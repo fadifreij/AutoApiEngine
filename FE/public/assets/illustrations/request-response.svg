@@ -1,0 +1,26 @@
+<svg width="320" height="180" viewBox="0 0 320 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="rr" x1="40" y1="40" x2="280" y2="140" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5E9"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="304" height="164" rx="18" fill="#0F172A" stroke="#334155"/>
+
+  <rect x="36" y="32" width="110" height="46" rx="12" fill="#111827" stroke="#475569"/>
+  <text x="91" y="59" text-anchor="middle" fill="#E2E8F0" font-size="12" font-family="Arial">Frontend</text>
+
+  <rect x="174" y="102" width="110" height="46" rx="12" fill="#111827" stroke="#475569"/>
+  <text x="229" y="129" text-anchor="middle" fill="#E2E8F0" font-size="12" font-family="Arial">Backend</text>
+
+  <path d="M148 54C180 54 192 72 212 102" stroke="url(#rr)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M204 100L213 104L216 94" stroke="url(#rr)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <path d="M172 126C136 124 118 108 104 78" stroke="#22C55E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M98 84L102 74L112 76" stroke="#22C55E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="92" y="102" width="72" height="20" rx="10" fill="#052E1F" stroke="#16A34A"/>
+  <text x="128" y="115" text-anchor="middle" fill="#DCFCE7" font-size="10" font-family="Arial">200 OK</text>
+  <rect x="170" y="58" width="88" height="20" rx="10" fill="#082F49" stroke="#0284C7"/>
+  <text x="214" y="71" text-anchor="middle" fill="#E0F2FE" font-size="10" font-family="Arial">POST /requests</text>
+</svg>

@@ -1,0 +1,10 @@
+/* Ocean theme - placeholder */
+:root {
+  --surface-ground: #0a1929;
+  --surface-card: #132f4c;
+  --surface-hover: #1a3a52;
+  --surface-border: #1e4976;
+  --text-color: #e3f2fd;
+  --text-color-secondary: #90caf9;
+  --primary-color: #42a5f5;
+}

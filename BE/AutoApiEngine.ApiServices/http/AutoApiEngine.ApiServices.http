@@ -1,0 +1,6 @@
+@AutoApiEngine.ApiServices_HostAddress = http://localhost:5145
+
+GET {{AutoApiEngine.ApiServices_HostAddress}}/api/Workspaces/
+Accept: application/json
+
+###

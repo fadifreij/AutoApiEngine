@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/Core/">
+    <Project Path="../AutoApiEngine.Domain/AutoApiEngine.Domain.csproj" />
+    <Project Path="../AutoApiEngine.ServiceAbstraction/AutoApiEngine.ServiceAbstraction.csproj" Id="2f2a00c4-99d9-4914-b1d1-bf50411baf16" />
+    <Project Path="../AutoApiEngine.Services/AutoApiEngine.Services.csproj" Id="833faa29-64cd-4c4b-9899-ed139ecf8fad" />
+  </Folder>
+  <Folder Name="/InfraStructure/">
+    <Project Path="../AutoApiEngine.Persistence/AutoApiEngine.Persistence.csproj" />
+    <Project Path="../AutoApiEngine.Presentation/AutoApiEngine.Presentation.csproj" />
+  </Folder>
+  <Project Path="AutoApiEngine.ApiServices.csproj" />
+</Solution>
