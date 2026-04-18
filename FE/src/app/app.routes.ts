@@ -6,7 +6,7 @@ export const routes: Routes = [
   // Root redirect
   {
     path: '',
-    redirectTo: 'workspaces',
+    redirectTo: 'home',
     pathMatch: 'full',
   },
 
@@ -36,6 +36,11 @@ export const routes: Routes = [
         path: 'workspaces',
         loadChildren: () =>
           import('./workspace/workspace.routes').then((m) => m.workspaceRoutes),
+      },
+      {
+        path: 'home',
+        loadChildren: () =>
+          import('./home/home.routes').then((m) => m.homeRoutes),
       },
       {
         path: 'admin',
