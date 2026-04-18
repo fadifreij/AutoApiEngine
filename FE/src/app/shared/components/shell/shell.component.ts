@@ -28,13 +28,21 @@ import { WorkspaceStore } from '../../../workspace/store/workspace.store';
         </div>
 
         <nav class="shell__topbar-nav">
-          <a routerLink="/dashboard" routerLinkActive="active" class="shell__nav-link">
+          <a routerLink="/home" routerLinkActive="active" class="shell__nav-link">
             <i class="pi pi-home"></i>
-            <span>Dashboard</span>
+            <span>Home</span>
           </a>
           <a routerLink="/workspaces/dashboard" routerLinkActive="active" class="shell__nav-link">
             <i class="pi pi-database"></i>
-            <span>Workspaces Management</span>
+            <span>Workspaces</span>
+          </a>
+          <a routerLink="/api-management" routerLinkActive="active" class="shell__nav-link">
+            <i class="pi pi-bolt"></i>
+            <span>API Management</span>
+          </a>
+          <a routerLink="/security" routerLinkActive="active" class="shell__nav-link">
+            <i class="pi pi-shield"></i>
+            <span>Security</span>
           </a>
         </nav>
 
