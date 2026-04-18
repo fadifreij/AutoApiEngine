@@ -5,6 +5,7 @@ import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
 import { WorkspaceStore } from '../../store/workspace.store';
+import { url_workspace } from '../../../auth/constants';
 
 @Component({
   selector: 'app-create-workspace',
@@ -38,7 +39,7 @@ export class CreateWorkspaceComponent {
   }
 
   goBack(): void {
-    this.router.navigate(['/workspaces/dashboard']);
+    this.router.navigate(['/workspaces']);
   }
 
   onSubmit(): void {
@@ -71,7 +72,7 @@ export class CreateWorkspaceComponent {
     };
 
     this.store.addWorkspace(newWorkspace);
-    this.router.navigate(['/workspaces/dashboard']);
+    this.router.navigate([url_workspace ]);
   }
 
   protected isInvalid(fieldName: string): boolean {

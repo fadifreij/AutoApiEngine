@@ -32,7 +32,7 @@ import { WorkspaceStore } from '../../../workspace/store/workspace.store';
             <i class="pi pi-home"></i>
             <span>Home</span>
           </a>
-          <a routerLink="/workspaces/dashboard" routerLinkActive="active" class="shell__nav-link">
+          <a routerLink="/workspaces" routerLinkActive="active" class="shell__nav-link">
             <i class="pi pi-database"></i>
             <span>Workspaces</span>
           </a>
@@ -222,7 +222,8 @@ import { WorkspaceStore } from '../../../workspace/store/workspace.store';
 
     .shell__body {
       flex: 1;
-      overflow: hidden;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
 
     /* ── Org pill ── */

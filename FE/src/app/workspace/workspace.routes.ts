@@ -16,7 +16,7 @@ export const workspaceRoutes: Routes = [
       ),
   },
   {
-    path: 'workspace',
+    path: 'workspace/:id',
     loadComponent: () =>
       import('./workspace.component').then((m) => m.WorkspaceComponent),
   },

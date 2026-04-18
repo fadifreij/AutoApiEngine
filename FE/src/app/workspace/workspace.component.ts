@@ -1,42 +1,22 @@
-import { Component, ChangeDetectionStrategy, inject, signal, computed } from '@angular/core';
-import { Router } from '@angular/router';
-import { TreeModule, TreeNodeSelectEvent } from 'primeng/tree';
+import { Component, ChangeDetectionStrategy, inject, signal, computed, OnInit } from '@angular/core';
+import { Router, ActivatedRoute } from '@angular/router';
 import { CardModule } from 'primeng/card';
 import { TableModule } from 'primeng/table';
 import { PanelModule } from 'primeng/panel';
 import { ButtonModule } from 'primeng/button';
-import { TreeNode } from 'primeng/api';
+import { UpperCasePipe } from '@angular/common';
 import { WorkspaceStore, Workspace } from './store/workspace.store';
 
 @Component({
   selector: 'app-workspace',
-  imports: [TreeModule, CardModule, TableModule, PanelModule, ButtonModule],
+  imports: [CardModule, TableModule, PanelModule, ButtonModule, UpperCasePipe],
   template: `
-    <div class="ws-detail" [class.sidebar-collapsed]="!store.sidebarVisible()">
-      <!-- Left sidebar: tree view -->
-      @if (store.sidebarVisible()) {
-        <aside class="ws-detail__sidebar" role="navigation" aria-label="Workspace tree">
-          <div class="ws-detail__sidebar-header">
-            <h2 class="ws-detail__sidebar-title">Workspaces</h2>
-          </div>
-          <p-tree
-            [value]="store.treeNodes()"
-            selectionMode="single"
-            [(selection)]="selectedNode"
-            (onNodeSelect)="onNodeSelect($event)"
-            styleClass="ws-tree"
-            [filter]="true"
-            filterPlaceholder="Search..."
-          />
-        </aside>
-      }
-
-      <!-- Right content area -->
+    <div class="ws-detail">
       <main class="ws-detail__content">
         @if (workspace(); as ws) {
           <div class="ws-detail__header">
             <p-button icon="pi pi-arrow-left" [text]="true" [rounded]="true" severity="secondary"
-              (onClick)="goBack()" ariaLabel="Back to dashboard" />
+              (onClick)="goBack()" ariaLabel="Back to workspaces" />
             <div>
               <h1 class="ws-detail__name">
                 <i class="pi pi-database"></i>
@@ -61,7 +41,7 @@ import { WorkspaceStore, Workspace } from './store/workspace.store';
                 </div>
                 <div class="ws-detail__info-item">
                   <span class="ws-detail__info-label">Type</span>
-                  <span class="ws-detail__info-value">{{ ws.dbType }}</span>
+                  <span class="ws-detail__info-value">{{ ws.dbType | uppercase }}</span>
                 </div>
                 <div class="ws-detail__info-item">
                   <span class="ws-detail__info-label">Size</span>
@@ -88,9 +68,9 @@ import { WorkspaceStore, Workspace } from './store/workspace.store';
             </p-card>
           </div>
 
-          <!-- Placeholder table -->
+          <!-- Database objects -->
           <p-panel header="Tables" [toggleable]="true" styleClass="ws-detail__panel">
-            <p-table [value]="mockTables()" [tableStyle]="{ 'min-width': '50rem' }">
+            <p-table [value]="tables()" [tableStyle]="{ 'min-width': '50rem' }">
               <ng-template #header>
                 <tr>
                   <th>Name</th>
@@ -110,11 +90,46 @@ import { WorkspaceStore, Workspace } from './store/workspace.store';
             </p-table>
           </p-panel>
 
+          <p-panel header="Stored Procedures" [toggleable]="true" styleClass="ws-detail__panel">
+            <p-table [value]="procedures()" [tableStyle]="{ 'min-width': '50rem' }">
+              <ng-template #header>
+                <tr>
+                  <th>Name</th>
+                  <th>Modified</th>
+                </tr>
+              </ng-template>
+              <ng-template #body let-row>
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.modified }}</td>
+                </tr>
+              </ng-template>
+            </p-table>
+          </p-panel>
+
+          <p-panel header="Functions" [toggleable]="true" styleClass="ws-detail__panel">
+            <p-table [value]="functions()" [tableStyle]="{ 'min-width': '50rem' }">
+              <ng-template #header>
+                <tr>
+                  <th>Name</th>
+                  <th>Modified</th>
+                </tr>
+              </ng-template>
+              <ng-template #body let-row>
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.modified }}</td>
+                </tr>
+              </ng-template>
+            </p-table>
+          </p-panel>
+
         } @else {
           <div class="ws-detail__empty">
             <i class="pi pi-database" style="font-size: 3rem; color: var(--aae-text-muted)"></i>
-            <h2>Select a workspace</h2>
-            <p>Choose a workspace from the tree to view its details.</p>
+            <h2>Workspace not found</h2>
+            <p>This workspace may have been deleted or doesn't exist.</p>
+            <p-button label="Back to Workspaces" icon="pi pi-arrow-left" (onClick)="goBack()" />
           </div>
         }
       </main>
@@ -125,29 +140,6 @@ import { WorkspaceStore, Workspace } from './store/workspace.store';
       display: flex;
       height: 100%;
       overflow: hidden;
-    }
-
-    .ws-detail__sidebar {
-      width: var(--aae-sidebar-width, 260px);
-      background: var(--aae-surface);
-      border-right: 1px solid var(--aae-border);
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
-      flex-shrink: 0;
-    }
-
-    .ws-detail__sidebar-header {
-      padding: 1rem 1rem 0.5rem;
-    }
-
-    .ws-detail__sidebar-title {
-      font-size: 0.85rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--aae-text-muted);
-      margin: 0;
     }
 
     .ws-detail__content {
@@ -231,6 +223,7 @@ import { WorkspaceStore, Workspace } from './store/workspace.store';
       text-align: center;
       color: var(--aae-text-muted);
       h2 { margin: 0; color: var(--aae-text); }
+      p { margin: 0; }
     }
 
     .aae-badge--ready {
@@ -251,40 +244,61 @@ import { WorkspaceStore, Workspace } from './store/workspace.store';
       border: 1px solid var(--aae-border);
     }
 
-    @media (max-width: 768px) {
-      .ws-detail { flex-direction: column; }
-      .ws-detail__sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--aae-border); max-height: 40vh; }
+    .aae-badge--restoring {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--aae-warning);
+      border: 1px solid var(--aae-warning);
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class WorkspaceComponent {
+export class WorkspaceComponent implements OnInit {
   protected readonly store = inject(WorkspaceStore);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
-  protected selectedNode = signal<TreeNode | null>(null);
+  protected readonly workspace = signal<Workspace | null>(null);
 
-  protected readonly workspace = computed(() => this.store.selected());
-
-  protected readonly mockTables = computed(() => {
+  protected readonly tables = computed(() => {
     const ws = this.workspace();
     if (!ws) return [];
-    return [
-      { name: 'Table_A', rows: '12,340', size: '24 MB', modified: 'Apr 5, 2026' },
-      { name: 'Table_B', rows: '8,910', size: '16 MB', modified: 'Apr 3, 2026' },
-      { name: 'Table_C', rows: '45,200', size: '102 MB', modified: 'Apr 1, 2026' },
-    ];
+    const tablesNode = ws.children.find((c: any) => c.label === 'Tables');
+    return (tablesNode?.children ?? []).map((c: any) => ({
+      name: c.label,
+      rows: '—',
+      size: '—',
+      modified: '—'
+    }));
   });
 
-  onNodeSelect(event: TreeNodeSelectEvent): void {
-    const node = event.node;
-    if (node?.data) {
-      this.store.selectWorkspace(node.data as Workspace);
-    }
+  protected readonly procedures = computed(() => {
+    const ws = this.workspace();
+    if (!ws) return [];
+    const procNode = ws.children.find((c: any) => c.label === 'Stored Procedures');
+    return (procNode?.children ?? []).map((c: any) => ({
+      name: c.label,
+      modified: '—'
+    }));
+  });
+
+  protected readonly functions = computed(() => {
+    const ws = this.workspace();
+    if (!ws) return [];
+    const funcNode = ws.children.find((c: any) => c.label === 'Functions');
+    return (funcNode?.children ?? []).map((c: any) => ({
+      name: c.label,
+      modified: '—'
+    }));
+  });
+
+  ngOnInit(): void {
+    const id = Number(this.route.snapshot.paramMap.get('id'));
+    const ws = this.store.getWorkspaceById(id);
+    this.workspace.set(ws ?? null);
   }
 
   goBack(): void {
-    this.router.navigate(['/dashboard']);
+    this.router.navigate(['/workspaces']);
   }
 
   formatSize(bytes?: number): string {

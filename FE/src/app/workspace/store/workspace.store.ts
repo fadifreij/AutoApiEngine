@@ -167,6 +167,10 @@ export class WorkspaceStore {
     }))
   );
 
+  getWorkspaceById(id: number): Workspace | undefined {
+    return this._workspaces().find((ws) => ws.id === id);
+  }
+
   // ── Mutations ──────────────────────────────────────────────────────────────
   setWorkspaces(items: Workspace[]): void { this._workspaces.set(items); }
   addWorkspace(w: Workspace): void { this._workspaces.update((list) => [...list, w]); }
