@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { Observable, of } from 'rxjs';
 import { tap, delay, finalize } from 'rxjs/operators';
 import { AuthStore, User, Org } from '../store/auth.store';
+import { url_after_login } from '../constants';
 
 export interface LoginDto {
   email: string;
@@ -50,7 +51,7 @@ export class MockAuthService {
       delay(500), // Simulate network delay
       tap((res) => {
         this.authStore.setSession(res.user, res.org, res.token, res.refreshToken);
-        this.router.navigate(['/dashboard']);
+        this.router.navigate([url_after_login]);
       }),
       finalize(() => this.authStore.setLoading(false))
     );

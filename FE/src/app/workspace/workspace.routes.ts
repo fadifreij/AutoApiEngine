@@ -2,21 +2,21 @@ import { Routes } from '@angular/router';
 
 export const workspaceRoutes: Routes = [
   {
-    path: 'dashboard',
+    path: '',
     loadComponent: () =>
-      import('./pages/create-workspace/dashboard-wrapper.component').then(
-        (m) => m.DashboardWrapperComponent
+      import('./components/main-workspace/main-workspace.component').then(
+        (m) => m.MainWorkspaceComponent
       ),
   },
   {
     path: 'create',
     loadComponent: () =>
-      import('./pages/create-workspace/create-workspace.component').then(
+      import('./components/create-workspace/create-workspace.component').then(
         (m) => m.CreateWorkspaceComponent
       ),
   },
   {
-    path: '',
+    path: 'workspace',
     loadComponent: () =>
       import('./workspace.component').then((m) => m.WorkspaceComponent),
   },

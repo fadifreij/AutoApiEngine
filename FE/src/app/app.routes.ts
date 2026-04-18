@@ -6,7 +6,7 @@ export const routes: Routes = [
   // Root redirect
   {
     path: '',
-    redirectTo: 'dashboard',
+    redirectTo: 'workspaces',
     pathMatch: 'full',
   },
 

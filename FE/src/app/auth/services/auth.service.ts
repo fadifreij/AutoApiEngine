@@ -6,6 +6,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthStore, User, Org } from '../store/auth.store';
 import { NotificationService } from '../../core/services/notification.service';
+import { url_after_login, url_logout } from '../constants';
 
 // ── DTOs (mirror your .NET API) ────────────────────────────────────────────
 export interface RegisterDto {
@@ -43,7 +44,7 @@ export class AuthService {
       tap((res) => {
         this.authStore.setSession(res.user, res.org, res.token, res.refreshToken);
         this.notify.success('Welcome aboard!', `${res.org.name} is ready.`);
-        this.router.navigate(['/dashboard']);
+        this.router.navigate([url_after_login]);
       }),
       finalize(() => this.authStore.setLoading(false))
     );
@@ -55,7 +56,7 @@ export class AuthService {
     return this.http.post<AuthResponse>(`${this.base}/login`, dto).pipe(
       tap((res) => {
         this.authStore.setSession(res.user, res.org, res.token, res.refreshToken);
-        this.router.navigate(['/dashboard']);
+        this.router.navigate([url_after_login]);
       }),
       finalize(() => this.authStore.setLoading(false))
     );
@@ -64,7 +65,7 @@ export class AuthService {
   // ── Logout ─────────────────────────────────────────────────────────────────
   logout(): void {
     this.authStore.clear();
-    this.router.navigate(['/auth/signin']);
+    this.router.navigate([url_logout]);
     this.notify.info('Signed out', 'See you next time.');
   }
 
