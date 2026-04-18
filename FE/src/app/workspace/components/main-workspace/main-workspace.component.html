@@ -1,0 +1,90 @@
+<div class="dash-wrapper" [class.sidebar-collapsed]="!store.sidebarVisible()">
+    @if (store.sidebarVisible()) {
+    <aside class="dash-wrapper__sidebar" role="navigation" aria-label="Workspace tree">
+        <div class="dash-wrapper__sidebar-header">
+            <h2 class="dash-wrapper__sidebar-title">Workspaces List</h2>
+            <p-button icon="pi pi-plus" [rounded]="true" [text]="true" severity="success" (onClick)="navigateToCreate()"
+                ariaLabel="Add new workspace" size="small" />
+        </div>
+        <p class="dash-wrapper__sidebar-help">Select a workspace to open details.</p>
+        <p-tree [value]="store.treeNodes()" selectionMode="single" [(selection)]="selectedNode"
+            (onNodeSelect)="onNodeSelect($event)" styleClass="ws-tree" />
+    </aside>
+    }
+
+    <main class="dash-wrapper__content">
+        <div class="dash-wrapper__hero aae-card">
+            <h1>Welcome to Workspaces Management</h1>
+            <p>
+                Use this page to onboard databases, review backups, and navigate tables,
+                stored procedures, and functions from the left workspace tree.
+            </p>
+            <div class="dash-wrapper__hero-actions">
+                <p-button label="Add New Workspace" icon="pi pi-plus" (onClick)="navigateToCreate()" />
+                <p-button label="Open First Workspace" icon="pi pi-arrow-right" severity="secondary" [outlined]="true"
+                    [disabled]="!store.workspaces().length" (onClick)="openWorkspace(store.workspaces()[0])" />
+            </div>
+        </div>
+
+        <div class="dash-wrapper__grid">
+            <section class="aae-card dash-wrapper__guide-card" aria-labelledby="how-to-title">
+                <h2 id="how-to-title">How To Use</h2>
+                <ul>
+                    <li>Click a workspace from the left panel to open detailed view.</li>
+                    <li>Expand tree nodes to inspect Tables, Backups, Stored Procedures, and Functions.</li>
+                    <li>Use Add New Workspace to register a database and save generated API key credentials.</li>
+                </ul>
+            </section>
+
+            <section class="aae-card dash-wrapper__guide-card" aria-labelledby="summary-title">
+                <h2 id="summary-title">Workspace Summary</h2>
+                <div class="dash-wrapper__summary-row">
+                    <span>Total Workspaces</span>
+                    <strong>{{ store.workspaceCount() }}</strong>
+                </div>
+                <div class="dash-wrapper__summary-row">
+                    <span>Ready Status</span>
+                    <strong>{{ store.workspaces().filter((w) => w.status === 'ready').length }}</strong>
+                </div>
+                <div class="dash-wrapper__summary-row">
+                    <span>Needs Setup</span>
+                    <strong>{{ store.workspaces().filter((w) => w.status === 'empty').length }}</strong>
+                </div>
+            </section>
+
+            <section class="aae-card dash-wrapper__guide-card" aria-labelledby="quick-start-title">
+                <h2 id="quick-start-title">Quick Start</h2>
+                <div class="dash-wrapper__quick-grid">
+                    <button type="button" class="dash-wrapper__quick-card" (click)="navigateToCreate()">
+                        <i class="pi pi-plus-circle"></i>
+                        <span>Create workspace</span>
+                    </button>
+                    <button type="button" class="dash-wrapper__quick-card" [disabled]="!store.workspaces().length"
+                        (click)="openWorkspace(store.workspaces()[0])">
+                        <i class="pi pi-folder-open"></i>
+                        <span>Open workspace</span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="aae-card dash-wrapper__guide-card" aria-labelledby="onboarding-title">
+                <h2 id="onboarding-title">Onboarding Checklist</h2>
+                <div class="dash-wrapper__check-item">
+                    <i class="pi" [class.pi-check-circle]="store.workspaceCount() > 0"
+                        [class.pi-circle]="store.workspaceCount() === 0"></i>
+                    <span>Create your first workspace</span>
+                </div>
+                <div class="dash-wrapper__check-item">
+                    <i class="pi"
+                        [class.pi-check-circle]="store.workspaces().filter((w) => w.status === 'ready').length > 0"
+                        [class.pi-circle]="store.workspaces().filter((w) => w.status === 'ready').length === 0"></i>
+                    <span>Mark at least one workspace as ready</span>
+                </div>
+                <div class="dash-wrapper__check-item">
+                    <i class="pi pi-circle"></i>
+                    <span>Review backups, procedures, and functions in left tree</span>
+                </div>
+            </section>
+        </div>
+    </main>
+</div>
