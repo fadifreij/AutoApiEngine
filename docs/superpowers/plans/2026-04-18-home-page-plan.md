@@ -104,7 +104,7 @@ Replace the `shell__topbar-nav` nav section with:
     <i class="pi pi-home"></i>
     <span>Home</span>
   </a>
-  <a routerLink="/workspaces/dashboard" routerLinkActive="active" class="shell__nav-link">
+  <a routerLink="/workspaces" routerLinkActive="active" class="shell__nav-link">
     <i class="pi pi-database"></i>
     <span>Workspaces</span>
   </a>

@@ -314,14 +314,18 @@ import { WorkspaceStore } from '../../../workspace/store/workspace.store';
       position: absolute;
       top: calc(100% + 8px);
       right: 0;
-      min-width: 240px;
+      min-width: 260px;
       background: var(--aae-surface);
-      border: 1px solid var(--aae-border);
-      border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+      border: 1.5px solid rgba(255, 255, 255, 0.25);
+      border-top: 3px solid var(--aae-accent);
+      border-radius: 14px;
+      box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.07),
+        0 10px 28px -4px rgba(0, 0, 0, 0.12),
+        0 0 0 1px rgba(0, 0, 0, 0.03);
       z-index: 1000;
       overflow: hidden;
-      animation: dropdown-in 120ms ease;
+      animation: dropdown-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     @keyframes dropdown-in {

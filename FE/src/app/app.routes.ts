@@ -3,13 +3,6 @@ import { authGuard } from './core/guards/auth.guard';
 import { guestGuard } from './core/guards/guest.guard';
 
 export const routes: Routes = [
-  // Root redirect
-  {
-    path: '',
-    redirectTo: 'home',
-    pathMatch: 'full',
-  },
-
   // ── Auth (guest only) ──────────────────────────────────────────────────────
   {
     path: 'auth',
@@ -18,7 +11,15 @@ export const routes: Routes = [
       import('./auth/auth.routes').then((m) => m.authRoutes),
   },
 
-  // ── Protected shell ────────────────────────────────────────────────────────
+  // ── Public landing (guest only) ──────────────────────────────────
+  {
+    path: '',
+    canActivate: [guestGuard],
+    loadChildren: () =>
+      import('./landing/landing.routes').then((m) => m.landingRoutes),
+  },
+
+  // ── Protected shell ────────────────────────────────────────────────
   {
     path: '',
     canActivate: [authGuard],
