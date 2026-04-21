@@ -31,8 +31,8 @@ namespace AutoApiEngine.Domain.Entities
        
         public bool IsActive { get; set; } = true;
         // Foreign key public
-        Guid OrganizationId { get; set; } 
+        public Guid OrganizationId { get; set; } 
         //Navigation property
-        public Organization Org { get; set; } = null!;
+        public Organization Organization { get; set; } = null!;
     }
 }

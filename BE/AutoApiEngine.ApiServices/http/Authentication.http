@@ -1,0 +1,14 @@
+@Authentication.ApiServices_HostAddress = http://localhost:5145
+
+
+POST {{Authentication.ApiServices_HostAddress}}/api/auth/register
+Content-Type: application/json
+Accept: application/json
+{
+
+ "Email": "fadi.freij@hotmail.com",
+ "Password": "test@123",
+ "OrganizationName": "Test Organization",
+ 
+
+}

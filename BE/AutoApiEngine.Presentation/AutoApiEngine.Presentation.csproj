@@ -10,6 +10,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\AutoApiEngine.Domain\AutoApiEngine.Domain.csproj" />
+    <ProjectReference Include="..\AutoApiEngine.Persistence\AutoApiEngine.Persistence.csproj" />
     <ProjectReference Include="..\AutoApiEngine.ServiceAbstraction\AutoApiEngine.ServiceAbstraction.csproj" />
+    <ProjectReference Include="..\AutoApiEngine.Services\AutoApiEngine.Services.csproj" />
   </ItemGroup>
 </Project>
