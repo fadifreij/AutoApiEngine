@@ -1,0 +1,6 @@
+https://myaccount.google.com/apppasswords to create new application on gmail
+
+smtp.gmail.com
+587 
+username: fadi.freij38601@gmail.com
+password: eolpmkyblwesfjax

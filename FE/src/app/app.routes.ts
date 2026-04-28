@@ -1,62 +1,25 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/guards/auth.guard';
-import { guestGuard } from './core/guards/guest.guard';
+import { authGuard, publicGuard } from './shared/auth/auth.guard';
 
 export const routes: Routes = [
-  // ── Auth (guest only) ──────────────────────────────────────────────────────
+  { path: '', canActivate: [publicGuard], loadComponent: () => import('./pages/landing/landing').then(m => m.Landing) },
+  { path: 'login', canActivate: [publicGuard], loadComponent: () => import('./pages/login/login').then(m => m.Login) },
+  { path: 'register', canActivate: [publicGuard], loadComponent: () => import('./pages/register/register').then(m => m.Register) },
+  { path: 'auth/callback', loadComponent: () => import('./pages/auth-callback/auth-callback').then(m => m.AuthCallback) },
+  { path: 'pricing', loadComponent: () => import('./pages/pricing/pricing').then(m => m.Pricing) },
+  { path: 'docs', loadComponent: () => import('./pages/docs/docs').then(m => m.Docs) },
   {
-    path: 'auth',
-    canActivate: [guestGuard],
-    loadChildren: () =>
-      import('./auth/auth.routes').then((m) => m.authRoutes),
-  },
-
-  // ── Public landing (guest only) ──────────────────────────────────
-  {
-    path: '',
-    canActivate: [guestGuard],
-    loadChildren: () =>
-      import('./landing/landing.routes').then((m) => m.landingRoutes),
-  },
-
-  // ── Protected shell ────────────────────────────────────────────────
-  {
-    path: '',
+    path: 'app',
     canActivate: [authGuard],
-    loadComponent: () =>
-      import('./shared/components/shell/shell.component').then(
-        (m) => m.ShellComponent
-      ),
+    loadComponent: () => import('./layouts/dashboard-layout/dashboard-layout').then(m => m.DashboardLayout),
     children: [
-      {
-        path: 'dashboard',
-        loadChildren: () =>
-          import('./dashboard/dashboard.routes').then((m) => m.dashboardRoutes),
-      },
-      {
-        path: 'workspaces',
-        loadChildren: () =>
-          import('./workspace/workspace.routes').then((m) => m.workspaceRoutes),
-      },
-      {
-        path: 'home',
-        loadChildren: () =>
-          import('./home/home.routes').then((m) => m.homeRoutes),
-      },
-      {
-        path: 'admin',
-        loadChildren: () =>
-          import('./admin/admin.routes').then((m) => m.adminRoutes),
-      },
-    ],
+      { path: 'dashboard', loadComponent: () => import('./dashboard/dashboard/dashboard').then(m => m.Dashboard) },
+      { path: 'workspace/new', loadComponent: () => import('./dashboard/workspace-new/workspace-new').then(m => m.WorkspaceNew) },
+      { path: 'workspace/manage', loadComponent: () => import('./dashboard/workspace-manage/workspace-manage').then(m => m.WorkspaceManage) },
+      { path: 'apis/generated', loadComponent: () => import('./dashboard/api-generated/api-generated').then(m => m.ApiGenerated) },
+      { path: 'apis/custom', loadComponent: () => import('./dashboard/api-custom/api-custom').then(m => m.ApiCustom) },
+      { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+    ]
   },
-
-  // ── 404 ───────────────────────────────────────────────────────────────────
-  {
-    path: '**',
-    loadComponent: () =>
-      import('./shared/components/not-found/not-found.component').then(
-        (m) => m.NotFoundComponent
-      ),
-  },
+  { path: 'app/query-studio', canActivate: [authGuard], loadComponent: () => import('./dashboard/query-studio/query-studio').then(m => m.QueryStudio) },
 ];

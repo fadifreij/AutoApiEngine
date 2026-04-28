@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Proposal A: Sidebar Navigation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1a1a2e; background: #f5f6fa; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* TOP BAR */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: #fff; border-bottom: 1px solid #e5e7eb; flex-shrink: 0; z-index: 10; }
+  .topbar-left { display: flex; align-items: center; gap: 20px; }
+  .logo { font-size: 18px; font-weight: 800; color: #4f46e5; }
+  .logo span { color: #1a1a2e; }
+  .workspace-switcher { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 8px; background: #f3f4f6; border: 1px solid #e5e7eb; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .workspace-switcher:hover { border-color: #4f46e5; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .topbar-right .search-box { padding: 6px 14px; border-radius: 8px; border: 1px solid #e5e7eb; background: #f9fafb; font-size: 13px; width: 240px; color: #888; }
+  .notif { width: 36px; height: 36px; border-radius: 50%; background: #f3f4f6; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; position: relative; }
+  .notif-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: #4f46e5; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; cursor: pointer; }
+
+  /* LAYOUT */
+  .layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar { width: 240px; background: #fff; border-right: 1px solid #e5e7eb; padding: 16px 0; flex-shrink: 0; display: flex; flex-direction: column; }
+  .sidebar-section { padding: 0 12px; margin-bottom: 8px; }
+  .sidebar-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #9ca3af; font-weight: 700; padding: 8px 12px; }
+  .sidebar-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; font-size: 14px; color: #555; cursor: pointer; transition: all .15s; font-weight: 500; }
+  .sidebar-item:hover { background: #f3f4f6; color: #1a1a2e; }
+  .sidebar-item.active { background: #ede9fe; color: #4f46e5; font-weight: 600; }
+  .sidebar-item .icon { font-size: 18px; width: 24px; text-align: center; }
+  .sidebar-item .badge { margin-left: auto; background: #4f46e5; color: #fff; font-size: 11px; padding: 1px 8px; border-radius: 10px; font-weight: 700; }
+  .sidebar-bottom { margin-top: auto; padding: 16px; border-top: 1px solid #e5e7eb; }
+  .plan-box { background: linear-gradient(135deg, #ede9fe, #dbeafe); border-radius: 10px; padding: 14px; }
+  .plan-box .plan-name { font-size: 13px; font-weight: 700; color: #4f46e5; }
+  .plan-box .plan-info { font-size: 12px; color: #666; margin: 4px 0 10px; }
+  .plan-bar { height: 6px; border-radius: 3px; background: #e5e7eb; overflow: hidden; }
+  .plan-bar-fill { height: 100%; width: 60%; background: #4f46e5; border-radius: 3px; }
+  .plan-box .upgrade-link { display: block; margin-top: 10px; font-size: 12px; color: #4f46e5; font-weight: 600; text-decoration: none; }
+
+  /* MAIN */
+  .main { flex: 1; padding: 28px 32px; overflow-y: auto; }
+  .main h1 { font-size: 24px; margin-bottom: 4px; }
+  .main .subtitle { color: #888; font-size: 14px; margin-bottom: 28px; }
+
+  /* STAT CARDS */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+  .stat-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; }
+  .stat-card .stat-label { font-size: 13px; color: #888; margin-bottom: 6px; }
+  .stat-card .stat-value { font-size: 28px; font-weight: 800; }
+  .stat-card .stat-change { font-size: 12px; color: #22c55e; margin-top: 4px; }
+  .stat-card .stat-change.down { color: #ef4444; }
+
+  /* PANELS */
+  .panel-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+  .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; }
+  .panel h3 { font-size: 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .panel h3 a { font-size: 12px; color: #4f46e5; text-decoration: none; font-weight: 600; }
+
+  /* ACTIVITY */
+  .activity-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f3f4f6; align-items: flex-start; }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+  .activity-dot.green { background: #22c55e; }
+  .activity-dot.blue { background: #3b82f6; }
+  .activity-dot.yellow { background: #f59e0b; }
+  .activity-dot.purple { background: #8b5cf6; }
+  .activity-text { font-size: 14px; color: #444; }
+  .activity-text strong { color: #1a1a2e; }
+  .activity-time { font-size: 12px; color: #aaa; margin-top: 2px; }
+
+  /* QUICK ACTIONS */
+  .quick-btn { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 14px; cursor: pointer; background: #fff; width: 100%; margin-bottom: 8px; transition: all .15s; color: #444; font-weight: 500; }
+  .quick-btn:hover { border-color: #4f46e5; color: #4f46e5; background: #fafafe; }
+  .quick-btn .qicon { font-size: 18px; }
+
+  /* API HEALTH */
+  .health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .health-item { padding: 10px; border-radius: 8px; background: #f9fafb; text-align: center; }
+  .health-item .h-num { font-size: 22px; font-weight: 800; }
+  .health-item .h-label { font-size: 11px; color: #888; }
+  .health-item.ok .h-num { color: #22c55e; }
+  .health-item.warn .h-num { color: #f59e0b; }
+  .health-item.err .h-num { color: #ef4444; }
+  .health-item.total .h-num { color: #4f46e5; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">API<span>Engine</span></div>
+    <div class="workspace-switcher">
+      🗄️ ecommerce-db &nbsp;▾
+    </div>
+  </div>
+  <div class="topbar-right">
+    <input class="search-box" placeholder="Search APIs, tables, users..." readonly>
+    <div class="notif">🔔<div class="notif-dot"></div></div>
+    <div class="avatar">JD</div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Main</div>
+      <div class="sidebar-item active">
+        <span class="icon">📊</span> Dashboard
+      </div>
+      <div class="sidebar-item">
+        <span class="icon">🗄️</span> Query Studio
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">APIs</div>
+      <div class="sidebar-item">
+        <span class="icon">⚡</span> Generated APIs
+        <span class="badge">48</span>
+      </div>
+      <div class="sidebar-item">
+        <span class="icon">🔧</span> Custom APIs
+        <span class="badge">2</span>
+      </div>
+      <div class="sidebar-item">
+        <span class="icon">🚀</span> Deployments
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Security</div>
+      <div class="sidebar-item">
+        <span class="icon">🛡️</span> Identity Providers
+      </div>
+      <div class="sidebar-item">
+        <span class="icon">👥</span> Users
+      </div>
+      <div class="sidebar-item">
+        <span class="icon">🔑</span> API Keys
+      </div>
+      <div class="sidebar-item">
+        <span class="icon">📋</span> Protocols
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Settings</div>
+      <div class="sidebar-item">
+        <span class="icon">⚙️</span> Workspace Settings
+      </div>
+      <div class="sidebar-item">
+        <span class="icon">💾</span> Backup & Restore
+      </div>
+    </div>
+
+    <div class="sidebar-bottom">
+      <div class="plan-box">
+        <div class="plan-name">Pro Trial</div>
+        <div class="plan-info">12 days remaining</div>
+        <div class="plan-bar"><div class="plan-bar-fill"></div></div>
+        <a href="#" class="upgrade-link">Upgrade Plan →</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+    <h1>Dashboard</h1>
+    <p class="subtitle">Workspace: ecommerce-db &nbsp;·&nbsp; Last sync: 2 minutes ago</p>
+
+    <!-- STATS -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Tables</div>
+        <div class="stat-value">12</div>
+        <div class="stat-change">+2 this week</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active APIs</div>
+        <div class="stat-value">48</div>
+        <div class="stat-change">+8 auto-generated</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Users</div>
+        <div class="stat-value">156</div>
+        <div class="stat-change">+12 this month</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">API Calls (24h)</div>
+        <div class="stat-value">3.2K</div>
+        <div class="stat-change down">↓ 5% from yesterday</div>
+      </div>
+    </div>
+
+    <!-- PANELS -->
+    <div class="panel-grid">
+      <!-- ACTIVITY -->
+      <div class="panel">
+        <h3>Recent Activity <a href="#">View All</a></h3>
+        <div class="activity-item">
+          <div class="activity-dot green"></div>
+          <div>
+            <div class="activity-text"><strong>API deployed</strong> — POST /api/custom/reports/monthly</div>
+            <div class="activity-time">5 minutes ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot blue"></div>
+          <div>
+            <div class="activity-text"><strong>Backup completed</strong> — ecommerce-db (245 MB)</div>
+            <div class="activity-time">1 hour ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot purple"></div>
+          <div>
+            <div class="activity-text"><strong>Table created</strong> — shipping_zones via DDL runner</div>
+            <div class="activity-time">3 hours ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot yellow"></div>
+          <div>
+            <div class="activity-text"><strong>Identity Provider</strong> — Added "Okta" as external IdP</div>
+            <div class="activity-time">Yesterday</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot green"></div>
+          <div>
+            <div class="activity-text"><strong>8 CRUD APIs generated</strong> — for table "shipping_zones"</div>
+            <div class="activity-time">Yesterday</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <!-- QUICK ACTIONS -->
+        <div class="panel">
+          <h3>Quick Actions</h3>
+          <button class="quick-btn"><span class="qicon">➕</span> New Custom API</button>
+          <button class="quick-btn"><span class="qicon">📝</span> Open SQL Editor</button>
+          <button class="quick-btn"><span class="qicon">👤</span> Add User</button>
+          <button class="quick-btn"><span class="qicon">💾</span> Backup Database</button>
+          <button class="quick-btn"><span class="qicon">🔑</span> Generate API Key</button>
+        </div>
+
+        <!-- API HEALTH -->
+        <div class="panel">
+          <h3>API Health</h3>
+          <div class="health-grid">
+            <div class="health-item ok">
+              <div class="h-num">46</div>
+              <div class="h-label">Healthy</div>
+            </div>
+            <div class="health-item warn">
+              <div class="h-num">1</div>
+              <div class="h-label">Degraded</div>
+            </div>
+            <div class="health-item err">
+              <div class="h-num">1</div>
+              <div class="h-label">Error</div>
+            </div>
+            <div class="health-item total">
+              <div class="h-num">48</div>
+              <div class="h-label">Total</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

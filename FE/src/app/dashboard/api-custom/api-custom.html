@@ -1,0 +1,112 @@
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Custom APIs</h1>
+    <div class="page-subtitle">Write custom SQL-backed endpoints and deploy them instantly</div>
+  </div>
+  <button class="btn btn-primary btn-sm" (click)="showModal.set(true)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg>
+    New Custom API
+  </button>
+</div>
+
+<div class="custom-api-list">
+  <!-- API 1: Deployed -->
+  <div class="api-card">
+    <div class="api-card-header">
+      <div class="api-card-left">
+        <span class="method-badge get">GET</span>
+        <span class="api-name">Top Customers Report</span>
+        <span class="api-path">/custom/top-customers</span>
+      </div>
+      <div class="api-card-right">
+        <span class="status deployed">● Deployed</span>
+        <div class="actions"><button>Edit</button><button>Try</button><button>Logs</button></div>
+      </div>
+    </div>
+    <div class="api-card-body">
+      <div class="api-detail-section">
+        <h4>SQL Query</h4>
+        <div class="code-block">
+<span class="kw">SELECT</span>
+  u.id,
+  u.first_name || <span class="str">' '</span> || u.last_name <span class="kw">AS</span> name,
+  u.email,
+  <span class="fn">COUNT</span>(o.id) <span class="kw">AS</span> total_orders,
+  <span class="fn">SUM</span>(o.total) <span class="kw">AS</span> lifetime_value
+<span class="kw">FROM</span> users u
+<span class="kw">JOIN</span> orders o <span class="kw">ON</span> u.id = o.user_id
+<span class="kw">WHERE</span> o.created_at >= <span class="str">:start_date</span>
+<span class="kw">GROUP BY</span> u.id, u.first_name, u.last_name, u.email
+<span class="kw">ORDER BY</span> lifetime_value <span class="kw">DESC</span>
+<span class="kw">LIMIT</span> <span class="str">:limit</span>
+        </div>
+      </div>
+      <div class="api-detail-section">
+        <h4>Parameters</h4>
+        <div class="param-list">
+          <div class="param-item">
+            <span class="param-name">start_date</span>
+            <span class="param-type">date</span>
+            <span class="param-required">required</span>
+          </div>
+          <div class="param-item">
+            <span class="param-name">limit</span>
+            <span class="param-type">integer</span>
+            <span class="param-default">default: 10</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- API 2: POST Monthly Report -->
+  <div class="api-card">
+    <div class="api-card-header">
+      <div class="api-card-left">
+        <span class="method-badge post">POST</span>
+        <span class="api-name">Monthly Revenue Report</span>
+        <span class="api-path">/custom/reports/monthly</span>
+      </div>
+      <div class="api-card-right">
+        <span class="status deployed">● Deployed</span>
+        <div class="actions"><button>Edit</button><button>Try</button><button>Logs</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE MODAL -->
+@if (showModal()) {
+  <div class="modal-overlay" (click)="showModal.set(false)">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Create Custom API</h2>
+        <button class="close-btn" (click)="showModal.set(false)">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>HTTP Method</label>
+            <select><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
+          </div>
+          <div class="form-group">
+            <label>Endpoint Path</label>
+            <input type="text" placeholder="/custom/my-endpoint">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Display Name</label>
+          <input type="text" placeholder="e.g. Top Customers Report">
+        </div>
+        <div class="form-group">
+          <label>SQL Query</label>
+          <textarea placeholder="SELECT * FROM users WHERE id = :userId"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" (click)="showModal.set(false)">Cancel</button>
+        <button class="btn btn-primary">Create & Deploy</button>
+      </div>
+    </div>
+  </div>
+}

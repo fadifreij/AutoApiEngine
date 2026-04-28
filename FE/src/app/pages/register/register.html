@@ -1,0 +1,140 @@
+﻿<div class="auth-nav">
+  <a routerLink="/" class="logo">
+    <svg viewBox="0 0 32 32" fill="none">
+      <ellipse cx="16" cy="7" rx="11" ry="4" stroke="#4f46e5" stroke-width="2" />
+      <path d="M5 7v18c0 2.2 4.9 4 11 4s11-1.8 11-4V7" stroke="#4f46e5" stroke-width="2" />
+      <path d="M5 15c0 2.2 4.9 4 11 4s11-1.8 11-4" stroke="#4f46e5" stroke-width="2" />
+      <path d="M18 14l-4 7h5l-4 7" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    API<span>Engine</span>
+  </a>
+  <a class="btn btn-outline btn-sm" (click)="onLogin()">Already have an account? Log in</a>
+</div>
+
+<div class="auth-layout">
+  <div class="auth-left">
+    <div class="auth-card">
+      <h1>Create your account</h1>
+      <p class="subtitle">Start your 14-day free trial. No credit card required.</p>
+
+      <div class="divider">register with email</div>
+
+      <form (ngSubmit)="onSubmit()">
+        <div class="form-group">
+          <label>Organization name</label>
+          <input type="text" [(ngModel)]="formData.organizationName" name="organizationName" placeholder="Acme Corp"
+            required>
+          <div class="form-hint">This will be displayed in your dashboard header</div>
+        </div>
+        <div class="form-group">
+          <label>Work email</label>
+          <input type="email" [(ngModel)]="formData.email" name="email" placeholder="john@acmecorp.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <div class="password-field">
+            <input [type]="showPassword ? 'text' : 'password'" [(ngModel)]="formData.password" name="password"
+              placeholder="Min 8 characters" required>
+            <button type="button" class="eye-btn" (click)="togglePassword()">
+              <svg *ngIf="!showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <svg *ngIf="showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path
+                  d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A10.05 10.05 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.39 6.38" />
+                <line x1="1" y1="1" x2="23" y2="23" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Confirm Password</label>
+          <div class="password-field">
+            <input [type]="showConfirmPassword ? 'text' : 'password'" [(ngModel)]="formData.confirmPassword"
+              name="confirmPassword" placeholder="Confirm your password" required>
+            <button type="button" class="eye-btn" (click)="toggleConfirmPassword()">
+              <svg *ngIf="!showConfirmPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <svg *ngIf="showConfirmPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path
+                  d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A10.05 10.05 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.39 6.38" />
+                <line x1="1" y1="1" x2="23" y2="23" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div *ngIf="success" class="success-message success-animated">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="9 12 11 14 15 10" />
+          </svg>
+          Registration successful! Redirecting you now…
+        </div>
+        <div *ngIf="error" class="error-message">{{ error }}</div>
+        <button type="submit" class="btn btn-primary btn-submit">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+          </svg>
+          Start Free Trial
+        </button>
+      </form>
+      <p class="terms">By signing up you agree to our <a>Terms</a> and <a>Privacy Policy</a></p>
+    </div>
+  </div>
+
+  <div class="auth-right">
+    <div class="promo">
+      <div class="trial-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+        14-Day Free Trial
+      </div>
+      <h2>Ship APIs 10x Faster</h2>
+      <p>Join hundreds of teams building production APIs without writing boilerplate code.</p>
+      <div class="promo-features">
+        <div class="promo-feat">
+          <div class="promo-feat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3" />
+              <path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3" />
+              <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5" />
+            </svg>
+          </div>
+          <div class="promo-feat-text">
+            <h4>Instant Workspaces</h4>
+            <p>Connect your DB or use our hosted service</p>
+          </div>
+        </div>
+        <div class="promo-feat">
+          <div class="promo-feat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+          </div>
+          <div class="promo-feat-text">
+            <h4>Auto CRUD Generation</h4>
+            <p>48 endpoints from 12 tables in seconds</p>
+          </div>
+        </div>
+        <div class="promo-feat">
+          <div class="promo-feat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0110 0v4" />
+            </svg>
+          </div>
+          <div class="promo-feat-text">
+            <h4>Built-in Security</h4>
+            <p>API keys + managed identity provider</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

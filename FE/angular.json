@@ -1,4 +1,4 @@
-{
+﻿{
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
   "cli": {
@@ -7,7 +7,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "autoApiEngine": {
+    "my-project": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -35,9 +35,8 @@
             ],
             "server": "src/main.server.ts",
             "outputMode": "server",
-            "prerender": false,
             "security": {
-              "allowedHosts": ["localhost"]
+              "allowedHosts": []
             },
             "ssr": {
               "entry": "src/server.ts"
@@ -48,16 +47,22 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "750kB",
-                  "maximumError": "1.5MB"
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "32kB",
-                  "maximumError": "64kB"
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.prod.ts"
+                }
+              ]
             },
             "development": {
               "optimization": false,
@@ -71,10 +76,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "autoApiEngine:build:production"
+              "buildTarget": "my-project:build:production"
             },
             "development": {
-              "buildTarget": "autoApiEngine:build:development"
+              "buildTarget": "my-project:build:development"
             }
           },
           "defaultConfiguration": "development"

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Custom APIs — APIEngine</title>
+<link rel="stylesheet" href="shared-styles.css">
+<style>
+  body { background: var(--gray-50); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .trial-banner { background: linear-gradient(90deg, var(--primary), var(--accent)); color: #fff; padding: 8px 24px; display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 13px; flex-shrink: 0; }
+  .trial-banner strong { font-weight: 700; }
+  .trial-banner a { color: #fff; font-weight: 700; background: rgba(255,255,255,.2); padding: 4px 14px; border-radius: 6px; font-size: 12px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: #fff; border-bottom: 1px solid var(--gray-200); flex-shrink: 0; }
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 18px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 6px; }
+  .logo span { color: var(--gray-900); }
+  .logo svg { width: 22px; height: 22px; }
+  .org-badge { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px; background: var(--primary-bg); color: var(--primary); font-size: 13px; font-weight: 700; }
+  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--gray-400); }
+  .breadcrumb a { color: var(--gray-500); }
+  .breadcrumb svg { width: 14px; height: 14px; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 32px; height: 32px; border-radius: 8px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  .layout { display: flex; flex: 1; overflow: hidden; }
+  .sidebar { width: 240px; background: #fff; border-right: 1px solid var(--gray-200); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+  .sidebar-section { padding: 16px 12px 8px; }
+  .sidebar-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gray-400); font-weight: 700; padding: 0 12px 8px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; font-size: 14px; color: var(--gray-600); cursor: pointer; transition: all .12s; font-weight: 500; text-decoration: none; }
+  .sidebar-item:hover { background: var(--gray-50); color: var(--gray-900); }
+  .sidebar-item.active { background: var(--primary-bg); color: var(--primary); font-weight: 600; }
+  .sidebar-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .sidebar-item .badge { margin-left: auto; background: var(--primary); color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+
+  .main { flex: 1; padding: 28px 32px; overflow-y: auto; }
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .page-title { font-size: 22px; font-weight: 700; }
+  .page-subtitle { color: var(--gray-400); font-size: 13px; margin-top: 2px; }
+
+  /* EMPTY STATE + LIST */
+  .custom-api-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .api-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; overflow: hidden; }
+  .api-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; }
+  .api-card-left { display: flex; align-items: center; gap: 12px; }
+  .api-card-left .method-badge { padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; font-family: var(--mono); }
+  .method-badge.get { background: #dbeafe; color: #1d4ed8; }
+  .method-badge.post { background: #dcfce7; color: #166534; }
+  .method-badge.put { background: #fef3c7; color: #92400e; }
+  .method-badge.delete { background: #fee2e2; color: #991b1b; }
+  .api-card-left .api-name { font-weight: 700; font-size: 15px; }
+  .api-card-left .api-path { font-family: var(--mono); font-size: 13px; color: var(--gray-500); margin-left: 8px; }
+  .api-card-right { display: flex; align-items: center; gap: 10px; }
+  .api-card-right .status { font-size: 12px; padding: 4px 10px; border-radius: 6px; font-weight: 600; }
+  .api-card-right .status.deployed { background: #dcfce7; color: #166534; }
+  .api-card-right .status.draft { background: #fef3c7; color: #92400e; }
+  .api-card-right .actions { display: flex; gap: 6px; }
+  .api-card-right .actions button { background: none; border: 1px solid var(--gray-200); border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12px; color: var(--gray-500); font-family: var(--font); }
+  .api-card-right .actions button:hover { border-color: var(--primary); color: var(--primary); }
+
+  .api-card-body { border-top: 1px solid var(--gray-100); padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .api-detail-section h4 { font-size: 12px; color: var(--gray-400); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .code-block { background: #1e1e2e; border-radius: 8px; padding: 12px 16px; font-family: var(--mono); font-size: 12px; color: #e2e8f0; line-height: 1.6; overflow-x: auto; max-height: 160px; overflow-y: auto; }
+  .code-block .kw { color: #c084fc; }
+  .code-block .str { color: #34d399; }
+  .code-block .cm { color: #475569; }
+  .code-block .fn { color: #818cf8; }
+
+  .param-list { font-size: 13px; }
+  .param-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--gray-100); }
+  .param-item:last-child { border: none; }
+  .param-name { font-family: var(--mono); font-weight: 600; color: var(--gray-700); }
+  .param-type { font-size: 11px; color: var(--gray-400); background: var(--gray-50); padding: 2px 6px; border-radius: 4px; }
+  .param-required { font-size: 10px; color: var(--danger); font-weight: 600; }
+
+  /* CREATE MODAL */
+  .create-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 100; align-items: center; justify-content: center; }
+  .create-modal-overlay.show { display: flex; }
+  .create-modal { background: #fff; border-radius: 16px; width: 640px; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+  .create-modal-header { padding: 20px 24px; border-bottom: 1px solid var(--gray-200); display: flex; justify-content: space-between; align-items: center; }
+  .create-modal-header h2 { font-size: 18px; font-weight: 700; }
+  .create-modal-header .close-btn { background: none; border: none; cursor: pointer; color: var(--gray-400); font-size: 20px; padding: 4px; }
+  .create-modal-body { padding: 24px; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--gray-700); margin-bottom: 6px; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 14px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-size: 14px; font-family: var(--font); background: var(--gray-50); }
+  .form-group textarea { min-height: 120px; font-family: var(--mono); }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .create-modal-footer { padding: 16px 24px; border-top: 1px solid var(--gray-200); display: flex; justify-content: flex-end; gap: 10px; }
+</style>
+</head>
+<body>
+
+<div class="trial-banner">
+  Your <strong>Pro Trial</strong> has <strong>12 days</strong> remaining.
+  <a href="pricing.html">View Plans →</a>
+</div>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="landing.html" class="logo"><svg viewBox="0 0 32 32" fill="none"><rect x="2" y="6" width="28" height="20" rx="4" stroke="#4f46e5" stroke-width="2.5"/><path d="M9 16h6m-3-3v6" stroke="#4f46e5" stroke-width="2" stroke-linecap="round"/><circle cx="22" cy="16" r="3" stroke="#7c3aed" stroke-width="2"/></svg> API<span>Engine</span></a>
+    <div class="org-badge">Acme Corp</div>
+    <div class="breadcrumb">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      <a href="dashboard.html">Dashboard</a>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      <span style="color:var(--gray-700);font-weight:600">Custom APIs</span>
+    </div>
+  </div>
+  <div class="topbar-right"><div class="avatar">JD</div></div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-section"><div class="sidebar-label">Overview</div>
+      <a href="dashboard.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Dashboard</a>
+    </div>
+    <div class="sidebar-section"><div class="sidebar-label">Workspace</div>
+      <a href="new-workspace.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg> New Workspace</a>
+      <a href="workspace-manage.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg> Manage Workspace</a>
+      <a href="query-studio.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg> Query Studio</a>
+    </div>
+    <div class="sidebar-section"><div class="sidebar-label">APIs</div>
+      <a href="api-generated.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> Generated APIs <span class="badge">48</span></a>
+      <a href="api-custom.html" class="sidebar-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Custom APIs <span class="badge">2</span></a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Custom APIs</h1>
+        <div class="page-subtitle">Write custom SQL-backed endpoints and deploy them instantly</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="document.getElementById('modal').classList.add('show')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg>
+        New Custom API
+      </button>
+    </div>
+
+    <div class="custom-api-list">
+      <!-- API 1: Deployed -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <div class="api-card-left">
+            <span class="method-badge get">GET</span>
+            <span class="api-name">Top Customers Report</span>
+            <span class="api-path">/custom/top-customers</span>
+          </div>
+          <div class="api-card-right">
+            <span class="status deployed">● Deployed</span>
+            <div class="actions">
+              <button>Edit</button>
+              <button>Try</button>
+              <button>Logs</button>
+            </div>
+          </div>
+        </div>
+        <div class="api-card-body">
+          <div class="api-detail-section">
+            <h4>SQL Query</h4>
+            <div class="code-block">
+<span class="kw">SELECT</span>
+  u.id,
+  u.first_name || <span class="str">' '</span> || u.last_name <span class="kw">AS</span> name,
+  u.email,
+  <span class="fn">COUNT</span>(o.id) <span class="kw">AS</span> total_orders,
+  <span class="fn">SUM</span>(o.total) <span class="kw">AS</span> lifetime_value
+<span class="kw">FROM</span> users u
+<span class="kw">JOIN</span> orders o <span class="kw">ON</span> u.id = o.user_id
+<span class="kw">WHERE</span> o.created_at >= <span class="str">:start_date</span>
+<span class="kw">GROUP BY</span> u.id, u.first_name, u.last_name, u.email
+<span class="kw">ORDER BY</span> lifetime_value <span class="kw">DESC</span>
+<span class="kw">LIMIT</span> <span class="str">:limit</span>
+            </div>
+          </div>
+          <div class="api-detail-section">
+            <h4>Parameters</h4>
+            <div class="param-list">
+              <div class="param-item">
+                <span class="param-name">start_date</span>
+                <span class="param-type">date</span>
+                <span class="param-required">required</span>
+              </div>
+              <div class="param-item">
+                <span class="param-name">limit</span>
+                <span class="param-type">integer</span>
+                <span style="font-size:11px;color:var(--gray-400)">default: 10</span>
+              </div>
+            </div>
+            <h4 style="margin-top:16px">Response Preview</h4>
+            <div class="code-block">
+{
+  <span class="str">"data"</span>: [
+    {
+      <span class="str">"id"</span>: 42,
+      <span class="str">"name"</span>: <span class="str">"Sarah Connor"</span>,
+      <span class="str">"email"</span>: <span class="str">"sarah@example.com"</span>,
+      <span class="str">"total_orders"</span>: 28,
+      <span class="str">"lifetime_value"</span>: 4892.50
+    }
+  ],
+  <span class="str">"count"</span>: 10
+}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- API 2: Draft -->
+      <div class="api-card">
+        <div class="api-card-header">
+          <div class="api-card-left">
+            <span class="method-badge post">POST</span>
+            <span class="api-name">Bulk Update Prices</span>
+            <span class="api-path">/custom/bulk-update-prices</span>
+          </div>
+          <div class="api-card-right">
+            <span class="status draft">◐ Draft</span>
+            <div class="actions">
+              <button>Edit</button>
+              <button>Deploy</button>
+            </div>
+          </div>
+        </div>
+        <div class="api-card-body">
+          <div class="api-detail-section">
+            <h4>SQL Query</h4>
+            <div class="code-block">
+<span class="kw">UPDATE</span> products
+<span class="kw">SET</span>
+  price = price * (1 + <span class="str">:percentage</span> / 100),
+  updated_at = <span class="fn">NOW</span>()
+<span class="kw">WHERE</span> category_id = <span class="str">:category_id</span>
+<span class="kw">RETURNING</span> id, name, price;
+            </div>
+          </div>
+          <div class="api-detail-section">
+            <h4>Parameters</h4>
+            <div class="param-list">
+              <div class="param-item">
+                <span class="param-name">percentage</span>
+                <span class="param-type">number</span>
+                <span class="param-required">required</span>
+              </div>
+              <div class="param-item">
+                <span class="param-name">category_id</span>
+                <span class="param-type">integer</span>
+                <span class="param-required">required</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- CREATE MODAL -->
+<div class="create-modal-overlay" id="modal">
+  <div class="create-modal">
+    <div class="create-modal-header">
+      <h2>Create Custom API</h2>
+      <button class="close-btn" onclick="document.getElementById('modal').classList.remove('show')">×</button>
+    </div>
+    <div class="create-modal-body">
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>Endpoint Name</label>
+          <input type="text" placeholder="e.g. Monthly Revenue">
+        </div>
+        <div class="form-group">
+          <label>HTTP Method</label>
+          <select>
+            <option>GET</option>
+            <option>POST</option>
+            <option>PUT</option>
+            <option>DELETE</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Path</label>
+        <input type="text" placeholder="/custom/my-endpoint" style="font-family:var(--mono)">
+      </div>
+      <div class="form-group">
+        <label>SQL Query</label>
+        <textarea placeholder="SELECT * FROM users WHERE role = :role LIMIT :limit;" style="font-family:var(--mono);font-size:13px"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Description (optional)</label>
+        <input type="text" placeholder="Brief description of what this endpoint does">
+      </div>
+    </div>
+    <div class="create-modal-footer">
+      <button class="btn btn-outline" onclick="document.getElementById('modal').classList.remove('show')">Cancel</button>
+      <button class="btn btn-outline">Save as Draft</button>
+      <button class="btn btn-primary">Deploy Now</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

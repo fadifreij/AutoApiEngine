@@ -1,0 +1,63 @@
+:host { display: block; padding: 28px 32px; overflow-y: auto; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.page-title { font-size: 22px; font-weight: 700; }
+.page-subtitle { color: var(--gray-400); font-size: 13px; margin-top: 2px; }
+
+.custom-api-list { display: flex; flex-direction: column; gap: 12px; }
+.api-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; overflow: hidden; }
+.api-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; }
+.api-card-left { display: flex; align-items: center; gap: 12px; }
+.method-badge { padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; font-family: var(--mono);
+  &.get { background: #dbeafe; color: #1d4ed8; }
+  &.post { background: #dcfce7; color: #166534; }
+  &.put { background: #fef3c7; color: #92400e; }
+  &.delete { background: #fee2e2; color: #991b1b; }
+}
+.api-name { font-weight: 700; font-size: 15px; }
+.api-path { font-family: var(--mono); font-size: 13px; color: var(--gray-500); margin-left: 8px; }
+.api-card-right { display: flex; align-items: center; gap: 10px; }
+.status { font-size: 12px; padding: 4px 10px; border-radius: 6px; font-weight: 600;
+  &.deployed { background: #dcfce7; color: #166534; }
+  &.draft { background: #fef3c7; color: #92400e; }
+}
+.actions { display: flex; gap: 6px;
+  button { background: none; border: 1px solid var(--gray-200); border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12px; color: var(--gray-500); font-family: var(--font);
+    &:hover { border-color: var(--primary); color: var(--primary); }
+  }
+}
+
+.api-card-body { border-top: 1px solid var(--gray-100); padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.api-detail-section {
+  h4 { font-size: 12px; color: var(--gray-400); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+}
+.code-block { background: #1e1e2e; border-radius: 8px; padding: 12px 16px; font-family: var(--mono); font-size: 12px; color: #e2e8f0; line-height: 1.6; overflow-x: auto; max-height: 160px; overflow-y: auto; white-space: pre;
+  .kw { color: #c084fc; }
+  .str { color: #34d399; }
+  .fn { color: #818cf8; }
+}
+.param-list { font-size: 13px; }
+.param-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--gray-100);
+  &:last-child { border: none; }
+}
+.param-name { font-family: var(--mono); font-weight: 600; color: var(--gray-700); }
+.param-type { font-size: 11px; color: var(--gray-400); background: var(--gray-50); padding: 2px 6px; border-radius: 4px; }
+.param-required { font-size: 10px; color: var(--danger); font-weight: 600; }
+.param-default { font-size: 11px; color: var(--gray-400); }
+
+/* MODAL */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 100; display: flex; align-items: center; justify-content: center; }
+.modal { background: #fff; border-radius: 16px; width: 640px; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+.modal-header { padding: 20px 24px; border-bottom: 1px solid var(--gray-200); display: flex; justify-content: space-between; align-items: center;
+  h2 { font-size: 18px; font-weight: 700; }
+}
+.close-btn { background: none; border: none; cursor: pointer; color: var(--gray-400); font-size: 20px; padding: 4px; }
+.modal-body { padding: 24px; }
+.form-group { margin-bottom: 16px;
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--gray-700); margin-bottom: 6px; }
+  input, select, textarea { width: 100%; padding: 10px 14px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-size: 14px; font-family: var(--font); background: var(--gray-50);
+    &:focus { outline: none; border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+  }
+  textarea { min-height: 120px; font-family: var(--mono); }
+}
+.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--gray-200); display: flex; justify-content: flex-end; gap: 10px; }

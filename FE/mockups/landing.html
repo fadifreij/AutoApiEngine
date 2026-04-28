@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APIEngine — Your Database to Production APIs in Minutes</title>
+<link rel="stylesheet" href="shared-styles.css">
+<style>
+  /* NAV */
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 64px; background: rgba(255,255,255,.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--gray-100); position: fixed; top: 0; left: 0; right: 0; z-index: 100; }
+  .logo { font-size: 22px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+  .logo span { color: var(--gray-900); }
+  .logo svg { width: 28px; height: 28px; }
+  .nav-links { display: flex; gap: 8px; align-items: center; }
+  .nav-links a { padding: 8px 16px; font-size: 14px; font-weight: 500; color: var(--gray-600); border-radius: 8px; transition: all .15s; }
+  .nav-links a:hover { color: var(--primary); background: var(--gray-50); }
+  .nav-sep { width: 1px; height: 24px; background: var(--gray-200); margin: 0 8px; }
+
+  /* HERO */
+  .hero { padding: 140px 48px 80px; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; max-width: 1280px; margin: 0 auto; align-items: center; }
+  .hero-text { max-width: 540px; }
+  .hero-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; background: var(--primary-bg); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 20px; }
+  .hero-badge svg { width: 14px; height: 14px; }
+  .hero h1 { font-size: 52px; font-weight: 800; line-height: 1.12; margin-bottom: 20px; letter-spacing: -1px; }
+  .hero h1 .gradient { background: linear-gradient(135deg, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { font-size: 18px; color: var(--gray-500); line-height: 1.7; margin-bottom: 32px; }
+  .hero-buttons { display: flex; gap: 12px; align-items: center; }
+  .hero-buttons .note { font-size: 13px; color: var(--gray-400); margin-left: 8px; }
+  .hero-visual { position: relative; }
+  .hero-visual svg { width: 100%; height: auto; filter: drop-shadow(0 20px 40px rgba(79,70,229,.15)); }
+
+  /* FLOATING BADGES */
+  .float-badge { position: absolute; background: #fff; border: 1px solid var(--gray-100); border-radius: 12px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; box-shadow: var(--shadow-md); animation: float 4s ease-in-out infinite; }
+  .float-badge svg { width: 20px; height: 20px; }
+  .float-badge.fb1 { top: 20px; right: -10px; animation-delay: 0s; }
+  .float-badge.fb2 { bottom: 60px; left: -20px; animation-delay: 1.5s; }
+  .float-badge.fb3 { bottom: 10px; right: 40px; animation-delay: 3s; }
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+  /* LOGOS */
+  .logo-strip { padding: 60px 48px 40px; text-align: center; }
+  .logo-strip p { font-size: 13px; text-transform: uppercase; letter-spacing: 2px; color: var(--gray-400); font-weight: 600; margin-bottom: 24px; }
+  .logo-row { display: flex; justify-content: center; gap: 48px; align-items: center; flex-wrap: wrap; }
+  .logo-row svg { height: 28px; opacity: .35; transition: opacity .2s; }
+  .logo-row svg:hover { opacity: .7; }
+
+  /* FEATURES */
+  .features { padding: 80px 48px; max-width: 1200px; margin: 0 auto; }
+  .section-header { text-align: center; margin-bottom: 56px; }
+  .section-header .label { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; background: var(--primary-bg); color: var(--primary); font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+  .section-header h2 { font-size: 40px; font-weight: 800; letter-spacing: -.5px; margin-bottom: 12px; }
+  .section-header p { font-size: 18px; color: var(--gray-500); max-width: 560px; margin: 0 auto; }
+  .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .feature-card { border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 32px 28px; transition: all .25s; position: relative; overflow: hidden; }
+  .feature-card:hover { border-color: var(--primary-light); box-shadow: var(--shadow-lg); transform: translateY(-4px); }
+  .feature-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--primary), var(--accent)); opacity: 0; transition: opacity .25s; }
+  .feature-card:hover::before { opacity: 1; }
+  .feature-icon { width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+  .feature-icon svg { width: 26px; height: 26px; }
+  .feature-icon.purple { background: #ede9fe; }
+  .feature-icon.blue { background: #dbeafe; }
+  .feature-icon.green { background: #dcfce7; }
+  .feature-icon.pink { background: #fce7f3; }
+  .feature-icon.orange { background: #ffedd5; }
+  .feature-icon.cyan { background: #cffafe; }
+  .feature-card h3 { font-size: 18px; margin-bottom: 10px; }
+  .feature-card p { color: var(--gray-500); font-size: 14px; line-height: 1.7; }
+  .feature-card ul { list-style: none; margin-top: 14px; }
+  .feature-card ul li { padding: 4px 0; font-size: 13px; color: var(--gray-600); display: flex; align-items: center; gap: 8px; }
+  .feature-card ul li svg { width: 16px; height: 16px; color: var(--success); flex-shrink: 0; }
+
+  /* HOW IT WORKS */
+  .how-section { padding: 80px 48px; background: var(--gray-50); }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; max-width: 1000px; margin: 0 auto; position: relative; }
+  .steps::before { content: ''; position: absolute; top: 36px; left: 100px; right: 100px; height: 2px; background: linear-gradient(90deg, var(--primary), var(--accent)); opacity: .2; }
+  .step { text-align: center; position: relative; z-index: 1; }
+  .step-icon { width: 72px; height: 72px; border-radius: 50%; background: #fff; border: 2px solid var(--gray-200); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; box-shadow: var(--shadow-sm); }
+  .step-icon svg { width: 32px; height: 32px; color: var(--primary); }
+  .step-num { position: absolute; top: -4px; right: calc(50% - 48px); width: 24px; height: 24px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .step h4 { font-size: 18px; margin-bottom: 8px; }
+  .step p { color: var(--gray-500); font-size: 14px; line-height: 1.6; max-width: 240px; margin: 0 auto; }
+
+  /* DEMO SECTION */
+  .demo-section { padding: 80px 48px; max-width: 1200px; margin: 0 auto; }
+  .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+  .demo-grid.reverse { direction: rtl; }
+  .demo-grid.reverse > * { direction: ltr; }
+  .demo-info .label { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 16px; font-size: 12px; font-weight: 600; margin-bottom: 14px; }
+  .demo-info h3 { font-size: 28px; font-weight: 700; margin-bottom: 14px; }
+  .demo-info p { color: var(--gray-500); line-height: 1.7; margin-bottom: 20px; }
+  .demo-info ul { list-style: none; }
+  .demo-info ul li { padding: 6px 0; font-size: 14px; color: var(--gray-600); display: flex; align-items: center; gap: 10px; }
+  .demo-info ul li svg { width: 18px; height: 18px; color: var(--primary); flex-shrink: 0; }
+  .demo-visual { background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); overflow: hidden; }
+  .demo-visual-bar { background: var(--gray-100); padding: 10px 14px; display: flex; gap: 6px; align-items: center; }
+  .demo-visual-bar .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .demo-visual-bar .dot:nth-child(1) { background: #f87171; }
+  .demo-visual-bar .dot:nth-child(2) { background: #fbbf24; }
+  .demo-visual-bar .dot:nth-child(3) { background: #34d399; }
+  .demo-body { padding: 24px; }
+
+  /* MOCK UIs inside demo sections */
+  .mock-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .mock-table th { text-align: left; padding: 8px 12px; background: var(--gray-100); color: var(--gray-500); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  .mock-table td { padding: 8px 12px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); }
+  .mock-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .mock-badge.green { background: #dcfce7; color: #16a34a; }
+  .mock-badge.blue { background: #dbeafe; color: #2563eb; }
+  .mock-badge.purple { background: #ede9fe; color: #7c3aed; }
+  .mock-method { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }
+  .mock-method.get { background: #22c55e; }
+  .mock-method.post { background: #3b82f6; }
+  .mock-method.put { background: #f59e0b; }
+  .mock-method.del { background: #ef4444; }
+
+  /* PRICING */
+  .pricing-section { padding: 80px 48px; background: var(--gray-50); }
+  .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; max-width: 1000px; margin: 0 auto; }
+  .pricing-card { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 36px 28px; text-align: center; transition: all .25s; }
+  .pricing-card.featured { border-color: var(--primary); box-shadow: 0 8px 30px rgba(79,70,229,.15); position: relative; transform: scale(1.04); }
+  .pricing-card.featured::before { content: 'MOST POPULAR'; position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 4px 16px; border-radius: 20px; letter-spacing: .5px; }
+  .pricing-card h3 { font-size: 20px; margin-bottom: 4px; }
+  .pricing-card .price-sub { color: var(--gray-400); font-size: 14px; margin-bottom: 16px; }
+  .pricing-card .price { font-size: 44px; font-weight: 800; margin-bottom: 4px; }
+  .pricing-card .price span { font-size: 16px; color: var(--gray-400); font-weight: 400; }
+  .pricing-card .price-note { font-size: 13px; color: var(--gray-400); margin-bottom: 24px; }
+  .pricing-card ul { list-style: none; text-align: left; margin-bottom: 24px; }
+  .pricing-card ul li { padding: 7px 0; font-size: 14px; color: var(--gray-600); display: flex; align-items: center; gap: 8px; }
+  .pricing-card ul li svg { width: 16px; height: 16px; color: var(--success); flex-shrink: 0; }
+  .pricing-card .btn { width: 100%; }
+
+  /* CTA */
+  .cta-section { padding: 80px 48px; }
+  .cta-box { max-width: 900px; margin: 0 auto; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 24px; padding: 60px; text-align: center; color: #fff; position: relative; overflow: hidden; }
+  .cta-box::before { content: ''; position: absolute; width: 300px; height: 300px; background: rgba(255,255,255,.08); border-radius: 50%; top: -80px; right: -60px; }
+  .cta-box::after { content: ''; position: absolute; width: 200px; height: 200px; background: rgba(255,255,255,.05); border-radius: 50%; bottom: -60px; left: -40px; }
+  .cta-box h2 { font-size: 36px; margin-bottom: 14px; position: relative; z-index: 1; }
+  .cta-box p { font-size: 18px; opacity: .85; margin-bottom: 32px; position: relative; z-index: 1; }
+  .cta-box .btn { position: relative; z-index: 1; }
+
+  /* FOOTER */
+  footer { background: var(--gray-900); color: var(--gray-400); padding: 60px 48px 32px; }
+  .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; max-width: 1200px; margin: 0 auto 40px; }
+  .footer-brand .logo { color: var(--primary-light); margin-bottom: 12px; }
+  .footer-brand p { font-size: 14px; line-height: 1.7; }
+  .footer-col h4 { color: var(--gray-300); font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+  .footer-col a { display: block; padding: 4px 0; font-size: 14px; color: var(--gray-400); transition: color .15s; }
+  .footer-col a:hover { color: var(--primary-light); }
+  .footer-bottom { max-width: 1200px; margin: 0 auto; padding-top: 24px; border-top: 1px solid var(--gray-800); display: flex; justify-content: space-between; font-size: 13px; }
+  .footer-bottom a { color: var(--gray-400); margin-left: 16px; }
+
+  /* SHARED SVG ICONS (inline) */
+  .check-icon { display: inline-flex; }
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<nav>
+  <a href="landing.html" class="logo">
+    <svg viewBox="0 0 32 32" fill="none"><rect x="2" y="6" width="28" height="20" rx="4" stroke="#4f46e5" stroke-width="2.5"/><path d="M9 16h6m-3-3v6" stroke="#4f46e5" stroke-width="2" stroke-linecap="round"/><circle cx="22" cy="16" r="3" stroke="#7c3aed" stroke-width="2"/></svg>
+    API<span>Engine</span>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">How it Works</a>
+    <a href="pricing.html">Pricing</a>
+    <a href="docs.html">Docs</a>
+    <div class="nav-sep"></div>
+    <a href="login.html" class="btn btn-ghost">Log in</a>
+    <a href="register.html" class="btn btn-primary">Start Free Trial</a>
+  </div>
+</nav>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="hero-text">
+    <div class="hero-badge">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5l1.85 3.75L14 5.91l-2.77 2.7.65 3.82L8 10.58l-3.88 2.04.66-3.82L2 6.1l4.15-.66L8 1.5z"/></svg>
+      Now in Public Beta — Free 14-Day Trial
+    </div>
+    <h1>Your Database →<br><span class="gradient">Production APIs</span><br>in Minutes</h1>
+    <p>Connect your existing database or use our hosted service. APIEngine auto-generates CRUD APIs, lets you write custom endpoints, and protects everything with built-in identity management.</p>
+    <div class="hero-buttons">
+      <a href="register.html" class="btn btn-primary btn-lg">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Start Free Trial
+      </a>
+      <a href="#how" class="btn btn-outline btn-lg">See How it Works</a>
+    </div>
+    <div style="margin-top:16px"><span class="note" style="font-size:13px;color:var(--gray-400)">No credit card required · Full access for 14 days</span></div>
+  </div>
+  <div class="hero-visual">
+    <!-- Main Dashboard Illustration SVG -->
+    <svg viewBox="0 0 520 380" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Browser frame -->
+      <rect x="10" y="10" width="500" height="360" rx="12" fill="#fff" stroke="#e5e7eb" stroke-width="1.5"/>
+      <rect x="10" y="10" width="500" height="36" rx="12" fill="#f9fafb"/>
+      <rect x="10" y="34" width="500" height="1" fill="#e5e7eb"/>
+      <circle cx="30" cy="28" r="5" fill="#f87171"/>
+      <circle cx="46" cy="28" r="5" fill="#fbbf24"/>
+      <circle cx="62" cy="28" r="5" fill="#34d399"/>
+      <rect x="180" y="21" width="160" height="14" rx="7" fill="#f3f4f6"/>
+      <!-- Sidebar -->
+      <rect x="10" y="46" width="100" height="324" fill="#f9fafb"/>
+      <rect x="110" y="46" width="1" height="324" fill="#e5e7eb"/>
+      <rect x="22" y="60" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="22" y="80" width="76" height="24" rx="6" fill="#ede9fe"/>
+      <rect x="22" y="112" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="22" y="128" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="22" y="144" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="22" y="168" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="22" y="184" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <!-- Stat cards -->
+      <rect x="124" y="56" width="90" height="56" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="136" y="68" width="40" height="6" rx="3" fill="#e5e7eb"/>
+      <rect x="136" y="82" width="24" height="14" rx="4" fill="#4f46e5" opacity=".15"/>
+      <text x="140" y="93" font-size="11" font-weight="700" fill="#4f46e5">12</text>
+      <rect x="222" y="56" width="90" height="56" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="234" y="68" width="40" height="6" rx="3" fill="#e5e7eb"/>
+      <rect x="234" y="82" width="24" height="14" rx="4" fill="#22c55e" opacity=".15"/>
+      <text x="238" y="93" font-size="11" font-weight="700" fill="#22c55e">48</text>
+      <rect x="320" y="56" width="90" height="56" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="332" y="68" width="40" height="6" rx="3" fill="#e5e7eb"/>
+      <rect x="332" y="82" width="24" height="14" rx="4" fill="#7c3aed" opacity=".15"/>
+      <text x="334" y="93" font-size="11" font-weight="700" fill="#7c3aed">156</text>
+      <rect x="418" y="56" width="80" height="56" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="430" y="68" width="40" height="6" rx="3" fill="#e5e7eb"/>
+      <rect x="430" y="82" width="30" height="14" rx="4" fill="#f59e0b" opacity=".15"/>
+      <text x="432" y="93" font-size="11" font-weight="700" fill="#f59e0b">3.2K</text>
+      <!-- Activity panel -->
+      <rect x="124" y="124" width="244" height="230" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="136" y="138" width="80" height="8" rx="4" fill="#e5e7eb"/>
+      <circle cx="142" cy="164" r="4" fill="#22c55e"/><rect x="154" y="160" width="180" height="6" rx="3" fill="#f3f4f6"/>
+      <circle cx="142" cy="184" r="4" fill="#3b82f6"/><rect x="154" y="180" width="160" height="6" rx="3" fill="#f3f4f6"/>
+      <circle cx="142" cy="204" r="4" fill="#8b5cf6"/><rect x="154" y="200" width="140" height="6" rx="3" fill="#f3f4f6"/>
+      <circle cx="142" cy="224" r="4" fill="#f59e0b"/><rect x="154" y="220" width="170" height="6" rx="3" fill="#f3f4f6"/>
+      <circle cx="142" cy="244" r="4" fill="#22c55e"/><rect x="154" y="240" width="150" height="6" rx="3" fill="#f3f4f6"/>
+      <!-- Quick actions panel -->
+      <rect x="376" y="124" width="122" height="230" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="388" y="138" width="80" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="388" y="160" width="98" height="28" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+      <rect x="388" y="196" width="98" height="28" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+      <rect x="388" y="232" width="98" height="28" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+      <rect x="388" y="268" width="98" height="28" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+    </svg>
+    <!-- Floating badges -->
+    <div class="float-badge fb1">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/><path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      48 APIs Generated
+    </div>
+    <div class="float-badge fb2">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      12 Tables Found
+    </div>
+    <div class="float-badge fb3">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      Identity Secured
+    </div>
+  </div>
+</section>
+
+<!-- ============ LOGO STRIP ============ -->
+<section class="logo-strip">
+  <p>Works with databases you already use</p>
+  <div class="logo-row">
+    <svg viewBox="0 0 120 28" fill="var(--gray-500)"><text x="0" y="22" font-size="18" font-weight="700" font-family="Segoe UI">PostgreSQL</text></svg>
+    <svg viewBox="0 0 80 28" fill="var(--gray-500)"><text x="0" y="22" font-size="18" font-weight="700" font-family="Segoe UI">MySQL</text></svg>
+    <svg viewBox="0 0 120 28" fill="var(--gray-500)"><text x="0" y="22" font-size="18" font-weight="700" font-family="Segoe UI">SQL Server</text></svg>
+    <svg viewBox="0 0 90 28" fill="var(--gray-500)"><text x="0" y="22" font-size="18" font-weight="700" font-family="Segoe UI">MariaDB</text></svg>
+    <svg viewBox="0 0 80 28" fill="var(--gray-500)"><text x="0" y="22" font-size="18" font-weight="700" font-family="Segoe UI">Oracle</text></svg>
+  </div>
+</section>
+
+<!-- ============ FEATURES ============ -->
+<section class="features" id="features">
+  <div class="section-header">
+    <div class="label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Platform Features
+    </div>
+    <h2>Everything You Need to Ship</h2>
+    <p>Three pillars that take you from raw database to secured, production-ready APIs</p>
+  </div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="feature-icon purple">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>
+      </div>
+      <h3>Database Workspaces</h3>
+      <p>Isolated workspaces, each backed by its own database. Connect external or use hosted.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> External or hosted databases</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Backup & restore</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> DDL transaction runner</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon blue">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8m-8 4h8"/></svg>
+      </div>
+      <h3>SQL Query Studio</h3>
+      <p>Browse tables, functions, views. Write and execute SQL with syntax highlighting.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Full object explorer</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Rich SQL editor</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Template queries</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon green">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
+      <h3>Auto CRUD APIs</h3>
+      <p>Every table instantly gets RESTful endpoints. Zero configuration, instant deployment.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> GET, POST, PUT, DELETE</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Auto-documentation</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> One-click deploy</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon orange">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      </div>
+      <h3>Custom Endpoints</h3>
+      <p>Deploy your own API endpoints with custom business logic alongside auto-generated ones.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Custom route builder</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Request/response editor</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> API testing playground</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon pink">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#db2777" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </div>
+      <h3>API Protection</h3>
+      <p>Secure any endpoint with API keys for simple auth or full OAuth/OIDC identity flows.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> API key management</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> OAuth / OIDC</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Per-API settings</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon cyan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0891b2" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      </div>
+      <h3>Identity Provider</h3>
+      <p>Built-in managed IdP with user management, or connect your own external provider.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Built-in IdP</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> External IdP (Okta, Auth0)</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> User & role management</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="how-section" id="how">
+  <div class="section-header">
+    <div class="label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+      Simple Process
+    </div>
+    <h2>Up and Running in 3 Steps</h2>
+    <p>From database connection to secured production APIs</p>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>
+      </div>
+      <h4>Create Workspace</h4>
+      <p>Name your workspace and connect a database — your own or hosted by us</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
+      <h4>Generate APIs</h4>
+      <p>CRUD endpoints auto-created for every table. Add custom endpoints as needed</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </div>
+      <h4>Secure & Deploy</h4>
+      <p>Protect with API keys or identity providers, then deploy to production</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DEMO: WORKSPACE ============ -->
+<section class="demo-section">
+  <div class="demo-grid">
+    <div class="demo-info">
+      <div class="label" style="background:#ede9fe;color:#7c3aed">Workspace</div>
+      <h3>Your Database, Fully Managed</h3>
+      <p>Create isolated workspaces backed by individual databases. Browse all objects, run SQL, manage backups — all from one place.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Connect external or spin up hosted DB</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Explore tables, functions, views</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Upload / download / backup database</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Run DDL transactions directly</li>
+      </ul>
+    </div>
+    <div class="demo-visual">
+      <div class="demo-visual-bar"><div class="dot"></div><div class="dot"></div><div class="dot"></div><span style="margin-left:12px;font-size:12px;color:var(--gray-400)">Query Studio — ecommerce-db</span></div>
+      <div class="demo-body">
+        <svg viewBox="0 0 440 200" fill="none">
+          <!-- Tree -->
+          <text x="0" y="14" font-size="11" font-weight="600" fill="#6b7280" font-family="Segoe UI">OBJECT EXPLORER</text>
+          <text x="8" y="36" font-size="12" fill="#4f46e5" font-weight="600" font-family="Segoe UI">📁 Tables (12)</text>
+          <text x="24" y="54" font-size="11" fill="#6b7280" font-family="Segoe UI">📄 users</text>
+          <text x="24" y="70" font-size="11" fill="#6b7280" font-family="Segoe UI">📄 orders</text>
+          <text x="24" y="86" font-size="11" fill="#6b7280" font-family="Segoe UI">📄 products</text>
+          <text x="8" y="108" font-size="12" fill="#7c3aed" font-weight="600" font-family="Segoe UI">⚡ Functions (3)</text>
+          <text x="8" y="128" font-size="12" fill="#0891b2" font-weight="600" font-family="Segoe UI">👁 Views (2)</text>
+          <!-- Editor -->
+          <rect x="160" y="0" width="280" height="140" rx="6" fill="#1e1e2e"/>
+          <text x="172" y="22" font-size="11" fill="#475569" font-family="Consolas">-- Pending orders</text>
+          <text x="172" y="40" font-size="11" font-family="Consolas"><tspan fill="#c084fc">SELECT</tspan><tspan fill="#e2e8f0"> * </tspan><tspan fill="#c084fc">FROM</tspan><tspan fill="#e2e8f0"> orders</tspan></text>
+          <text x="172" y="58" font-size="11" font-family="Consolas"><tspan fill="#c084fc">WHERE</tspan><tspan fill="#e2e8f0"> status = </tspan><tspan fill="#34d399">'pending'</tspan></text>
+          <text x="172" y="76" font-size="11" font-family="Consolas"><tspan fill="#c084fc">LIMIT</tspan><tspan fill="#fbbf24"> 100</tspan><tspan fill="#e2e8f0">;</tspan></text>
+          <rect x="172" y="96" width="44" height="20" rx="4" fill="#22c55e"/>
+          <text x="180" y="110" font-size="10" fill="#fff" font-weight="600" font-family="Segoe UI">▶ Run</text>
+          <!-- Result hint -->
+          <text x="160" y="160" font-size="11" fill="#22c55e" font-family="Segoe UI">✓ 5 rows · 23ms</text>
+          <rect x="160" y="168" width="280" height="28" rx="4" fill="#f9fafb" stroke="#e5e7eb"/>
+          <text x="172" y="186" font-size="10" fill="#6b7280" font-family="Consolas">id | name        | total   | status</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DEMO: APIs ============ -->
+<section class="demo-section" style="background:var(--gray-50)">
+  <div class="demo-grid reverse">
+    <div class="demo-info">
+      <div class="label" style="background:#dcfce7;color:#16a34a">API Management</div>
+      <h3>APIs, Auto-Generated</h3>
+      <p>The moment your database connects, CRUD endpoints appear for every table. Add custom endpoints with your own logic.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> GET / POST / PUT / DELETE per table</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Deploy custom endpoints</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Test playground included</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Request monitoring & logs</li>
+      </ul>
+    </div>
+    <div class="demo-visual">
+      <div class="demo-visual-bar"><div class="dot"></div><div class="dot"></div><div class="dot"></div><span style="margin-left:12px;font-size:12px;color:var(--gray-400)">API Management — 48 endpoints</span></div>
+      <div class="demo-body" style="padding:16px">
+        <table class="mock-table">
+          <thead><tr><th>Method</th><th>Endpoint</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td><span class="mock-method get">GET</span></td><td style="font-family:var(--mono);font-size:12px">/api/v1/users</td><td><span class="mock-badge green">Active</span></td></tr>
+            <tr><td><span class="mock-method post">POST</span></td><td style="font-family:var(--mono);font-size:12px">/api/v1/users</td><td><span class="mock-badge green">Active</span></td></tr>
+            <tr><td><span class="mock-method get">GET</span></td><td style="font-family:var(--mono);font-size:12px">/api/v1/orders</td><td><span class="mock-badge green">Active</span></td></tr>
+            <tr><td><span class="mock-method put">PUT</span></td><td style="font-family:var(--mono);font-size:12px">/api/v1/orders/:id</td><td><span class="mock-badge green">Active</span></td></tr>
+            <tr><td><span class="mock-method del">DEL</span></td><td style="font-family:var(--mono);font-size:12px">/api/v1/orders/:id</td><td><span class="mock-badge green">Active</span></td></tr>
+            <tr><td><span class="mock-method post">POST</span></td><td style="font-family:var(--mono);font-size:12px">/api/custom/reports</td><td><span class="mock-badge blue">Custom</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DEMO: SECURITY ============ -->
+<section class="demo-section">
+  <div class="demo-grid">
+    <div class="demo-info">
+      <div class="label" style="background:#fce7f3;color:#db2777">Security</div>
+      <h3>Security Built In</h3>
+      <p>Protect any API with API keys or a full identity provider. Use our managed IdP or bring your own — Keycloak powers everything behind the scenes.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> API key generation & rotation</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Built-in identity provider (managed)</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Connect external IdPs</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> OIDC & SAML protocols</li>
+      </ul>
+    </div>
+    <div class="demo-visual">
+      <div class="demo-visual-bar"><div class="dot"></div><div class="dot"></div><div class="dot"></div><span style="margin-left:12px;font-size:12px;color:var(--gray-400)">Security — Identity Providers</span></div>
+      <div class="demo-body">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+            <div style="display:flex;align-items:center;gap:10px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <div><div style="font-weight:600;font-size:14px">Built-in IdP</div><div style="font-size:12px;color:var(--gray-400)">156 users · OIDC</div></div>
+            </div>
+            <span class="mock-badge green">Active</span>
+          </div>
+          <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+            <div style="display:flex;align-items:center;gap:10px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z"/></svg>
+              <div><div style="font-weight:600;font-size:14px">Okta (External)</div><div style="font-size:12px;color:var(--gray-400)">SAML 2.0 · SSO</div></div>
+            </div>
+            <span class="mock-badge blue">Configured</span>
+          </div>
+          <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+            <div style="display:flex;align-items:center;gap:10px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.78 7.78 5.5 5.5 0 017.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              <div><div style="font-weight:600;font-size:14px">API Keys</div><div style="font-size:12px;color:var(--gray-400)">12 APIs · 3 keys issued</div></div>
+            </div>
+            <span class="mock-badge green">Active</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING PREVIEW ============ -->
+<section class="pricing-section" id="pricing">
+  <div class="section-header">
+    <div class="label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Pricing
+    </div>
+    <h2>Simple, Transparent Pricing</h2>
+    <p>Start free, upgrade when you're ready</p>
+  </div>
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <h3>Free Trial</h3>
+      <div class="price-sub">Get started for free</div>
+      <div class="price">$0<span>/14 days</span></div>
+      <div class="price-note">No credit card required</div>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> 1 Workspace</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Hosted DB (100 MB)</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Auto CRUD generation</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> API key protection</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Community support</li>
+      </ul>
+      <a href="register.html" class="btn btn-outline">Start Free Trial</a>
+    </div>
+    <div class="pricing-card featured">
+      <h3>Pro</h3>
+      <div class="price-sub">For growing teams</div>
+      <div class="price">$49<span>/month</span></div>
+      <div class="price-note">per workspace</div>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> 10 Workspaces</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> External + hosted DBs</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Custom API endpoints</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Built-in identity provider</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Backup & restore</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Priority support</li>
+      </ul>
+      <a href="register.html" class="btn btn-primary">Get Started</a>
+    </div>
+    <div class="pricing-card">
+      <h3>Enterprise</h3>
+      <div class="price-sub">For large organizations</div>
+      <div class="price">Custom</div>
+      <div class="price-note">contact for quote</div>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Unlimited workspaces</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> External IdP integration</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> SSO & SAML</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Dedicated infrastructure</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> SLA & dedicated support</li>
+      </ul>
+      <a href="#" class="btn btn-outline">Contact Sales</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA ============ -->
+<section class="cta-section">
+  <div class="cta-box">
+    <h2>Ready to Ship Faster?</h2>
+    <p>Start your free 14-day trial. No credit card, no setup hassle.</p>
+    <a href="register.html" class="btn btn-white btn-lg">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      Start Free Trial
+    </a>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="logo" style="font-size:20px">
+        <svg width="24" height="24" viewBox="0 0 32 32" fill="none"><rect x="2" y="6" width="28" height="20" rx="4" stroke="#818cf8" stroke-width="2.5"/><path d="M9 16h6m-3-3v6" stroke="#818cf8" stroke-width="2" stroke-linecap="round"/><circle cx="22" cy="16" r="3" stroke="#a78bfa" stroke-width="2"/></svg>
+        API<span style="color:var(--gray-300)">Engine</span>
+      </div>
+      <p>Your database to production APIs in minutes. Auto-generate, customize, and secure — all from one platform.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Product</h4>
+      <a href="#features">Features</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="docs.html">Documentation</a>
+      <a href="#">Changelog</a>
+    </div>
+    <div class="footer-col">
+      <h4>Company</h4>
+      <a href="#">About</a>
+      <a href="#">Blog</a>
+      <a href="#">Careers</a>
+      <a href="#">Contact</a>
+    </div>
+    <div class="footer-col">
+      <h4>Legal</h4>
+      <a href="#">Privacy Policy</a>
+      <a href="#">Terms of Service</a>
+      <a href="#">Cookie Policy</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>&copy; 2026 APIEngine. All rights reserved.</span>
+    <div>
+      <a href="#">Twitter</a>
+      <a href="#">GitHub</a>
+      <a href="#">LinkedIn</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

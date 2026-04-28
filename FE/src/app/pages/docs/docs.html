@@ -1,0 +1,116 @@
+<nav>
+  <a routerLink="/" class="logo">
+    <svg viewBox="0 0 32 32" fill="none">
+      <ellipse cx="16" cy="7" rx="11" ry="4" stroke="#4f46e5" stroke-width="2" />
+      <path d="M5 7v18c0 2.2 4.9 4 11 4s11-1.8 11-4V7" stroke="#4f46e5" stroke-width="2" />
+      <path d="M5 15c0 2.2 4.9 4 11 4s11-1.8 11-4" stroke="#4f46e5" stroke-width="2" />
+      <path d="M18 14l-4 7h5l-4 7" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    API<span>Engine</span>
+  </a>
+  <div class="nav-links">
+    <a routerLink="/" fragment="features">Features</a>
+    <a routerLink="/pricing">Pricing</a>
+    <a routerLink="/docs" class="active-link">Docs</a>
+    <div class="nav-sep"></div>
+    <a class="btn btn-ghost btn-sm" (click)="onLogin()">Log in</a>
+    <a routerLink="/register" class="btn btn-primary btn-sm">Start Free Trial</a>
+  </div>
+</nav>
+
+<div class="docs-layout">
+  <aside class="docs-sidebar">
+    <input class="docs-search" placeholder="Search docs..." readonly>
+    <div class="docs-section">
+      <div class="docs-section-title">Getting Started</div>
+      <a class="docs-link active">Introduction</a>
+      <a class="docs-link">Quick Start Guide</a>
+      <a class="docs-link">Creating Your Account</a>
+    </div>
+    <div class="docs-section">
+      <div class="docs-section-title">Workspaces</div>
+      <a class="docs-link">Creating a Workspace</a>
+      <a class="docs-link">Connecting External DB</a>
+      <a class="docs-link">Hosted Databases</a>
+      <a class="docs-link">Backup & Restore</a>
+      <a class="docs-link">DDL Transactions</a>
+    </div>
+    <div class="docs-section">
+      <div class="docs-section-title">Query Studio</div>
+      <a class="docs-link">Object Explorer</a>
+      <a class="docs-link">SQL Editor</a>
+      <a class="docs-link">Template Queries</a>
+    </div>
+    <div class="docs-section">
+      <div class="docs-section-title">API Management</div>
+      <a class="docs-link">Auto CRUD APIs</a>
+      <a class="docs-link">Custom Endpoints</a>
+      <a class="docs-link">API Testing</a>
+      <a class="docs-link">Deployment</a>
+    </div>
+    <div class="docs-section">
+      <div class="docs-section-title">Security</div>
+      <a class="docs-link">API Keys</a>
+      <a class="docs-link">Identity Providers</a>
+      <a class="docs-link">User Management</a>
+      <a class="docs-link">Protocols (OIDC/SAML)</a>
+    </div>
+  </aside>
+
+  <main class="docs-content">
+    <h1>Introduction</h1>
+    <p class="doc-subtitle">Welcome to APIEngine — the fastest way to go from database to production APIs.</p>
+
+    <div class="docs-callout">
+      <strong>New to APIEngine?</strong> Follow our <a>Quick Start Guide</a> to create your first workspace and generate
+      APIs in under 5 minutes.
+    </div>
+
+    <h2>What is APIEngine?</h2>
+    <p>APIEngine is a SaaS platform that lets you connect any database (or use our hosted service), automatically
+      generate RESTful CRUD APIs for every table, deploy custom endpoints, and protect everything with built-in identity
+      management.</p>
+
+    <h2>Core Concepts</h2>
+    <div class="card-grid">
+      <div class="doc-card">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3" />
+            <path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3" />
+            <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5" />
+          </svg> Workspaces</h3>
+        <p>Isolated environments, each backed by a database. Think of them as projects.</p>
+      </div>
+      <div class="doc-card">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+          </svg> Auto CRUD</h3>
+        <p>Automatic REST endpoints generated from your database schema.</p>
+      </div>
+      <div class="doc-card">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+          </svg> Custom APIs</h3>
+        <p>Deploy your own endpoints with custom business logic.</p>
+      </div>
+      <div class="doc-card">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg> Security</h3>
+        <p>API keys, managed identity provider, or external IdP integration.</p>
+      </div>
+    </div>
+
+    <h2>Quick Example</h2>
+    <p>Here's what happens when you create a workspace with a database that has a <code>users</code> table:</p>
+    <pre><span class="cm">// Auto-generated endpoints for "users" table</span>
+<span class="kw">GET</span>    /api/v1/users          <span class="cm">// List all users</span>
+<span class="kw">GET</span>    /api/v1/users/:id      <span class="cm">// Get user by ID</span>
+<span class="kw">POST</span>   /api/v1/users          <span class="cm">// Create user</span>
+<span class="kw">PUT</span>    /api/v1/users/:id      <span class="cm">// Update user</span>
+<span class="kw">DELETE</span> /api/v1/users/:id      <span class="cm">// Delete user</span></pre>
+    <p>That's it. No code, no configuration. Just connect and go.</p>
+  </main>
+</div>

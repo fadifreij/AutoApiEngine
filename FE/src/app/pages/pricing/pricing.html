@@ -1,0 +1,162 @@
+<nav>
+  <a routerLink="/" class="logo">
+    <svg viewBox="0 0 32 32" fill="none">
+      <ellipse cx="16" cy="7" rx="11" ry="4" stroke="#4f46e5" stroke-width="2" />
+      <path d="M5 7v18c0 2.2 4.9 4 11 4s11-1.8 11-4V7" stroke="#4f46e5" stroke-width="2" />
+      <path d="M5 15c0 2.2 4.9 4 11 4s11-1.8 11-4" stroke="#4f46e5" stroke-width="2" />
+      <path d="M18 14l-4 7h5l-4 7" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    API<span>Engine</span>
+  </a>
+  <div class="nav-links">
+    <a routerLink="/" fragment="features">Features</a>
+    <a routerLink="/" fragment="how">How it Works</a>
+    <a routerLink="/pricing" class="active-link">Pricing</a>
+    <a routerLink="/docs">Docs</a>
+    <div class="nav-sep"></div>
+    <a class="btn btn-ghost btn-sm" (click)="onLogin()">Log in</a>
+    <a routerLink="/register" class="btn btn-primary btn-sm">Start Free Trial</a>
+  </div>
+</nav>
+
+<section class="page-hero">
+  <h1>Simple, Transparent Pricing</h1>
+  <p>Start free. Upgrade when you're ready. No hidden fees, no surprises.</p>
+</section>
+
+<div class="toggle-row">
+  <div class="toggle">
+    <button [class.active]="!yearly()" (click)="yearly.set(false)">Monthly</button>
+    <button [class.active]="yearly()" (click)="yearly.set(true)">Yearly (Save 20%)</button>
+  </div>
+</div>
+
+<div class="pricing-grid">
+  <div class="pricing-card">
+    <h3>Free Trial</h3>
+    <div class="price-sub">Get started risk-free</div>
+    <div class="price">$0<span>/14 days</span></div>
+    <div class="price-note">No credit card required</div>
+    <ul>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> 1 Workspace</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> Hosted database (100 MB)</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> Auto CRUD generation</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> Query Studio</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> API key protection</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> Community support</li>
+    </ul>
+    <a routerLink="/register" class="btn btn-outline">Start Free Trial</a>
+  </div>
+
+  <div class="pricing-card featured">
+    <h3>Pro</h3>
+    <div class="price-sub">For growing teams</div>
+    <div class="price">{{ yearly() ? '$39' : '$49' }}<span>/month</span></div>
+    <div class="price-note">per workspace, billed {{ yearly() ? 'yearly' : 'monthly' }}</div>
+    <ul>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> 10 Workspaces</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> External + hosted databases</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> Custom API endpoints</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> Built-in identity provider</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> Backup & restore</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> Priority support</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> DDL transaction runner</li>
+    </ul>
+    <a routerLink="/register" class="btn btn-primary">Get Started</a>
+  </div>
+
+  <div class="pricing-card">
+    <h3>Enterprise</h3>
+    <div class="price-sub">For large organizations</div>
+    <div class="price">Custom</div>
+    <div class="price-note">tailored to your needs</div>
+    <ul>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> Unlimited workspaces</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> External IdP integration</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> SSO & SAML</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> Dedicated infrastructure</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> SLA guarantee</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg> Dedicated support</li>
+    </ul>
+    <button class="btn btn-outline">Contact Sales</button>
+  </div>
+</div>
+
+<section class="faq">
+  <h2>Frequently Asked Questions</h2>
+  @for (item of faqItems; track item.q) {
+  <div class="faq-item" [class.open]="item.open">
+    <div class="faq-q" (click)="toggleFaq(item)">
+      {{ item.q }}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+    </div>
+    <div class="faq-a">
+      <p>{{ item.a }}</p>
+    </div>
+  </div>
+  }
+</section>
+
+<footer>
+  <p>&copy; 2026 APIEngine. All rights reserved. | <a routerLink="/pricing">Privacy</a> | <a
+      routerLink="/pricing">Terms</a></p>
+</footer>

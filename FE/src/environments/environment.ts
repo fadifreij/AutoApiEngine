@@ -1,5 +1,6 @@
-export const environment = {
+﻿export const environment = {
   production: false,
-  apiUrl: 'http://localhost:5000/api/v1',
-  signalRUrl: 'http://localhost:5000/hubs',
+  apiUrl: 'https://localhost:7002/api/auth',
+  keycloakUrl: 'http://localhost:8081',
+  clientId: 'api-engine-app'
 };

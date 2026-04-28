@@ -1,4 +1,4 @@
-﻿using AutoApiEngine.Domain.Entities;
+using AutoApiEngine.Domain.Entities;
 using AutoApiEngine.ServiceAbstraction.DTO;
 using System;
 using System.Collections.Generic;
@@ -8,7 +8,9 @@ namespace AutoApiEngine.ServiceAbstraction
 {
     public interface IAuthService
     {
-        Task<AuthResult> RegisterAsync(RegisterRequest request);
-        Task<AuthResult> LoginAsync(string email, string password);
+        Task<RegisterResult> RegisterAsync(RegisterRequest request);
+       
+      
+        
     }
 }

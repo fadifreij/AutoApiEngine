@@ -1,15 +1,10 @@
 ﻿using AutoApiEngine.Domain.Entities;
-using AutoApiEngine.Persistence.models;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using static System.Collections.Specialized.BitVector32;
+
 
 namespace AutoApiEngine.Persistence.Context
 {
-    public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
+    public class ApplicationDbContext : DbContext
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -21,7 +16,6 @@ namespace AutoApiEngine.Persistence.Context
        
         public DbSet<Plan> Plans { get; set; } = null!;
         public DbSet<Subscription> Subscriptions { get; set; } = null!;
-        public DbSet<RefreshToken> RefreshTokens { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -54,16 +48,7 @@ namespace AutoApiEngine.Persistence.Context
                 .HasOne(w => w.Organization)
                 .WithMany(o => o.Workspaces)
                 .HasForeignKey(w => w.OrganizationId);
-            modelBuilder.Entity<RefreshToken>()
-                .HasIndex(r => r.Token)
-                .IsUnique();
-
-            modelBuilder.Entity<RefreshToken>()
-                .HasOne(r => r.User)
-                .WithMany(u => u.RefreshTokens) 
-                .HasForeignKey(r => r.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-
+           
             modelBuilder.Entity<Plan>().HasData(
             new Plan
             {

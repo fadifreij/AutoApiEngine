@@ -7,8 +7,25 @@ Accept: application/json
 {
 
  "Email": "fadi.freij@hotmail.com",
- "Password": "test@123",
- "OrganizationName": "Test Organization",
- 
+ "Password": "Test@123",
+ "OrganizationName": "Test Organization"
+}
 
+###
+
+POST {{Authentication.ApiServices_HostAddress}}/api/auth/login
+Content-Type: application/json
+Accept: application/json
+{
+ "Email": "fadi.freij@hotmail.com",
+ "Password": "Test@123"
+}
+
+###
+
+POST {{Authentication.ApiServices_HostAddress}}/api/auth/refresh-token
+Content-Type: application/json
+Accept: application/josn
+{
+ "RefreshToken":"uTDqrVcqyCMMg0Oq4gCTcuaVlXvz1RJR2q9ToJiBlzf+VRYTtJVm5rFDn27/S1HFiYdR7soqr7i34l2wGZAKeQ=="
 }

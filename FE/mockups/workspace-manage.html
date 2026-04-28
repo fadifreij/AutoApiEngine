@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manage Workspace — APIEngine</title>
+<link rel="stylesheet" href="shared-styles.css">
+<style>
+  body { background: var(--gray-50); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .trial-banner { background: linear-gradient(90deg, var(--primary), var(--accent)); color: #fff; padding: 8px 24px; display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 13px; flex-shrink: 0; }
+  .trial-banner strong { font-weight: 700; }
+  .trial-banner a { color: #fff; font-weight: 700; background: rgba(255,255,255,.2); padding: 4px 14px; border-radius: 6px; font-size: 12px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: #fff; border-bottom: 1px solid var(--gray-200); flex-shrink: 0; }
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 18px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 6px; }
+  .logo span { color: var(--gray-900); }
+  .logo svg { width: 22px; height: 22px; }
+  .org-badge { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px; background: var(--primary-bg); color: var(--primary); font-size: 13px; font-weight: 700; }
+  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--gray-400); }
+  .breadcrumb a { color: var(--gray-500); }
+  .breadcrumb svg { width: 14px; height: 14px; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 32px; height: 32px; border-radius: 8px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  .layout { display: flex; flex: 1; overflow: hidden; }
+  .sidebar { width: 240px; background: #fff; border-right: 1px solid var(--gray-200); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+  .sidebar-section { padding: 16px 12px 8px; }
+  .sidebar-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gray-400); font-weight: 700; padding: 0 12px 8px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; font-size: 14px; color: var(--gray-600); cursor: pointer; transition: all .12s; font-weight: 500; text-decoration: none; }
+  .sidebar-item:hover { background: var(--gray-50); color: var(--gray-900); }
+  .sidebar-item.active { background: var(--primary-bg); color: var(--primary); font-weight: 600; }
+  .sidebar-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .sidebar-item .badge { margin-left: auto; background: var(--primary); color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+
+  .main { flex: 1; padding: 28px 32px; overflow-y: auto; }
+  .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+  .page-title { font-size: 22px; font-weight: 700; }
+  .page-subtitle { color: var(--gray-400); font-size: 13px; margin-top: 2px; }
+
+  /* INFO STRIP */
+  .info-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .info-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 10px; padding: 16px; }
+  .info-card .label { font-size: 12px; color: var(--gray-400); margin-bottom: 4px; }
+  .info-card .value { font-size: 18px; font-weight: 700; }
+  .info-card .value.purple { color: var(--primary); }
+  .info-card .value.green { color: var(--success); }
+
+  /* ACTION CARDS */
+  .action-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .action-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 14px; padding: 28px; }
+  .action-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .action-card h3 svg { width: 20px; height: 20px; color: var(--primary); }
+  .action-card p { font-size: 13px; color: var(--gray-500); margin-bottom: 16px; line-height: 1.6; }
+  .action-card .action-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .upload-zone { border: 2px dashed var(--gray-200); border-radius: 10px; padding: 24px; text-align: center; cursor: pointer; transition: all .15s; margin-bottom: 12px; }
+  .upload-zone:hover { border-color: var(--primary); background: var(--primary-bg); }
+  .upload-zone svg { width: 32px; height: 32px; color: var(--gray-400); margin-bottom: 8px; }
+  .upload-zone p { font-size: 13px; color: var(--gray-500); }
+  .upload-zone .upload-hint { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
+
+  .recent-backups { margin-top: 16px; }
+  .recent-backups h4 { font-size: 13px; color: var(--gray-500); margin-bottom: 8px; }
+  .backup-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--gray-50); border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+  .backup-item .name { font-weight: 600; color: var(--gray-700); }
+  .backup-item .meta { color: var(--gray-400); font-size: 12px; }
+  .backup-item .actions { display: flex; gap: 6px; }
+  .backup-item .actions a { color: var(--primary); font-size: 12px; font-weight: 600; }
+
+  .ddl-editor { background: #1e1e2e; border-radius: 10px; padding: 16px; font-family: var(--mono); font-size: 13px; color: #e2e8f0; line-height: 1.8; min-height: 120px; margin-bottom: 12px; }
+  .ddl-editor .kw { color: #c084fc; }
+  .ddl-editor .str { color: #34d399; }
+  .ddl-editor .cm { color: #475569; }
+</style>
+</head>
+<body>
+
+<div class="trial-banner">
+  Your <strong>Pro Trial</strong> has <strong>12 days</strong> remaining.
+  <a href="pricing.html">View Plans →</a>
+</div>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="landing.html" class="logo"><svg viewBox="0 0 32 32" fill="none"><rect x="2" y="6" width="28" height="20" rx="4" stroke="#4f46e5" stroke-width="2.5"/><path d="M9 16h6m-3-3v6" stroke="#4f46e5" stroke-width="2" stroke-linecap="round"/><circle cx="22" cy="16" r="3" stroke="#7c3aed" stroke-width="2"/></svg> API<span>Engine</span></a>
+    <div class="org-badge">Acme Corp</div>
+    <div class="breadcrumb">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      <a href="dashboard.html">Dashboard</a>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      <span style="color:var(--gray-700);font-weight:600">Manage Workspace</span>
+    </div>
+  </div>
+  <div class="topbar-right"><div class="avatar">JD</div></div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-section"><div class="sidebar-label">Overview</div>
+      <a href="dashboard.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Dashboard</a>
+    </div>
+    <div class="sidebar-section"><div class="sidebar-label">Workspace</div>
+      <a href="new-workspace.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg> New Workspace</a>
+      <a href="workspace-manage.html" class="sidebar-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg> Manage Workspace</a>
+      <a href="query-studio.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg> Query Studio</a>
+    </div>
+    <div class="sidebar-section"><div class="sidebar-label">APIs</div>
+      <a href="api-generated.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> Generated APIs <span class="badge">48</span></a>
+      <a href="api-custom.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Custom APIs <span class="badge">2</span></a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Manage Workspace</h1>
+        <div class="page-subtitle">ecommerce-db · Hosted PostgreSQL · Created Apr 10, 2026</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)">Delete Workspace</button>
+      </div>
+    </div>
+
+    <!-- INFO -->
+    <div class="info-strip">
+      <div class="info-card"><div class="label">Database Engine</div><div class="value purple">PostgreSQL 15.4</div></div>
+      <div class="info-card"><div class="label">Size</div><div class="value">245 MB</div></div>
+      <div class="info-card"><div class="label">Status</div><div class="value green">● Connected</div></div>
+      <div class="info-card"><div class="label">Last Backup</div><div class="value">1 hour ago</div></div>
+    </div>
+
+    <!-- ACTION CARDS -->
+    <div class="action-grid">
+      <!-- UPLOAD DB -->
+      <div class="action-card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload Database
+        </h3>
+        <p>Upload a database dump file to restore into this workspace.</p>
+        <div class="upload-zone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>Drop file here or <strong style="color:var(--primary)">browse</strong></p>
+          <div class="upload-hint">.sql, .dump, .gz · Max 500 MB</div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="width:100%">Upload & Restore</button>
+      </div>
+
+      <!-- DOWNLOAD / BACKUP -->
+      <div class="action-card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download & Backup
+        </h3>
+        <p>Download a full backup of your database or create a new snapshot.</p>
+        <div class="action-btns" style="margin-bottom:16px">
+          <button class="btn btn-primary btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download Now
+          </button>
+          <button class="btn btn-outline btn-sm">Create Backup</button>
+        </div>
+        <div class="recent-backups">
+          <h4>Recent Backups</h4>
+          <div class="backup-item">
+            <span class="name">ecommerce-db_2026-04-23.sql.gz</span>
+            <span class="meta">245 MB · 1h ago</span>
+            <span class="actions"><a href="#">Download</a></span>
+          </div>
+          <div class="backup-item">
+            <span class="name">ecommerce-db_2026-04-22.sql.gz</span>
+            <span class="meta">240 MB · Yesterday</span>
+            <span class="actions"><a href="#">Download</a></span>
+          </div>
+          <div class="backup-item">
+            <span class="name">ecommerce-db_2026-04-20.sql.gz</span>
+            <span class="meta">235 MB · 3 days ago</span>
+            <span class="actions"><a href="#">Download</a></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- DDL SCRIPT -->
+      <div class="action-card" style="grid-column: 1 / -1">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Run DDL Script
+        </h3>
+        <p>Execute Data Definition Language scripts to create, alter, or drop database objects. You can also upload a .sql file.</p>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
+          <div>
+            <div class="ddl-editor" contenteditable="true">
+              <span class="cm">-- Paste your DDL script here</span><br>
+              <span class="kw">CREATE TABLE</span> shipping_zones (<br>
+              &nbsp;&nbsp;id <span class="kw">SERIAL PRIMARY KEY</span>,<br>
+              &nbsp;&nbsp;name <span class="kw">VARCHAR</span>(100) <span class="kw">NOT NULL</span>,<br>
+              &nbsp;&nbsp;rate <span class="kw">DECIMAL</span>(10,2),<br>
+              &nbsp;&nbsp;active <span class="kw">BOOLEAN DEFAULT</span> <span class="str">true</span><br>
+              );
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Execute DDL
+              </button>
+              <button class="btn btn-outline btn-sm">Upload .sql File</button>
+            </div>
+          </div>
+          <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:14px;width:200px">
+            <div style="font-size:12px;color:var(--gray-500);font-weight:600;margin-bottom:8px">Recent DDL Runs</div>
+            <div style="font-size:12px;color:var(--gray-600);padding:4px 0;border-bottom:1px solid var(--gray-100)">CREATE TABLE shipping_zones<br><span style="color:var(--success)">✓ Success</span> · 3h ago</div>
+            <div style="font-size:12px;color:var(--gray-600);padding:4px 0;border-bottom:1px solid var(--gray-100)">ALTER TABLE users ADD column<br><span style="color:var(--success)">✓ Success</span> · Yesterday</div>
+            <div style="font-size:12px;color:var(--gray-600);padding:4px 0">CREATE INDEX idx_orders<br><span style="color:var(--success)">✓ Success</span> · 2 days ago</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

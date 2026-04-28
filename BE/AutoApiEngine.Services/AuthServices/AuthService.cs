@@ -1,6 +1,5 @@
-﻿using AutoApiEngine.Domain.Entities;
+using AutoApiEngine.Domain.Entities;
 using AutoApiEngine.Persistence.Context;
-using AutoApiEngine.Persistence.models;
 using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.ServiceAbstraction.DTO;
 using Microsoft.AspNetCore.Identity;
@@ -14,194 +13,154 @@ namespace AutoApiEngine.Services.AuthServices
 {
     public class AuthService : IAuthService
     {
-        private readonly UserManager<ApplicationUser> _userManager;
+       
         private readonly ApplicationDbContext _context;
-        private readonly JwtService _jwtService;
+        private readonly KeycloakService _keycloakService;
 
         public AuthService(
-            UserManager<ApplicationUser> userManager,
+            
             ApplicationDbContext context,
-            JwtService jwtService)
+           
+            KeycloakService keycloakService)
         {
-            _userManager = userManager;
+          
             _context = context;
-            _jwtService = jwtService;
+            _keycloakService = keycloakService;
         }
 
 
-        public async Task<AuthResult> RegisterAsync(RegisterRequest request)
+        public async Task<RegisterResult> RegisterAsync(RegisterRequest request)
         {
-            // 1. Create or resolve Organization
-            Organization? organization;
-            // Todo : need to change the logic and to create organization with code
-            if (!string.IsNullOrEmpty(request.RegistrationCode))
-            {
-                organization = await _context.Organizations
-                    .FirstOrDefaultAsync(o => o.RegistrationCode == request.RegistrationCode);
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {                
+                // 1.Check if user already exists by email
+                var existingUserId = await _keycloakService.GetUserIdByUsername(request.Email);
 
-                if (organization == null)
-                    return new AuthResult { Success = false, Error = "Invalid registration code" };
-            }
-            else
-            {
-                var slug = ToSlug(request.OrganizationName);
-                // 🔴 Check if organization already exists
-                var exists = await _context.Organizations
-                    .AnyAsync(o => o.RegistrationCode == slug);
-
-                if (exists)
+                if (!String.IsNullOrEmpty(existingUserId) )
                 {
-                    return new AuthResult
+                    return new RegisterResult
                     {
                         Success = false,
-                        Error = "Organization already exists. Please choose a different name."
+                        Error = "A user with this email already exists."
                     };
                 }
 
-                organization = new Organization
+                // 3. Create or resolve Organization
+                Organization? organization;
+                
+                if (!string.IsNullOrEmpty(request.RegistrationCode))
                 {
-                    Name = request.OrganizationName,
-                    RegistrationCode = slug,
-                    TrialEndsAt = DateTime.UtcNow.AddDays(14)
+                    organization = await _context.Organizations
+                       .FirstOrDefaultAsync(o => o.RegistrationCode == request.RegistrationCode);
+
+                    if (organization == null)
+                        return new RegisterResult { Success = false, Error = "Invalid registration code" };
+                }
+                else
+                {
+                    var slug = ToSlug(request.OrganizationName);
+                    // 🔴 Check if organization already exists
+                    var exists = await _context.Organizations
+                        .AnyAsync(o => o.RegistrationCode == slug);
+
+                    if (exists)
+                    {
+                        return new RegisterResult
+                        {
+                            Success = false,
+                            Error = "Organization already exists. Please choose a different name."
+                        };
+                    }
+
+                    organization = new Organization
+                    {
+                        Name = request.OrganizationName,
+                        RegistrationCode = slug,
+                        TrialEndsAt = DateTime.UtcNow.AddDays(14),
+                        CreatedAt = DateTime.UtcNow,
+                        IsActive = true
+                    };
+
+                    _context.Organizations.Add(organization);
+                    await _context.SaveChangesAsync();
+                }
+
+                // 4. Create Group in Keycloak if not exists
+                string groupId;
+                var existingGroup = await _keycloakService.GetGroupIdByName(organization.Name, null);
+                if (!string.IsNullOrEmpty(existingGroup))
+                {
+                    groupId = existingGroup;
+                }
+                else
+                {
+                    var group = await _keycloakService.CreateGroup(organization.Name);
+                    groupId = group.Id;
+                }
+
+                // 5. Create User in Keycloak
+                var keycloakUser = await _keycloakService.CreateUser(request.Email, request.Password);
+
+                // 6. Send verification email
+                await _keycloakService.SendVerificationEmail(keycloakUser.Id);
+
+                // 7. Add user to group
+                await _keycloakService.AddUserToGroup(keycloakUser.Id, groupId);
+                Plan? plan;
+
+                if (request.PlanId.HasValue)
+                {
+                    plan = await _context.Plans.FindAsync(request.PlanId.Value);
+                }
+                else
+                {
+                    plan = await _context.Plans.FirstAsync(p => p.Name == "Free");
+                }
+
+                // 6. Create Subscription (trial or paid starter)
+                var subscription = new Subscription
+                {
+                    OrganizationId = organization.Id,
+                    PlanId = plan!.Id,
+                    StartDate = DateTime.UtcNow,
+                    EndDate = DateTime.UtcNow.AddDays(plan.DurationInDays),
+                    AmountPaid = plan.Price,
+                    CreatedAt = DateTime.UtcNow
                 };
 
-                _context.Organizations.Add(organization);
+                _context.Subscriptions.Add(subscription);
                 await _context.SaveChangesAsync();
-            }
 
-            // 2. Create User
-            // Check if user already exists by email
-            var existingUser = await _userManager.FindByEmailAsync(request.Email);
+                
 
-            if (existingUser != null)
-            {
-                return new AuthResult
+                await transaction.CommitAsync();
+
+                return new RegisterResult
                 {
-                    Success = false,
-                    Error = "A user with this email already exists."
+                    Success = true,
+                    Error = string.Empty
                 };
             }
-            var user = new ApplicationUser
+            catch
             {
-                Email = request.Email,
-                UserName = request.Email,
-                OrganizationId = organization.Id
-            };
-
-            var createUser = await _userManager.CreateAsync(user, request.Password);
-
-            if (!createUser.Succeeded)
-            {
-                return new AuthResult
-                {
-                    Success = false,
-                    Error = string.Join(", ", createUser.Errors.Select(e => e.Description))
-                };
+                await transaction.RollbackAsync();
+                throw;
             }
-
-            // 3. Resolve Plan (HYBRID LOGIC)
-            Plan? plan;
-
-            if (request.PlanId.HasValue)
-            {
-                plan = await _context.Plans.FindAsync(request.PlanId.Value);
-            }
-            else
-            {
-                plan = await _context.Plans.FirstAsync(p => p.Name == "Free");
-            }
-
-            // 4. Create Subscription (trial or paid starter)
-            var subscription = new Subscription
-            {
-                OrganizationId = organization.Id,
-                PlanId = plan!.Id,
-                StartDate = DateTime.UtcNow,
-                EndDate = DateTime.UtcNow.AddDays(plan.DurationInDays),
-                AmountPaid = plan.Price
-            };
-
-            _context.Subscriptions.Add(subscription);
-            await _context.SaveChangesAsync();
-
-            // 5. Generate JWT + Refresh Token
-            var accessToken = _jwtService.GenerateToken(user);
-            var refreshToken = _jwtService.GenerateRefreshToken();
-
-            // Store refresh token in DB
-            var refreshTokenEntity = new RefreshToken
-            {
-                Token = refreshToken,
-                UserId = user.Id,
-                ExpiresAt = DateTime.UtcNow.AddDays(7),
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.RefreshTokens.Add(refreshTokenEntity);
-            await _context.SaveChangesAsync();
-
-            return new AuthResult
-            {
-                Success = true,
-                Token = accessToken,
-                RefreshToken = refreshToken
-            };
         }
-
-        public async Task<AuthResult> LoginAsync(string email, string password)
-        {
-            var user = await _userManager.FindByEmailAsync(email);
-
-            if (user == null)
-                return new AuthResult { Success = false, Error = "Invalid credentials" };
-
-            var valid = await _userManager.CheckPasswordAsync(user, password);
-
-            if (!valid)
-                return new AuthResult { Success = false, Error = "Invalid credentials" };
-
-            var accessToken = _jwtService.GenerateToken(user);
-            var refreshToken = _jwtService.GenerateRefreshToken();
-
-            var refreshTokenEntity = new RefreshToken
-            {
-                Token = refreshToken,
-                UserId = user.Id,
-                ExpiresAt = DateTime.UtcNow.AddDays(7),
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.RefreshTokens.Add(refreshTokenEntity);
-            await _context.SaveChangesAsync();
-
-            return new AuthResult
-            {
-                Success = true,
-                Token = accessToken,
-                RefreshToken = refreshToken
-            };
-        }
-
         
-
-         private string ToSlug(string input)
+     
+        private string ToSlug(string input)
         {
             if (string.IsNullOrWhiteSpace(input))
                   return string.Empty;
 
-            // Convert to lowercase
             string slug = input.ToLowerInvariant();
-
-            // Remove invalid chars
             slug = Regex.Replace(slug, @"[^a-z0-9\s-]", "");
-
-            // Replace multiple spaces with one
             slug = Regex.Replace(slug, @"\s+", " ").Trim();
-
-            // Replace spaces with hyphens
             slug = slug.Replace(" ", "-");
 
             return slug;
+        }
     }
-}
 }

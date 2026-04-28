@@ -1,0 +1,77 @@
+{
+  "id": "api-engine-realm",
+  "realm": "ApiEngineRealm",
+  "enabled": true,
+  "displayName": "API Engine Realm",
+  "accessTokenLifespan": 300,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "clients": [
+    {
+      "clientId": "api-engine-app",
+      "name": "API Engine Application",
+      "enabled": true,
+      "clientAuthenticatorType": "client-jwt",
+      "rootUrl": "http://localhost:4200",
+      "baseUrl": "http://localhost:4200",
+      "redirectUris": [
+        "http://localhost:4200/*",
+        "http://localhost:4200"
+      ],
+      "webOrigins": [
+        "http://localhost:4200"
+      ],
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "api-engine-service",
+      "name": "API Engine Service Account",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "api-engine-service-secret",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Administrator role"
+      },
+      {
+        "name": "user",
+        "description": "User role"
+      },
+      {
+        "name": "realm-admin",
+        "description": "Realm Administrator role"
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "service-account-api-engine-service",
+      "enabled": true,
+      "serviceAccountClientId": "api-engine-service",
+      "clientRoles": {
+        "realm-management": [
+          "realm-admin"
+        ]
+      }
+    }
+  ]
+}

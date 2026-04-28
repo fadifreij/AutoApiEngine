@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Proposal C: Command-Center (IDE-like)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #cbd5e1; background: #0f172a; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* TOP BAR */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: 44px; background: #1e293b; border-bottom: 1px solid #334155; flex-shrink: 0; }
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 16px; font-weight: 800; color: #818cf8; }
+  .logo span { color: #e2e8f0; }
+  .cmd-palette { display: flex; align-items: center; gap: 8px; padding: 5px 16px; border-radius: 6px; background: #0f172a; border: 1px solid #334155; color: #64748b; font-size: 13px; cursor: pointer; min-width: 280px; }
+  .cmd-palette:hover { border-color: #818cf8; }
+  .cmd-palette kbd { background: #334155; padding: 1px 6px; border-radius: 3px; font-size: 11px; color: #94a3b8; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .ws-badge { padding: 4px 12px; border-radius: 6px; background: #1e1b4b; border: 1px solid #3730a3; color: #a5b4fc; font-size: 12px; font-weight: 600; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: #818cf8; color: #0f172a; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+
+  /* LAYOUT */
+  .layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* MINI RAIL */
+  .rail { width: 48px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; align-items: center; padding: 8px 0; gap: 4px; flex-shrink: 0; }
+  .rail-item { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 20px; cursor: pointer; transition: all .15s; position: relative; }
+  .rail-item:hover { background: #334155; }
+  .rail-item.active { background: #1e1b4b; }
+  .rail-item.active::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 2px 2px 0; background: #818cf8; }
+  .rail-item .badge { position: absolute; top: 4px; right: 4px; width: 16px; height: 16px; border-radius: 50%; background: #818cf8; color: #0f172a; font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .rail-spacer { flex: 1; }
+
+  /* STAT BAR */
+  .stat-bar { display: flex; gap: 16px; padding: 12px 20px; background: #1e293b; border-bottom: 1px solid #334155; }
+  .stat-chip { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 8px; background: #0f172a; border: 1px solid #334155; font-size: 13px; }
+  .stat-chip .s-label { color: #64748b; }
+  .stat-chip .s-value { font-weight: 700; color: #e2e8f0; }
+  .stat-chip .s-value.purple { color: #a5b4fc; }
+  .stat-chip .s-value.green { color: #34d399; }
+  .stat-chip .s-value.yellow { color: #fbbf24; }
+
+  /* CONTENT AREA */
+  .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .content-body { flex: 1; display: flex; overflow: hidden; }
+
+  /* OBJECT EXPLORER */
+  .explorer { width: 240px; background: #1e293b; border-right: 1px solid #334155; overflow-y: auto; flex-shrink: 0; }
+  .explorer-header { padding: 12px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #64748b; font-weight: 700; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
+  .explorer-header button { background: none; border: none; color: #64748b; cursor: pointer; font-size: 14px; }
+  .tree-section { padding: 4px 0; }
+  .tree-header { display: flex; align-items: center; gap: 8px; padding: 6px 16px; font-size: 13px; font-weight: 600; color: #94a3b8; cursor: pointer; }
+  .tree-header:hover { background: #334155; }
+  .tree-header .arrow { font-size: 10px; transition: transform .15s; }
+  .tree-header .count { margin-left: auto; font-size: 11px; color: #475569; font-weight: 400; }
+  .tree-item { display: flex; align-items: center; gap: 8px; padding: 5px 16px 5px 36px; font-size: 13px; color: #64748b; cursor: pointer; }
+  .tree-item:hover { background: #334155; color: #e2e8f0; }
+  .tree-item.active { background: #1e1b4b; color: #a5b4fc; }
+  .tree-icon { font-size: 14px; width: 18px; text-align: center; }
+
+  /* EDITOR AREA */
+  .editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* TABS */
+  .editor-tabs { display: flex; background: #1e293b; border-bottom: 1px solid #334155; }
+  .editor-tab { padding: 8px 16px; font-size: 13px; color: #64748b; cursor: pointer; border-right: 1px solid #334155; display: flex; align-items: center; gap: 8px; }
+  .editor-tab.active { background: #0f172a; color: #e2e8f0; }
+  .editor-tab .close { font-size: 14px; opacity: .4; }
+  .editor-tab .close:hover { opacity: 1; }
+
+  /* SQL EDITOR */
+  .sql-editor { flex: 1; padding: 16px 20px; background: #0f172a; font-family: 'Consolas', 'Courier New', monospace; font-size: 14px; line-height: 2; overflow-y: auto; position: relative; }
+  .line-numbers { position: absolute; left: 0; top: 16px; width: 40px; text-align: right; color: #334155; font-size: 14px; line-height: 2; user-select: none; }
+  .sql-content { margin-left: 52px; }
+  .kw { color: #c084fc; }
+  .fn { color: #38bdf8; }
+  .str { color: #34d399; }
+  .num { color: #fbbf24; }
+  .comment { color: #475569; }
+  .col { color: #e2e8f0; }
+
+  /* TOOLBAR */
+  .editor-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #1e293b; border-bottom: 1px solid #334155; border-top: 1px solid #334155; }
+  .tool-btn { padding: 5px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid #334155; background: #0f172a; color: #94a3b8; display: flex; align-items: center; gap: 6px; }
+  .tool-btn.run { background: #22c55e; color: #0f172a; border-color: #22c55e; }
+  .tool-btn.run:hover { background: #16a34a; }
+  .tool-spacer { flex: 1; }
+  .tool-info { font-size: 12px; color: #475569; }
+
+  /* RESULTS */
+  .results { height: 200px; background: #0f172a; border-top: 1px solid #334155; overflow: auto; flex-shrink: 0; }
+  .results-header { display: flex; align-items: center; padding: 8px 16px; background: #1e293b; border-bottom: 1px solid #334155; font-size: 12px; color: #64748b; gap: 16px; }
+  .results-header .result-tab { cursor: pointer; padding: 2px 8px; border-radius: 4px; }
+  .results-header .result-tab.active { background: #334155; color: #e2e8f0; }
+  .results-header .result-info { margin-left: auto; color: #22c55e; }
+  .result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .result-table th { background: #1e293b; padding: 6px 16px; text-align: left; font-weight: 600; color: #94a3b8; border-bottom: 1px solid #334155; position: sticky; top: 0; }
+  .result-table td { padding: 6px 16px; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
+  .result-table tr:hover td { background: #1e293b; }
+
+  /* BOTTOM BAR */
+  .bottombar { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: 28px; background: #4f46e5; flex-shrink: 0; font-size: 12px; color: #e0e7ff; }
+  .bottombar a { color: #e0e7ff; text-decoration: none; margin: 0 8px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">API<span>Engine</span></div>
+    <div class="cmd-palette">
+      🔍 Search commands, tables, APIs... <kbd>Ctrl</kbd><kbd>K</kbd>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="ws-badge">🗄️ ecommerce-db</div>
+    <span style="font-size:16px;cursor:pointer">🔔</span>
+    <div class="avatar">JD</div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- MINI RAIL -->
+  <nav class="rail">
+    <div class="rail-item" title="Dashboard">🏠</div>
+    <div class="rail-item active" title="Query Studio">🗄️</div>
+    <div class="rail-item" title="APIs">
+      🔌
+      <span class="badge">48</span>
+    </div>
+    <div class="rail-item" title="Security">🔒</div>
+    <div class="rail-item" title="Settings">⚙️</div>
+    <div class="rail-spacer"></div>
+    <div class="rail-item" title="Billing">💳</div>
+    <div class="rail-item" title="Help">❓</div>
+  </nav>
+
+  <div class="content">
+    <!-- STAT BAR -->
+    <div class="stat-bar">
+      <div class="stat-chip">
+        <span class="s-label">Requests/day</span>
+        <span class="s-value purple">3.2K</span>
+      </div>
+      <div class="stat-chip">
+        <span class="s-label">DB Size</span>
+        <span class="s-value">245 MB</span>
+      </div>
+      <div class="stat-chip">
+        <span class="s-label">APIs</span>
+        <span class="s-value green">48 active</span>
+      </div>
+      <div class="stat-chip">
+        <span class="s-label">Users</span>
+        <span class="s-value">156</span>
+      </div>
+      <div class="stat-chip">
+        <span class="s-label">Plan</span>
+        <span class="s-value yellow">Trial · 12d</span>
+      </div>
+    </div>
+
+    <div class="content-body">
+      <!-- OBJECT EXPLORER -->
+      <div class="explorer">
+        <div class="explorer-header">
+          Object Explorer
+          <button title="Refresh">🔄</button>
+        </div>
+        <div class="tree-section">
+          <div class="tree-header">
+            <span class="arrow">▼</span> 📁 Tables
+            <span class="count">12</span>
+          </div>
+          <div class="tree-item active"><span class="tree-icon">📄</span> users</div>
+          <div class="tree-item"><span class="tree-icon">📄</span> orders</div>
+          <div class="tree-item"><span class="tree-icon">📄</span> products</div>
+          <div class="tree-item"><span class="tree-icon">📄</span> categories</div>
+          <div class="tree-item"><span class="tree-icon">📄</span> shipping_zones</div>
+          <div class="tree-item"><span class="tree-icon">📄</span> payments</div>
+          <div class="tree-item"><span class="tree-icon">📄</span> reviews</div>
+          <div class="tree-item"><span class="tree-icon">📄</span> coupons</div>
+        </div>
+        <div class="tree-section">
+          <div class="tree-header">
+            <span class="arrow">▶</span> ⚡ Functions
+            <span class="count">3</span>
+          </div>
+        </div>
+        <div class="tree-section">
+          <div class="tree-header">
+            <span class="arrow">▶</span> 👁 Views
+            <span class="count">2</span>
+          </div>
+        </div>
+        <div class="tree-section">
+          <div class="tree-header">
+            <span class="arrow">▶</span> 🔗 Indexes
+            <span class="count">8</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- EDITOR + RESULTS -->
+      <div class="editor-area">
+        <!-- TABS -->
+        <div class="editor-tabs">
+          <div class="editor-tab active">📝 Query 1 <span class="close">×</span></div>
+          <div class="editor-tab">📝 Query 2 <span class="close">×</span></div>
+          <div class="editor-tab" style="color:#475569">+</div>
+        </div>
+
+        <!-- TOOLBAR -->
+        <div class="editor-toolbar">
+          <button class="tool-btn run">▶ Run</button>
+          <button class="tool-btn">💾 Save</button>
+          <button class="tool-btn">📋 Format</button>
+          <button class="tool-btn">📤 Export</button>
+          <div class="tool-spacer"></div>
+          <span class="tool-info">Database: ecommerce-db · PostgreSQL 15.4</span>
+        </div>
+
+        <!-- SQL EDITOR -->
+        <div class="sql-editor">
+          <div class="line-numbers">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8</div>
+          <div class="sql-content">
+            <span class="comment">-- Find pending orders with user details</span><br>
+            <span class="kw">SELECT</span><br>
+            &nbsp;&nbsp;<span class="col">u.name</span>,<br>
+            &nbsp;&nbsp;<span class="col">u.email</span>,<br>
+            &nbsp;&nbsp;<span class="col">o.total</span>,<br>
+            &nbsp;&nbsp;<span class="col">o.status</span><br>
+            <span class="kw">FROM</span> <span class="col">orders</span> <span class="col">o</span><br>
+            <span class="kw">JOIN</span> <span class="col">users</span> <span class="col">u</span> <span class="kw">ON</span> <span class="col">u.id</span> = <span class="col">o.user_id</span><br>
+            <span class="kw">WHERE</span> <span class="col">o.status</span> = <span class="str">'pending'</span><br>
+            <span class="kw">ORDER BY</span> <span class="col">o.created_at</span> <span class="kw">DESC</span><br>
+            <span class="kw">LIMIT</span> <span class="num">100</span>;
+          </div>
+        </div>
+
+        <!-- RESULTS -->
+        <div class="results">
+          <div class="results-header">
+            <span class="result-tab active">Results</span>
+            <span class="result-tab">Messages</span>
+            <span class="result-info">✓ 5 rows returned · 23ms</span>
+          </div>
+          <table class="result-table">
+            <thead>
+              <tr>
+                <th>name</th>
+                <th>email</th>
+                <th>total</th>
+                <th>status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Alice Johnson</td>
+                <td>alice@example.com</td>
+                <td>$129.99</td>
+                <td>pending</td>
+              </tr>
+              <tr>
+                <td>Bob Smith</td>
+                <td>bob@example.com</td>
+                <td>$89.50</td>
+                <td>pending</td>
+              </tr>
+              <tr>
+                <td>Carlos Diaz</td>
+                <td>carlos@example.com</td>
+                <td>$245.00</td>
+                <td>pending</td>
+              </tr>
+              <tr>
+                <td>Diana Park</td>
+                <td>diana@example.com</td>
+                <td>$67.20</td>
+                <td>pending</td>
+              </tr>
+              <tr>
+                <td>Erik Novak</td>
+                <td>erik@example.com</td>
+                <td>$312.75</td>
+                <td>pending</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bottombar">
+  <span>Pro Trial · 12 days left</span>
+  <span>
+    <a href="#">Docs</a>
+    <a href="#">Support</a>
+    <a href="#">Upgrade</a>
+  </span>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Query Studio — APIEngine</title>
+<link rel="stylesheet" href="shared-styles.css">
+<style>
+  body { background: var(--gray-100); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .trial-banner { background: linear-gradient(90deg, var(--primary), var(--accent)); color: #fff; padding: 8px 24px; display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 13px; flex-shrink: 0; }
+  .trial-banner strong { font-weight: 700; }
+  .trial-banner a { color: #fff; font-weight: 700; background: rgba(255,255,255,.2); padding: 4px 14px; border-radius: 6px; font-size: 12px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 48px; background: #1e1e2e; border-bottom: 1px solid #2d2d44; flex-shrink: 0; }
+  .topbar-left { display: flex; align-items: center; gap: 14px; }
+  .logo { font-size: 16px; font-weight: 800; color: #a5b4fc; display: flex; align-items: center; gap: 6px; }
+  .logo span { color: #e2e8f0; }
+  .logo svg { width: 20px; height: 20px; }
+  .org-badge { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: rgba(99,102,241,.2); color: #a5b4fc; font-size: 12px; font-weight: 700; }
+  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; }
+  .breadcrumb a { color: #94a3b8; }
+  .breadcrumb svg { width: 12px; height: 12px; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 28px; height: 28px; border-radius: 6px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { color: #94a3b8; font-size: 12px; padding: 4px 10px; border-radius: 6px; text-decoration: none; font-weight: 500; }
+  .nav-links a:hover, .nav-links a.active { background: rgba(99,102,241,.15); color: #a5b4fc; }
+
+  .studio-layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* LEFT PANEL — OBJECT EXPLORER */
+  .explorer { width: 260px; background: #1e1e2e; border-right: 1px solid #2d2d44; display: flex; flex-direction: column; flex-shrink: 0; }
+  .explorer-header { padding: 12px 14px 8px; display: flex; align-items: center; justify-content: space-between; }
+  .explorer-header h3 { font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+  .explorer-search { margin: 0 10px 10px; padding: 6px 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #e2e8f0; font-size: 12px; font-family: var(--font); width: calc(100% - 20px); }
+  .explorer-search::placeholder { color: #64748b; }
+
+  .db-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 0 10px 12px; }
+  .db-stat { background: #2d2d44; border-radius: 6px; padding: 8px 10px; }
+  .db-stat .label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
+  .db-stat .val { font-size: 16px; font-weight: 700; color: #e2e8f0; }
+  .db-stat .val.purple { color: #a5b4fc; }
+  .db-stat .val.green { color: #34d399; }
+
+  .tree-section { padding: 4px 10px; overflow-y: auto; flex: 1; }
+  .tree-label { font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 6px 4px 4px; }
+  .tree-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 5px; cursor: pointer; color: #cbd5e1; font-size: 12px; font-family: var(--mono); }
+  .tree-item:hover { background: rgba(99,102,241,.12); color: #e2e8f0; }
+  .tree-item svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .tree-item .col-count { margin-left: auto; font-size: 10px; color: #475569; }
+
+  /* CENTER — EDITOR */
+  .editor-area { flex: 1; display: flex; flex-direction: column; }
+  .editor-tabs { display: flex; background: #1e1e2e; border-bottom: 1px solid #2d2d44; padding: 0 8px; flex-shrink: 0; }
+  .editor-tab { padding: 8px 16px; font-size: 12px; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+  .editor-tab.active { color: #e2e8f0; border-bottom-color: var(--primary); }
+  .editor-tab svg { width: 12px; height: 12px; }
+  .editor-tab .close-tab { opacity: 0; font-size: 10px; cursor: pointer; margin-left: 4px; }
+  .editor-tab:hover .close-tab { opacity: 1; }
+  .new-tab { color: #475569; font-size: 16px; padding: 8px 12px; cursor: pointer; }
+  .new-tab:hover { color: #94a3b8; }
+
+  .sql-editor { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px; background: #262640; border-bottom: 1px solid #2d2d44; flex-shrink: 0; }
+  .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 6px; }
+  .toolbar-btn { background: none; border: 1px solid #3d3d5c; color: #94a3b8; padding: 4px 10px; border-radius: 5px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-family: var(--font); }
+  .toolbar-btn:hover { background: rgba(99,102,241,.15); color: #a5b4fc; border-color: #6366f1; }
+  .toolbar-btn.run { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
+  .toolbar-btn.run:hover { background: #4338ca; }
+
+  .code-area { flex: 1; padding: 16px; background: #1e1e2e; font-family: var(--mono); font-size: 13px; line-height: 1.7; color: #e2e8f0; overflow: auto; min-height: 0; }
+  .code-area .ln { color: #475569; display: inline-block; width: 30px; text-align: right; margin-right: 16px; user-select: none; }
+  .code-area .kw { color: #c084fc; }
+  .code-area .fn { color: #818cf8; }
+  .code-area .str { color: #34d399; }
+  .code-area .num { color: #fbbf24; }
+  .code-area .cm { color: #475569; }
+  .code-area .tbl { color: #67e8f9; }
+
+  /* BOTTOM — RESULTS */
+  .results-panel { height: 220px; border-top: 2px solid #6366f1; background: #1e1e2e; flex-shrink: 0; display: flex; flex-direction: column; }
+  .results-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px; background: #262640; border-bottom: 1px solid #2d2d44; flex-shrink: 0; }
+  .results-header .label { font-size: 12px; color: #94a3b8; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .results-header .label .count { color: #34d399; font-weight: 700; }
+  .results-header .meta { font-size: 11px; color: #475569; display: flex; align-items: center; gap: 10px; }
+  .results-body { flex: 1; overflow: auto; }
+  .results-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .results-table th { background: #262640; color: #94a3b8; font-weight: 600; text-align: left; padding: 6px 14px; position: sticky; top: 0; border-bottom: 1px solid #3d3d5c; }
+  .results-table td { padding: 6px 14px; color: #cbd5e1; border-bottom: 1px solid #2d2d44; font-family: var(--mono); }
+  .results-table tr:hover td { background: rgba(99,102,241,.06); }
+  .null-val { color: #475569; font-style: italic; }
+
+  /* RIGHT PANEL — TEMPLATES */
+  .templates-panel { width: 260px; background: #1e1e2e; border-left: 1px solid #2d2d44; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+  .templates-header { padding: 12px 14px 8px; }
+  .templates-header h3 { font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+  .template-group { padding: 4px 10px; }
+  .template-group-label { font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; padding: 8px 4px 4px; }
+  .template-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 2px; }
+  .template-item:hover { background: rgba(99,102,241,.1); }
+  .template-item .title { font-size: 12px; color: #e2e8f0; font-weight: 600; margin-bottom: 2px; }
+  .template-item .snippet { font-size: 11px; color: #475569; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+
+<div class="trial-banner">
+  Your <strong>Pro Trial</strong> has <strong>12 days</strong> remaining.
+  <a href="pricing.html">View Plans →</a>
+</div>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="landing.html" class="logo"><svg viewBox="0 0 32 32" fill="none"><rect x="2" y="6" width="28" height="20" rx="4" stroke="#818cf8" stroke-width="2.5"/><path d="M9 16h6m-3-3v6" stroke="#818cf8" stroke-width="2" stroke-linecap="round"/><circle cx="22" cy="16" r="3" stroke="#c084fc" stroke-width="2"/></svg> API<span>Engine</span></a>
+    <div class="org-badge">Acme Corp</div>
+    <div class="breadcrumb">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      <a href="dashboard.html">Dashboard</a>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      <span style="color:#e2e8f0;font-weight:600">Query Studio</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="workspace-manage.html">Workspace</a>
+      <a href="query-studio.html" class="active">Query Studio</a>
+      <a href="api-generated.html">APIs</a>
+    </div>
+    <div class="avatar">JD</div>
+  </div>
+</div>
+
+<div class="studio-layout">
+  <!-- LEFT: OBJECT EXPLORER -->
+  <div class="explorer">
+    <div class="explorer-header">
+      <h3>Object Explorer</h3>
+    </div>
+    <input class="explorer-search" placeholder="Search tables, functions…" type="text">
+
+    <!-- DB STATS -->
+    <div class="db-stats">
+      <div class="db-stat">
+        <div class="label">Tables</div>
+        <div class="val purple">12</div>
+      </div>
+      <div class="db-stat">
+        <div class="label">DB Size</div>
+        <div class="val">245 MB</div>
+      </div>
+      <div class="db-stat">
+        <div class="label">Functions</div>
+        <div class="val green">8</div>
+      </div>
+      <div class="db-stat">
+        <div class="label">Views</div>
+        <div class="val">5</div>
+      </div>
+    </div>
+
+    <div class="tree-section">
+      <div class="tree-label">Tables (12)</div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+        users <span class="col-count">8 cols</span>
+      </div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+        products <span class="col-count">12 cols</span>
+      </div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+        orders <span class="col-count">10 cols</span>
+      </div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+        order_items <span class="col-count">6 cols</span>
+      </div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+        categories <span class="col-count">4 cols</span>
+      </div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+        reviews <span class="col-count">7 cols</span>
+      </div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+        shipping_zones <span class="col-count">4 cols</span>
+      </div>
+
+      <div class="tree-label">Functions (8)</div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round"><text x="4" y="17" font-size="14" font-weight="bold" fill="#c084fc" stroke="none">ƒ</text></svg>
+        calculate_tax()
+      </div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round"><text x="4" y="17" font-size="14" font-weight="bold" fill="#c084fc" stroke="none">ƒ</text></svg>
+        get_user_orders()
+      </div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round"><text x="4" y="17" font-size="14" font-weight="bold" fill="#c084fc" stroke="none">ƒ</text></svg>
+        apply_discount()
+      </div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round"><text x="4" y="17" font-size="14" font-weight="bold" fill="#c084fc" stroke="none">ƒ</text></svg>
+        update_inventory()
+      </div>
+
+      <div class="tree-label">Views (5)</div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        v_active_orders
+      </div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        v_product_stats
+      </div>
+      <div class="tree-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        v_revenue_summary
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: SQL EDITOR + RESULTS -->
+  <div class="editor-area">
+    <div class="editor-tabs">
+      <div class="editor-tab active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+        Query 1
+        <span class="close-tab">×</span>
+      </div>
+      <div class="editor-tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+        Top Products
+        <span class="close-tab">×</span>
+      </div>
+      <div class="new-tab">+</div>
+    </div>
+
+    <div class="sql-editor">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="toolbar-btn run">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
+            Run (Ctrl+Enter)
+          </button>
+          <button class="toolbar-btn">Format</button>
+          <button class="toolbar-btn">Explain</button>
+        </div>
+        <div class="toolbar-right">
+          <button class="toolbar-btn">Export CSV</button>
+          <button class="toolbar-btn">Export JSON</button>
+        </div>
+      </div>
+
+      <div class="code-area">
+        <div><span class="ln">1</span><span class="kw">SELECT</span></div>
+        <div><span class="ln">2</span>&nbsp;&nbsp;u.id,</div>
+        <div><span class="ln">3</span>&nbsp;&nbsp;u.first_name,</div>
+        <div><span class="ln">4</span>&nbsp;&nbsp;u.last_name,</div>
+        <div><span class="ln">5</span>&nbsp;&nbsp;u.email,</div>
+        <div><span class="ln">6</span>&nbsp;&nbsp;<span class="fn">COUNT</span>(o.id) <span class="kw">AS</span> total_orders,</div>
+        <div><span class="ln">7</span>&nbsp;&nbsp;<span class="fn">SUM</span>(o.total) <span class="kw">AS</span> total_spent</div>
+        <div><span class="ln">8</span><span class="kw">FROM</span> <span class="tbl">users</span> u</div>
+        <div><span class="ln">9</span><span class="kw">LEFT JOIN</span> <span class="tbl">orders</span> o <span class="kw">ON</span> u.id = o.user_id</div>
+        <div><span class="ln">10</span><span class="kw">WHERE</span> o.created_at >= <span class="str">'2026-01-01'</span></div>
+        <div><span class="ln">11</span><span class="kw">GROUP BY</span> u.id, u.first_name, u.last_name, u.email</div>
+        <div><span class="ln">12</span><span class="kw">ORDER BY</span> total_spent <span class="kw">DESC</span></div>
+        <div><span class="ln">13</span><span class="kw">LIMIT</span> <span class="num">10</span>;</div>
+      </div>
+    </div>
+
+    <div class="results-panel">
+      <div class="results-header">
+        <div class="label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+          Results — <span class="count">10 rows</span> returned
+        </div>
+        <div class="meta">
+          <span>⏱ 24ms</span>
+          <span>Rows affected: 0</span>
+        </div>
+      </div>
+      <div class="results-body">
+        <table class="results-table">
+          <thead>
+            <tr><th>id</th><th>first_name</th><th>last_name</th><th>email</th><th>total_orders</th><th>total_spent</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>42</td><td>Sarah</td><td>Connor</td><td>sarah@example.com</td><td>28</td><td>$4,892.50</td></tr>
+            <tr><td>17</td><td>John</td><td>Smith</td><td>john@example.com</td><td>23</td><td>$3,741.00</td></tr>
+            <tr><td>8</td><td>Alice</td><td>Johnson</td><td>alice@example.com</td><td>19</td><td>$3,215.75</td></tr>
+            <tr><td>91</td><td>Bob</td><td>Williams</td><td>bob@example.com</td><td>17</td><td>$2,890.25</td></tr>
+            <tr><td>33</td><td>Emma</td><td>Brown</td><td>emma@example.com</td><td>15</td><td>$2,456.00</td></tr>
+            <tr><td>55</td><td>David</td><td>Lee</td><td>david@example.com</td><td>14</td><td>$2,180.50</td></tr>
+            <tr><td>12</td><td>Maria</td><td>Garcia</td><td>maria@example.com</td><td>12</td><td>$1,925.00</td></tr>
+            <tr><td>67</td><td>James</td><td>Wilson</td><td>james@example.com</td><td>11</td><td>$1,640.75</td></tr>
+            <tr><td>29</td><td>Lisa</td><td>Taylor</td><td>lisa@example.com</td><td>9</td><td>$1,320.25</td></tr>
+            <tr><td>44</td><td>Michael</td><td>Davis</td><td>michael@example.com</td><td>8</td><td>$1,105.00</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: TEMPLATE SQL QUERIES -->
+  <div class="templates-panel">
+    <div class="templates-header">
+      <h3>SQL Templates</h3>
+    </div>
+
+    <div class="template-group">
+      <div class="template-group-label">Data Retrieval</div>
+      <div class="template-item">
+        <div class="title">Select All Rows</div>
+        <div class="snippet">SELECT * FROM table_name LIMIT 100;</div>
+      </div>
+      <div class="template-item">
+        <div class="title">Count Records</div>
+        <div class="snippet">SELECT COUNT(*) FROM table_name;</div>
+      </div>
+      <div class="template-item">
+        <div class="title">Top N with Aggregation</div>
+        <div class="snippet">SELECT col, COUNT(*) cnt FROM … GROUP BY</div>
+      </div>
+      <div class="template-item">
+        <div class="title">Search by Column</div>
+        <div class="snippet">SELECT * FROM tbl WHERE col ILIKE '%val%';</div>
+      </div>
+    </div>
+
+    <div class="template-group">
+      <div class="template-group-label">Schema Inspection</div>
+      <div class="template-item">
+        <div class="title">List All Tables</div>
+        <div class="snippet">SELECT table_name FROM information_schema…</div>
+      </div>
+      <div class="template-item">
+        <div class="title">Table Columns</div>
+        <div class="snippet">SELECT column_name, data_type FROM …</div>
+      </div>
+      <div class="template-item">
+        <div class="title">Table Size</div>
+        <div class="snippet">SELECT pg_size_pretty(pg_total_relat…</div>
+      </div>
+      <div class="template-item">
+        <div class="title">Index Info</div>
+        <div class="snippet">SELECT indexname, indexdef FROM pg_indexes…</div>
+      </div>
+    </div>
+
+    <div class="template-group">
+      <div class="template-group-label">Data Modification</div>
+      <div class="template-item">
+        <div class="title">Insert Row</div>
+        <div class="snippet">INSERT INTO tbl (col1, col2) VALUES (…);</div>
+      </div>
+      <div class="template-item">
+        <div class="title">Update Rows</div>
+        <div class="snippet">UPDATE tbl SET col = 'val' WHERE id = ?;</div>
+      </div>
+      <div class="template-item">
+        <div class="title">Delete Rows</div>
+        <div class="snippet">DELETE FROM tbl WHERE condition;</div>
+      </div>
+      <div class="template-item">
+        <div class="title">Upsert (ON CONFLICT)</div>
+        <div class="snippet">INSERT INTO tbl … ON CONFLICT DO UPDATE…</div>
+      </div>
+    </div>
+
+    <div class="template-group">
+      <div class="template-group-label">Advanced</div>
+      <div class="template-item">
+        <div class="title">Join Two Tables</div>
+        <div class="snippet">SELECT * FROM a JOIN b ON a.id = b.a_id;</div>
+      </div>
+      <div class="template-item">
+        <div class="title">Window Function</div>
+        <div class="snippet">SELECT *, ROW_NUMBER() OVER(PARTITION…</div>
+      </div>
+      <div class="template-item">
+        <div class="title">CTE (WITH clause)</div>
+        <div class="snippet">WITH cte AS (SELECT …) SELECT * FROM cte;</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Landing Page — Proposal A: Hero + Feature Pillars</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1a1a2e; background: #fff; }
+
+  /* NAV */
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 48px; border-bottom: 1px solid #eee; position: sticky; top: 0; background: #fff; z-index: 100; }
+  .logo { font-size: 22px; font-weight: 800; color: #4f46e5; }
+  .logo span { color: #1a1a2e; }
+  .nav-links { display: flex; gap: 32px; align-items: center; }
+  .nav-links a { text-decoration: none; color: #555; font-size: 15px; font-weight: 500; }
+  .nav-links a:hover { color: #4f46e5; }
+  .btn { padding: 10px 24px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; text-decoration: none; border: none; }
+  .btn-outline { border: 2px solid #4f46e5; color: #4f46e5; background: transparent; }
+  .btn-primary { background: #4f46e5; color: #fff; }
+  .btn-primary:hover { background: #4338ca; }
+  .btn-large { padding: 14px 36px; font-size: 17px; }
+
+  /* HERO */
+  .hero { text-align: center; padding: 100px 48px 80px; background: linear-gradient(135deg, #f0f0ff 0%, #e8e0ff 50%, #f0f7ff 100%); }
+  .hero h1 { font-size: 52px; font-weight: 800; line-height: 1.15; margin-bottom: 20px; }
+  .hero h1 span { background: linear-gradient(135deg, #4f46e5, #7c3aed); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { font-size: 20px; color: #555; max-width: 600px; margin: 0 auto 36px; line-height: 1.6; }
+  .hero-buttons { display: flex; gap: 16px; justify-content: center; }
+
+  /* PILLARS */
+  .pillars { padding: 80px 48px; max-width: 1100px; margin: 0 auto; }
+  .pillars h2 { text-align: center; font-size: 36px; margin-bottom: 12px; }
+  .pillars .subtitle { text-align: center; color: #777; font-size: 18px; margin-bottom: 56px; }
+  .pillar-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .pillar-card { border: 1px solid #e5e7eb; border-radius: 16px; padding: 36px 28px; transition: box-shadow .2s, transform .2s; }
+  .pillar-card:hover { box-shadow: 0 12px 40px rgba(79,70,229,.12); transform: translateY(-4px); }
+  .pillar-icon { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 20px; }
+  .pillar-card:nth-child(1) .pillar-icon { background: #ede9fe; }
+  .pillar-card:nth-child(2) .pillar-icon { background: #dbeafe; }
+  .pillar-card:nth-child(3) .pillar-icon { background: #fce7f3; }
+  .pillar-card h3 { font-size: 20px; margin-bottom: 12px; }
+  .pillar-card p { color: #666; line-height: 1.7; font-size: 15px; }
+  .pillar-card ul { list-style: none; margin-top: 16px; }
+  .pillar-card ul li { padding: 6px 0; color: #555; font-size: 14px; }
+  .pillar-card ul li::before { content: "✓ "; color: #4f46e5; font-weight: bold; }
+
+  /* HOW IT WORKS */
+  .how { padding: 80px 48px; background: #fafafe; }
+  .how h2 { text-align: center; font-size: 36px; margin-bottom: 56px; }
+  .steps { display: flex; max-width: 900px; margin: 0 auto; gap: 24px; align-items: flex-start; }
+  .step { flex: 1; text-align: center; position: relative; }
+  .step-num { width: 48px; height: 48px; border-radius: 50%; background: #4f46e5; color: #fff; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+  .step h4 { font-size: 18px; margin-bottom: 8px; }
+  .step p { color: #666; font-size: 14px; line-height: 1.6; }
+  .step-arrow { position: absolute; right: -28px; top: 20px; font-size: 24px; color: #c5c5d6; }
+
+  /* PRICING */
+  .pricing { padding: 80px 48px; max-width: 1100px; margin: 0 auto; }
+  .pricing h2 { text-align: center; font-size: 36px; margin-bottom: 12px; }
+  .pricing .subtitle { text-align: center; color: #777; font-size: 18px; margin-bottom: 56px; }
+  .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  .price-card { border: 1px solid #e5e7eb; border-radius: 16px; padding: 36px 28px; text-align: center; }
+  .price-card.featured { border: 2px solid #4f46e5; box-shadow: 0 8px 30px rgba(79,70,229,.15); position: relative; }
+  .price-card.featured::before { content: "POPULAR"; position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: #4f46e5; color: #fff; font-size: 12px; font-weight: 700; padding: 4px 16px; border-radius: 20px; }
+  .price-card h3 { font-size: 22px; margin-bottom: 8px; }
+  .price-card .price { font-size: 42px; font-weight: 800; margin: 16px 0; }
+  .price-card .price span { font-size: 16px; color: #888; font-weight: 400; }
+  .price-card ul { list-style: none; text-align: left; margin: 24px 0; }
+  .price-card ul li { padding: 8px 0; color: #555; font-size: 14px; border-bottom: 1px solid #f3f3f3; }
+  .price-card ul li::before { content: "✓ "; color: #22c55e; font-weight: bold; }
+
+  /* FOOTER */
+  footer { background: #1a1a2e; color: #aaa; padding: 48px; text-align: center; font-size: 14px; }
+  footer a { color: #818cf8; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">API<span>Engine</span></div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">How it Works</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#">Docs</a>
+    <a href="#" class="btn btn-outline">Log in</a>
+    <a href="#" class="btn btn-primary">Start Free Trial</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <h1>Your Database → <span>Production APIs</span><br>in Minutes</h1>
+  <p>Connect your existing database or use our hosted service. We auto-generate CRUD APIs, you build the product.</p>
+  <div class="hero-buttons">
+    <a href="#" class="btn btn-primary btn-large">Start Free Trial</a>
+    <a href="#pricing" class="btn btn-outline btn-large">View Plans</a>
+  </div>
+</section>
+
+<!-- PILLARS -->
+<section class="pillars" id="features">
+  <h2>Everything You Need</h2>
+  <p class="subtitle">Three pillars that take you from database to production</p>
+  <div class="pillar-grid">
+    <div class="pillar-card">
+      <div class="pillar-icon">🗄️</div>
+      <h3>Workspace & Query</h3>
+      <p>Create isolated workspaces, each backed by its own database. Connect an external DB or spin up a hosted one instantly.</p>
+      <ul>
+        <li>External or hosted databases</li>
+        <li>SQL editor with table explorer</li>
+        <li>Backup, restore & DDL runner</li>
+        <li>View tables, functions & objects</li>
+      </ul>
+    </div>
+    <div class="pillar-card">
+      <div class="pillar-icon">🔌</div>
+      <h3>API Management</h3>
+      <p>Auto-generated CRUD endpoints for every table, plus a custom API editor for your business logic.</p>
+      <ul>
+        <li>Auto CRUD for every table</li>
+        <li>Deploy custom endpoints</li>
+        <li>Test & monitor APIs</li>
+        <li>One-click deployment</li>
+      </ul>
+    </div>
+    <div class="pillar-card">
+      <div class="pillar-icon">🔒</div>
+      <h3>Security & Identity</h3>
+      <p>Protect APIs with API keys or a full identity provider — use ours or bring your own external IdP.</p>
+      <ul>
+        <li>API key protection</li>
+        <li>Built-in identity provider</li>
+        <li>External IdP support</li>
+        <li>User & protocol management</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <h2>How It Works</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h4>Create Workspace</h4>
+      <p>Name your workspace and connect a database — external or hosted by us.</p>
+      <span class="step-arrow">→</span>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h4>Generate APIs</h4>
+      <p>CRUD endpoints are auto-created for every table. Add custom APIs as needed.</p>
+      <span class="step-arrow">→</span>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h4>Secure & Deploy</h4>
+      <p>Protect with API keys or identity providers, then deploy to production.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <h2>Simple Pricing</h2>
+  <p class="subtitle">Start free, upgrade when you're ready</p>
+  <div class="price-grid">
+    <div class="price-card">
+      <h3>Free Trial</h3>
+      <div class="price">$0<span>/14 days</span></div>
+      <ul>
+        <li>1 Workspace</li>
+        <li>Hosted database (100 MB)</li>
+        <li>Auto CRUD generation</li>
+        <li>Basic API key protection</li>
+        <li>Community support</li>
+      </ul>
+      <a href="#" class="btn btn-outline" style="width:100%">Start Trial</a>
+    </div>
+    <div class="price-card featured">
+      <h3>Pro</h3>
+      <div class="price">$49<span>/month</span></div>
+      <ul>
+        <li>10 Workspaces</li>
+        <li>External + hosted databases</li>
+        <li>Custom API endpoints</li>
+        <li>Identity provider (built-in)</li>
+        <li>Backup & restore</li>
+        <li>Priority support</li>
+      </ul>
+      <a href="#" class="btn btn-primary" style="width:100%">Get Started</a>
+    </div>
+    <div class="price-card">
+      <h3>Enterprise</h3>
+      <div class="price">Custom</div>
+      <ul>
+        <li>Unlimited workspaces</li>
+        <li>External IdP integration</li>
+        <li>SSO & SAML</li>
+        <li>Dedicated infrastructure</li>
+        <li>SLA & dedicated support</li>
+      </ul>
+      <a href="#" class="btn btn-outline" style="width:100%">Contact Sales</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>&copy; 2026 APIEngine. All rights reserved. | <a href="#">Privacy</a> | <a href="#">Terms</a> | <a href="#">Docs</a></p>
+</footer>
+
+</body>
+</html>

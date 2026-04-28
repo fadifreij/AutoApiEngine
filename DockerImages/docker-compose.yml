@@ -1,0 +1,75 @@
+services:
+
+  keycloak:
+    build: ./KeyClock
+    container_name: keycloak
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: mysql
+      KC_DB_URL: jdbc:mysql://mysql:3306/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+    ports:
+      - "8081:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./KeyClock/realm:/opt/keycloak/data/import
+
+  mysql:
+    build: ./mysql
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: ApiEngineDB
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: Welcome@123
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  sqlserver:
+    build: ./sqlserver
+    container_name: sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "Welcome@123"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Welcome@123' -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # dotnet-app:
+  #   build: ./back-end-app
+  #   container_name: dotnet-app
+  #   depends_on:
+  #     sqlserver:
+  #       condition: service_healthy
+  #     keycloak:
+  #       condition: service_healthy
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: Development
+  #     ASPNETCORE_URLS: "http://+:8080"
+  #     ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=MyDb;User Id=sa;Password=Welcome@123;"
+  #     Keycloak__Authority: "http://keycloak:8080"
+  #   ports:
+  #     - "5000:8080"
+
+volumes:
+  mysql_data:
+  sqlserver_data:

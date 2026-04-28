@@ -1,4 +1,0 @@
-USE DbPortal;
-
-CREATE USER MyUser WITH PASSWORD = '123';
-ALTER ROLE db_owner ADD MEMBER MyUser;

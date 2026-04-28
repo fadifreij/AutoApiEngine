@@ -31,6 +31,9 @@ namespace AutoApiEngine.ApiServices.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("CurrentSubscriptionId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(250)
@@ -44,14 +47,151 @@ namespace AutoApiEngine.ApiServices.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("VARCHAR");
 
+                    b.Property<string>("RegistrationCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("SubscriptionEndsAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("TrialEndsAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrentSubscriptionId");
+
+                    b.ToTable("Organizations");
+                });
+
+            modelBuilder.Entity("AutoApiEngine.Domain.Entities.Plan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DurationInDays")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MaxUsers")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxWorkspaces")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Plans");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("11111111-1111-1111-1111-111111111111"),
+                            CreatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            DurationInDays = 14,
+                            IsActive = true,
+                            MaxUsers = 1,
+                            MaxWorkspaces = 1,
+                            Name = "Free",
+                            Price = 0m
+                        },
+                        new
+                        {
+                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
+                            CreatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            DurationInDays = 30,
+                            IsActive = true,
+                            MaxUsers = 5,
+                            MaxWorkspaces = 3,
+                            Name = "Security",
+                            Price = 10m
+                        },
+                        new
+                        {
+                            Id = new Guid("33333333-3333-3333-3333-333333333333"),
+                            CreatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            DurationInDays = 30,
+                            IsActive = true,
+                            MaxUsers = 20,
+                            MaxWorkspaces = 10,
+                            Name = "Basic",
+                            Price = 25m
+                        },
+                        new
+                        {
+                            Id = new Guid("44444444-4444-4444-4444-444444444444"),
+                            CreatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            DurationInDays = 30,
+                            IsActive = true,
+                            MaxUsers = 1000,
+                            MaxWorkspaces = 100,
+                            Name = "Pro",
+                            Price = 100m
+                        },
+                        new
+                        {
+                            Id = new Guid("55555555-5555-5555-5555-555555555555"),
+                            CreatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            DurationInDays = 30,
+                            IsActive = true,
+                            MaxUsers = 1000,
+                            MaxWorkspaces = 100,
+                            Name = "Enterprise",
+                            Price = 100m
+                        });
+                });
+
+            modelBuilder.Entity("AutoApiEngine.Domain.Entities.Subscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AmountPaid")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("OrganizationId");
 
-                    b.ToTable("Organizations");
+                    b.HasIndex("PlanId");
+
+                    b.ToTable("Subscriptions");
                 });
 
             modelBuilder.Entity("AutoApiEngine.Domain.Entities.Workspace", b =>
@@ -91,36 +231,59 @@ namespace AutoApiEngine.ApiServices.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("VARCHAR");
 
-                    b.Property<Guid>("OrgId")
+                    b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("OrgId");
+                    b.HasIndex("OrganizationId");
 
                     b.ToTable("Workspaces");
                 });
 
             modelBuilder.Entity("AutoApiEngine.Domain.Entities.Organization", b =>
                 {
-                    b.HasOne("AutoApiEngine.Domain.Entities.Organization", "Org")
+                    b.HasOne("AutoApiEngine.Domain.Entities.Subscription", "CurrentSubscription")
+                        .WithMany()
+                        .HasForeignKey("CurrentSubscriptionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CurrentSubscription");
+                });
+
+            modelBuilder.Entity("AutoApiEngine.Domain.Entities.Subscription", b =>
+                {
+                    b.HasOne("AutoApiEngine.Domain.Entities.Organization", "Organization")
                         .WithMany()
                         .HasForeignKey("OrganizationId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Org");
+                    b.HasOne("AutoApiEngine.Domain.Entities.Plan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("Plan");
                 });
 
             modelBuilder.Entity("AutoApiEngine.Domain.Entities.Workspace", b =>
                 {
-                    b.HasOne("AutoApiEngine.Domain.Entities.Organization", "Org")
-                        .WithMany()
-                        .HasForeignKey("OrgId")
+                    b.HasOne("AutoApiEngine.Domain.Entities.Organization", "Organization")
+                        .WithMany("Workspaces")
+                        .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Org");
+                    b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("AutoApiEngine.Domain.Entities.Organization", b =>
+                {
+                    b.Navigation("Workspaces");
                 });
 #pragma warning restore 612, 618
         }

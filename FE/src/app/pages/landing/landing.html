@@ -1,0 +1,295 @@
+<!-- NAV -->
+<nav>
+  <a routerLink="/" class="logo">
+    <svg viewBox="0 0 32 32" fill="none"><ellipse cx="16" cy="7" rx="11" ry="4" stroke="#4f46e5" stroke-width="2"/><path d="M5 7v18c0 2.2 4.9 4 11 4s11-1.8 11-4V7" stroke="#4f46e5" stroke-width="2"/><path d="M5 15c0 2.2 4.9 4 11 4s11-1.8 11-4" stroke="#4f46e5" stroke-width="2"/><path d="M18 14l-4 7h5l-4 7" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    API<span>Engine</span>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">How it Works</a>
+    <a routerLink="/pricing">Pricing</a>
+    <a routerLink="/docs">Docs</a>
+    <div class="nav-sep"></div>
+    <a class="btn btn-ghost" (click)="onLogin()">Log in</a>
+    <a routerLink="/register" class="btn btn-primary">Start Free Trial</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-text">
+    <div class="hero-badge">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5l1.85 3.75L14 5.91l-2.77 2.7.65 3.82L8 10.58l-3.88 2.04.66-3.82L2 6.1l4.15-.66L8 1.5z"/></svg>
+      Now in Public Beta — Free 14-Day Trial
+    </div>
+    <h1>Your Database →<br><span class="gradient">Production APIs</span><br>in Minutes</h1>
+    <p>Connect your existing database or use our hosted service. APIEngine auto-generates CRUD APIs, lets you write custom endpoints, and protects everything with built-in identity management.</p>
+    <div class="hero-buttons">
+      <a routerLink="/register" class="btn btn-primary btn-lg">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Start Free Trial
+      </a>
+      <a href="#how" class="btn btn-outline btn-lg">See How it Works</a>
+    </div>
+    <div style="margin-top:16px"><span class="note" style="font-size:13px;color:var(--gray-400)">No credit card required · Full access for 14 days</span></div>
+  </div>
+  <div class="hero-visual">
+    <svg viewBox="0 0 520 380" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="10" y="10" width="500" height="360" rx="12" fill="#fff" stroke="#e5e7eb" stroke-width="1.5"/>
+      <rect x="10" y="10" width="500" height="36" rx="12" fill="#f9fafb"/>
+      <rect x="10" y="34" width="500" height="1" fill="#e5e7eb"/>
+      <circle cx="30" cy="28" r="5" fill="#f87171"/><circle cx="46" cy="28" r="5" fill="#fbbf24"/><circle cx="62" cy="28" r="5" fill="#34d399"/>
+      <rect x="180" y="21" width="160" height="14" rx="7" fill="#f3f4f6"/>
+      <rect x="10" y="46" width="100" height="324" fill="#f9fafb"/>
+      <rect x="110" y="46" width="1" height="324" fill="#e5e7eb"/>
+      <rect x="22" y="60" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="22" y="80" width="76" height="24" rx="6" fill="#ede9fe"/>
+      <rect x="22" y="112" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="22" y="128" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="22" y="144" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="22" y="168" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="22" y="184" width="76" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="124" y="56" width="90" height="56" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="136" y="68" width="40" height="6" rx="3" fill="#e5e7eb"/>
+      <rect x="136" y="82" width="24" height="14" rx="4" fill="#4f46e5" opacity=".15"/>
+      <text x="140" y="93" font-size="11" font-weight="700" fill="#4f46e5">12</text>
+      <rect x="222" y="56" width="90" height="56" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="234" y="68" width="40" height="6" rx="3" fill="#e5e7eb"/>
+      <rect x="234" y="82" width="24" height="14" rx="4" fill="#22c55e" opacity=".15"/>
+      <text x="238" y="93" font-size="11" font-weight="700" fill="#22c55e">48</text>
+      <rect x="320" y="56" width="90" height="56" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="332" y="68" width="40" height="6" rx="3" fill="#e5e7eb"/>
+      <rect x="332" y="82" width="24" height="14" rx="4" fill="#7c3aed" opacity=".15"/>
+      <text x="334" y="93" font-size="11" font-weight="700" fill="#7c3aed">156</text>
+      <rect x="418" y="56" width="80" height="56" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="430" y="68" width="40" height="6" rx="3" fill="#e5e7eb"/>
+      <rect x="430" y="82" width="30" height="14" rx="4" fill="#f59e0b" opacity=".15"/>
+      <text x="432" y="93" font-size="11" font-weight="700" fill="#f59e0b">3.2K</text>
+      <rect x="124" y="124" width="244" height="230" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="136" y="138" width="80" height="8" rx="4" fill="#e5e7eb"/>
+      <circle cx="142" cy="164" r="4" fill="#22c55e"/><rect x="154" y="160" width="180" height="6" rx="3" fill="#f3f4f6"/>
+      <circle cx="142" cy="184" r="4" fill="#3b82f6"/><rect x="154" y="180" width="160" height="6" rx="3" fill="#f3f4f6"/>
+      <circle cx="142" cy="204" r="4" fill="#8b5cf6"/><rect x="154" y="200" width="140" height="6" rx="3" fill="#f3f4f6"/>
+      <circle cx="142" cy="224" r="4" fill="#f59e0b"/><rect x="154" y="220" width="170" height="6" rx="3" fill="#f3f4f6"/>
+      <circle cx="142" cy="244" r="4" fill="#22c55e"/><rect x="154" y="240" width="150" height="6" rx="3" fill="#f3f4f6"/>
+      <rect x="376" y="124" width="122" height="230" rx="8" fill="#fff" stroke="#e5e7eb"/>
+      <rect x="388" y="138" width="80" height="8" rx="4" fill="#e5e7eb"/>
+      <rect x="388" y="160" width="98" height="28" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+      <rect x="388" y="196" width="98" height="28" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+      <rect x="388" y="232" width="98" height="28" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+      <rect x="388" y="268" width="98" height="28" rx="6" fill="#f9fafb" stroke="#e5e7eb"/>
+    </svg>
+    <div class="float-badge fb1">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/><path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      48 APIs Generated
+    </div>
+    <div class="float-badge fb2">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      12 Tables Found
+    </div>
+    <div class="float-badge fb3">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      Identity Secured
+    </div>
+  </div>
+</section>
+
+<!-- LOGO STRIP -->
+<section class="logo-strip">
+  <p>Works with databases you already use</p>
+  <div class="logo-row">
+    <svg viewBox="0 0 120 28" fill="var(--gray-500)"><text x="0" y="22" font-size="18" font-weight="700" font-family="Segoe UI">PostgreSQL</text></svg>
+    <svg viewBox="0 0 80 28" fill="var(--gray-500)"><text x="0" y="22" font-size="18" font-weight="700" font-family="Segoe UI">MySQL</text></svg>
+    <svg viewBox="0 0 120 28" fill="var(--gray-500)"><text x="0" y="22" font-size="18" font-weight="700" font-family="Segoe UI">SQL Server</text></svg>
+    <svg viewBox="0 0 90 28" fill="var(--gray-500)"><text x="0" y="22" font-size="18" font-weight="700" font-family="Segoe UI">MariaDB</text></svg>
+    <svg viewBox="0 0 80 28" fill="var(--gray-500)"><text x="0" y="22" font-size="18" font-weight="700" font-family="Segoe UI">Oracle</text></svg>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="section-header">
+    <div class="label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Platform Features
+    </div>
+    <h2>Everything You Need to Ship</h2>
+    <p>Three pillars that take you from raw database to secured, production-ready APIs</p>
+  </div>
+  <div class="feature-grid">
+    @for (feature of features; track feature.title) {
+      <div class="feature-card">
+        <div class="feature-icon" [class]="feature.iconClass">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            @switch (feature.iconClass) {
+              @case ('purple') { <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/> }
+              @case ('blue') { <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/> }
+              @case ('green') { <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/> }
+              @case ('orange') { <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/> }
+              @case ('pink') { <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/> }
+              @case ('cyan') { <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/> }
+            }
+          </svg>
+        </div>
+        <h3>{{ feature.title }}</h3>
+        <p>{{ feature.desc }}</p>
+        <ul>
+          @for (item of feature.items; track item) {
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+              {{ item }}
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-section" id="how">
+  <div class="section-header">
+    <div class="label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+      Simple Process
+    </div>
+    <h2>Up and Running in 3 Steps</h2>
+    <p>From database connection to secured production APIs</p>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>
+      </div>
+      <h4>Create Workspace</h4>
+      <p>Name your workspace and connect a database — your own or hosted by us</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
+      <h4>Generate APIs</h4>
+      <p>CRUD endpoints auto-created for every table. Add custom endpoints as needed</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </div>
+      <h4>Secure & Deploy</h4>
+      <p>Protect with API keys or identity providers, then deploy to production</p>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING PREVIEW -->
+<section class="pricing-section" id="pricing">
+  <div class="section-header">
+    <div class="label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Pricing
+    </div>
+    <h2>Simple, Transparent Pricing</h2>
+    <p>Start free, upgrade when you're ready</p>
+  </div>
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <h3>Free Trial</h3>
+      <div class="price-sub">Get started for free</div>
+      <div class="price">$0<span>/14 days</span></div>
+      <div class="price-note">No credit card required</div>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> 1 Workspace</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Hosted DB (100 MB)</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Auto CRUD generation</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> API key protection</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Community support</li>
+      </ul>
+      <a routerLink="/register" class="btn btn-outline">Start Free Trial</a>
+    </div>
+    <div class="pricing-card featured">
+      <h3>Pro</h3>
+      <div class="price-sub">For growing teams</div>
+      <div class="price">$49<span>/month</span></div>
+      <div class="price-note">per workspace</div>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> 10 Workspaces</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> External + hosted DBs</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Custom API endpoints</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Built-in identity provider</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Backup & restore</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Priority support</li>
+      </ul>
+      <a routerLink="/register" class="btn btn-primary">Get Started</a>
+    </div>
+    <div class="pricing-card">
+      <h3>Enterprise</h3>
+      <div class="price-sub">For large organizations</div>
+      <div class="price">Custom</div>
+      <div class="price-note">contact for quote</div>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Unlimited workspaces</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> External IdP integration</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> SSO & SAML</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Dedicated infrastructure</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> SLA & dedicated support</li>
+      </ul>
+      <a class="btn btn-outline">Contact Sales</a>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="cta-box">
+    <h2>Ready to Ship Faster?</h2>
+    <p>Start your free 14-day trial. No credit card, no setup hassle.</p>
+    <a routerLink="/register" class="btn btn-white btn-lg">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      Start Free Trial
+    </a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="logo" style="font-size:20px">
+        <svg width="24" height="24" viewBox="0 0 32 32" fill="none"><ellipse cx="16" cy="7" rx="11" ry="4" stroke="#818cf8" stroke-width="2"/><path d="M5 7v18c0 2.2 4.9 4 11 4s11-1.8 11-4V7" stroke="#818cf8" stroke-width="2"/><path d="M5 15c0 2.2 4.9 4 11 4s11-1.8 11-4" stroke="#818cf8" stroke-width="2"/><path d="M18 14l-4 7h5l-4 7" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        API<span style="color:var(--gray-300)">Engine</span>
+      </div>
+      <p>Your database to production APIs in minutes. Auto-generate, customize, and secure — all from one platform.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Product</h4>
+      <a href="#features">Features</a>
+      <a routerLink="/pricing">Pricing</a>
+      <a routerLink="/docs">Documentation</a>
+      <a>Changelog</a>
+    </div>
+    <div class="footer-col">
+      <h4>Company</h4>
+      <a>About</a>
+      <a>Blog</a>
+      <a>Careers</a>
+      <a>Contact</a>
+    </div>
+    <div class="footer-col">
+      <h4>Legal</h4>
+      <a>Privacy Policy</a>
+      <a>Terms of Service</a>
+      <a>Cookie Policy</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>&copy; 2026 APIEngine. All rights reserved.</span>
+    <div>
+      <a>Twitter</a>
+      <a>GitHub</a>
+      <a>LinkedIn</a>
+    </div>
+  </div>
+</footer>

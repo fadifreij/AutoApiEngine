@@ -1,6 +1,5 @@
-using AutoApiEngine.ApiServices.Providers;
+﻿using AutoApiEngine.ApiServices.Providers;
 using AutoApiEngine.Persistence.Context;
-using AutoApiEngine.Persistence.models;
 using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.Services.AuthServices;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -11,67 +10,41 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 builder.Services.AddControllers()
       .AddJsonOptions(options =>
       {
           options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
           options.JsonSerializerOptions.WriteIndented = true;
-      }
-      ); ;
+          options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+      });
 
-
-
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:4200", "https://localhost:7002")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials()
+              .SetIsOriginAllowed(_ => true);
+    });
+});
 
 builder.Services.AddOpenApi();
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<JwtService>();
+builder.Services.AddScoped(typeof(KeycloakService));
 
-// Read the database provider from configuration
 var databaseProvider = builder.Configuration["DatabaseProvider"] ?? "";
 builder.AddDatabaseContext(databaseProvider);
 
-builder.Services
-    .AddIdentity<ApplicationUser, IdentityRole>()
-    .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddDefaultTokenProviders();
-
-var jwtSettings = builder.Configuration.GetSection("Jwt");
-var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]!);
-
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(key)
-    };
-});
-
-builder.Services.AddAuthorization();
-
-
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+app.UseCors("AllowFrontend");
 
 app.UseAuthorization();
 

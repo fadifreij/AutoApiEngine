@@ -1,42 +1,33 @@
-import {
-  Component,
-  signal,
-  inject,
-  OnInit,
-  afterNextRender,
-  ChangeDetectionStrategy,
-} from '@angular/core';
-import { RouterOutlet } from '@angular/router';
-import { ToastModule } from 'primeng/toast';
-import { MessageService } from 'primeng/api';
-import { ThemeService } from './core/theme/theme.service';
+import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import { Router, RouterOutlet, NavigationStart, NavigationEnd, NavigationCancel, NavigationError } from '@angular/router';
+import { LoadingComponent } from './shared/loading/loading.component';
+import { LoadingService } from './shared/loading/loading.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, ToastModule],
-  providers: [MessageService], // Singleton at app level
-  template: `
-    <!-- Global toast outlet — positioned top-right -->
-    <p-toast
-      position="top-right"
-      [breakpoints]="{ '960px': { width: '100%', right: '0', left: '0' } }"
-    ></p-toast>
-
-    <!-- All routes render here -->
-    <router-outlet></router-outlet>
-  `,
-  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterOutlet, LoadingComponent],
+  templateUrl: './app.html',
+  styleUrl: './app.scss'
 })
-export class App implements OnInit {
-  protected readonly title = signal('autoApiEngine');
-  private readonly themeService = inject(ThemeService);
+export class App implements OnInit, OnDestroy {
+  protected readonly title = signal('my-project');
+  private router = inject(Router);
+  private loading = inject(LoadingService);
+  private routerSub!: Subscription;
 
-  constructor() {
-    // Apply persisted / OS-detected theme after first render (browser only)
-    afterNextRender(() => {
-      this.themeService.apply(this.themeService.active());
+  ngOnInit() {
+    this.routerSub = this.router.events.subscribe(event => {
+      if (event instanceof NavigationStart) {
+        this.loading.show();
+      }
+      if (event instanceof NavigationEnd || event instanceof NavigationCancel || event instanceof NavigationError) {
+        this.loading.hide();
+      }
     });
   }
 
-  ngOnInit(): void {}
+  ngOnDestroy() {
+    this.routerSub?.unsubscribe();
+  }
 }

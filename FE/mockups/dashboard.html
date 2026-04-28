@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — APIEngine</title>
+<link rel="stylesheet" href="shared-styles.css">
+<style>
+  body { background: var(--gray-50); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* TRIAL BANNER */
+  .trial-banner { background: linear-gradient(90deg, var(--primary), var(--accent)); color: #fff; padding: 8px 24px; display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 13px; font-weight: 500; flex-shrink: 0; }
+  .trial-banner svg { width: 16px; height: 16px; }
+  .trial-banner strong { font-weight: 700; }
+  .trial-banner a { color: #fff; font-weight: 700; background: rgba(255,255,255,.2); padding: 4px 14px; border-radius: 6px; font-size: 12px; margin-left: 8px; }
+  .trial-banner a:hover { background: rgba(255,255,255,.3); }
+
+  /* TOP BAR */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: #fff; border-bottom: 1px solid var(--gray-200); flex-shrink: 0; }
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 18px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 6px; }
+  .logo span { color: var(--gray-900); }
+  .logo svg { width: 22px; height: 22px; }
+  .org-badge { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px; background: var(--primary-bg); color: var(--primary); font-size: 13px; font-weight: 700; }
+  .org-badge svg { width: 14px; height: 14px; }
+  .ws-switcher { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 8px; background: var(--gray-50); border: 1px solid var(--gray-200); font-size: 13px; font-weight: 600; cursor: pointer; color: var(--gray-700); }
+  .ws-switcher:hover { border-color: var(--primary); }
+  .ws-switcher svg { width: 14px; height: 14px; color: var(--gray-400); }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .search-box { padding: 6px 12px 6px 32px; border-radius: 8px; border: 1px solid var(--gray-200); background: var(--gray-50) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='M21 21l-4.35-4.35'/%3E%3C/svg%3E") 10px center no-repeat; font-size: 13px; width: 220px; color: var(--gray-600); }
+  .icon-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--gray-200); background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+  .icon-btn:hover { background: var(--gray-50); }
+  .icon-btn svg { width: 18px; height: 18px; color: var(--gray-500); }
+  .notif-dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }
+  .avatar { width: 32px; height: 32px; border-radius: 8px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .user-info { display: flex; flex-direction: column; align-items: flex-end; margin-right: 4px; }
+  .user-name { font-size: 13px; font-weight: 600; color: var(--gray-800); }
+  .user-role { font-size: 11px; color: var(--gray-400); }
+
+  /* LAYOUT */
+  .layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar { width: 240px; background: #fff; border-right: 1px solid var(--gray-200); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+  .sidebar-section { padding: 16px 12px 8px; }
+  .sidebar-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gray-400); font-weight: 700; padding: 0 12px 8px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; font-size: 14px; color: var(--gray-600); cursor: pointer; transition: all .12s; font-weight: 500; text-decoration: none; }
+  .sidebar-item:hover { background: var(--gray-50); color: var(--gray-900); }
+  .sidebar-item.active { background: var(--primary-bg); color: var(--primary); font-weight: 600; }
+  .sidebar-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .sidebar-item .badge { margin-left: auto; background: var(--primary); color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+  .sidebar-bottom { margin-top: auto; padding: 12px; border-top: 1px solid var(--gray-100); }
+  .plan-card { background: linear-gradient(135deg, #ede9fe, #dbeafe); border-radius: 10px; padding: 14px; }
+  .plan-card .plan-name { font-size: 13px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 6px; }
+  .plan-card .plan-name svg { width: 14px; height: 14px; }
+  .plan-card .plan-info { font-size: 12px; color: var(--gray-500); margin: 4px 0 8px; }
+  .plan-bar { height: 5px; border-radius: 3px; background: rgba(79,70,229,.15); overflow: hidden; }
+  .plan-bar-fill { height: 100%; width: 60%; background: var(--primary); border-radius: 3px; }
+  .plan-card a { display: block; margin-top: 10px; font-size: 12px; color: var(--primary); font-weight: 600; text-align: center; padding: 6px; border-radius: 6px; border: 1px solid var(--primary); }
+
+  /* MAIN */
+  .main { flex: 1; padding: 24px 28px; overflow-y: auto; }
+  .main-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+  .main-header h1 { font-size: 22px; font-weight: 700; }
+  .main-header .subtitle { color: var(--gray-400); font-size: 13px; margin-top: 2px; }
+
+  /* STAT CARDS */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; padding: 18px 20px; display: flex; align-items: flex-start; gap: 14px; transition: all .15s; }
+  .stat-card:hover { box-shadow: var(--shadow-sm); border-color: var(--gray-300); }
+  .stat-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .stat-icon svg { width: 20px; height: 20px; }
+  .stat-icon.purple { background: #ede9fe; color: #7c3aed; }
+  .stat-icon.blue { background: #dbeafe; color: #2563eb; }
+  .stat-icon.green { background: #dcfce7; color: #16a34a; }
+  .stat-icon.orange { background: #ffedd5; color: #ea580c; }
+  .stat-label { font-size: 13px; color: var(--gray-400); margin-bottom: 4px; }
+  .stat-value { font-size: 26px; font-weight: 800; color: var(--gray-900); }
+  .stat-change { font-size: 12px; color: var(--success); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+  .stat-change svg { width: 12px; height: 12px; }
+
+  /* PANELS */
+  .panel-grid { display: grid; grid-template-columns: 5fr 3fr; gap: 20px; }
+  .panel { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; overflow: hidden; }
+  .panel-header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--gray-100); }
+  .panel-header h3 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .panel-header h3 svg { width: 16px; height: 16px; color: var(--gray-400); }
+  .panel-header a { font-size: 12px; color: var(--primary); font-weight: 600; }
+  .panel-body { padding: 12px 20px; }
+
+  /* ACTIVITY */
+  .activity-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--gray-50); align-items: flex-start; }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .activity-icon svg { width: 16px; height: 16px; }
+  .activity-icon.green { background: #dcfce7; color: #16a34a; }
+  .activity-icon.blue { background: #dbeafe; color: #2563eb; }
+  .activity-icon.purple { background: #ede9fe; color: #7c3aed; }
+  .activity-icon.orange { background: #ffedd5; color: #ea580c; }
+  .activity-text { font-size: 13px; color: var(--gray-600); line-height: 1.5; }
+  .activity-text strong { color: var(--gray-900); }
+  .activity-time { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+
+  /* QUICK ACTIONS */
+  .quick-btn { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--gray-100); font-size: 13px; cursor: pointer; background: #fff; width: 100%; margin-bottom: 6px; transition: all .15s; color: var(--gray-600); font-weight: 500; text-decoration: none; }
+  .quick-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--gray-50); }
+  .quick-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .quick-btn .arrow { margin-left: auto; color: var(--gray-300); }
+  .quick-btn:hover .arrow { color: var(--primary); }
+
+  /* DB HEALTH */
+  .health-row { display: flex; gap: 8px; margin-top: 12px; }
+  .health-chip { flex: 1; text-align: center; padding: 12px 8px; border-radius: 8px; background: var(--gray-50); }
+  .health-chip .h-num { font-size: 20px; font-weight: 800; }
+  .health-chip .h-label { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+  .health-chip.ok .h-num { color: var(--success); }
+  .health-chip.warn .h-num { color: var(--warning); }
+  .health-chip.total .h-num { color: var(--primary); }
+</style>
+</head>
+<body>
+
+<!-- TRIAL BANNER -->
+<div class="trial-banner">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+  Your <strong>Pro Trial</strong> has <strong>12 days</strong> remaining. Upgrade now to keep all features.
+  <a href="pricing.html">View Plans →</a>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="landing.html" class="logo">
+      <svg viewBox="0 0 32 32" fill="none"><rect x="2" y="6" width="28" height="20" rx="4" stroke="#4f46e5" stroke-width="2.5"/><path d="M9 16h6m-3-3v6" stroke="#4f46e5" stroke-width="2" stroke-linecap="round"/><circle cx="22" cy="16" r="3" stroke="#7c3aed" stroke-width="2"/></svg>
+      API<span>Engine</span>
+    </a>
+    <div class="org-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      Acme Corp
+    </div>
+    <div class="ws-switcher" onclick="document.getElementById('ws-dd').style.display=document.getElementById('ws-dd').style.display==='block'?'none':'block'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>
+      ecommerce-db
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <input class="search-box" placeholder="Search..." readonly>
+    <div class="icon-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      <div class="notif-dot"></div>
+    </div>
+    <div class="user-info">
+      <span class="user-name">John Doe</span>
+      <span class="user-role">Admin</span>
+    </div>
+    <div class="avatar">JD</div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Overview</div>
+      <a href="dashboard.html" class="sidebar-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Workspace</div>
+      <a href="new-workspace.html" class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg>
+        New Workspace
+      </a>
+      <a href="workspace-manage.html" class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>
+        Manage Workspace
+      </a>
+      <a href="query-studio.html" class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8m-8 4h8"/></svg>
+        Query Studio
+      </a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">APIs</div>
+      <a href="api-generated.html" class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Generated APIs
+        <span class="badge">48</span>
+      </a>
+      <a href="api-custom.html" class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        Custom APIs
+        <span class="badge">2</span>
+      </a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Security</div>
+      <a href="#" class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Identity Providers
+      </a>
+      <a href="#" class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        Users
+      </a>
+      <a href="#" class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.78 7.78 5.5 5.5 0 017.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        API Keys
+      </a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Account</div>
+      <a href="#" class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Settings
+      </a>
+      <a href="pricing.html" class="sidebar-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        Plans & Billing
+      </a>
+    </div>
+
+    <div class="sidebar-bottom">
+      <div class="plan-card">
+        <div class="plan-name">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Pro Trial
+        </div>
+        <div class="plan-info">60% of trial used · 12 days left</div>
+        <div class="plan-bar"><div class="plan-bar-fill"></div></div>
+        <a href="pricing.html">Upgrade Plan</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="main-header">
+      <div>
+        <h1>Dashboard</h1>
+        <div class="subtitle">Workspace: ecommerce-db · Last sync: 2 minutes ago</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <a href="new-workspace.html" class="btn btn-outline btn-sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg>
+          New Workspace
+        </a>
+        <a href="query-studio.html" class="btn btn-primary btn-sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Open Query Studio
+        </a>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-icon purple">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </div>
+        <div>
+          <div class="stat-label">Tables</div>
+          <div class="stat-value">12</div>
+          <div class="stat-change"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 15l-6-6-6 6"/></svg> +2 this week</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <div>
+          <div class="stat-label">Active APIs</div>
+          <div class="stat-value">48</div>
+          <div class="stat-change"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 15l-6-6-6 6"/></svg> +8 auto-generated</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        </div>
+        <div>
+          <div class="stat-label">IdP Users</div>
+          <div class="stat-value">156</div>
+          <div class="stat-change"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 15l-6-6-6 6"/></svg> +12 this month</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon orange">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>
+        </div>
+        <div>
+          <div class="stat-label">DB Size</div>
+          <div class="stat-value">245 MB</div>
+          <div class="stat-change" style="color:var(--gray-400)">of 1 GB limit</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANELS -->
+    <div class="panel-grid">
+      <!-- ACTIVITY -->
+      <div class="panel">
+        <div class="panel-header">
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Recent Activity</h3>
+          <a href="#">View All</a>
+        </div>
+        <div class="panel-body">
+          <div class="activity-item">
+            <div class="activity-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div>
+            <div>
+              <div class="activity-text"><strong>API deployed</strong> — POST /api/custom/reports/monthly</div>
+              <div class="activity-time">5 minutes ago</div>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+            <div>
+              <div class="activity-text"><strong>Backup completed</strong> — ecommerce-db (245 MB)</div>
+              <div class="activity-time">1 hour ago</div>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-icon purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
+            <div>
+              <div class="activity-text"><strong>Table created</strong> — shipping_zones via DDL runner</div>
+              <div class="activity-time">3 hours ago</div>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+            <div>
+              <div class="activity-text"><strong>Identity Provider</strong> — Added "Okta" as external IdP</div>
+              <div class="activity-time">Yesterday</div>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+            <div>
+              <div class="activity-text"><strong>8 CRUD APIs generated</strong> for table "shipping_zones"</div>
+              <div class="activity-time">Yesterday</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COL -->
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <!-- QUICK ACTIONS -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> Quick Actions</h3>
+          </div>
+          <div class="panel-body">
+            <a href="new-workspace.html" class="quick-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg>
+              New Workspace
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+            </a>
+            <a href="query-studio.html" class="quick-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+              Open SQL Editor
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+            </a>
+            <a href="api-generated.html" class="quick-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              View Generated APIs
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+            </a>
+            <a href="workspace-manage.html" class="quick-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Backup Database
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+            </a>
+          </div>
+        </div>
+
+        <!-- DB HEALTH -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg> Database Objects</h3>
+          </div>
+          <div class="panel-body">
+            <div class="health-row">
+              <div class="health-chip ok">
+                <div class="h-num">12</div>
+                <div class="h-label">Tables</div>
+              </div>
+              <div class="health-chip warn">
+                <div class="h-num">3</div>
+                <div class="h-label">Functions</div>
+              </div>
+              <div class="health-chip total">
+                <div class="h-num">2</div>
+                <div class="h-label">Views</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

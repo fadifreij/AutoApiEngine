@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Landing Page — Proposal B: Interactive Demo + Social Proof</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1a1a2e; background: #fff; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 48px; border-bottom: 1px solid #eee; position: sticky; top: 0; background: #fff; z-index: 100; }
+  .logo { font-size: 22px; font-weight: 800; color: #4f46e5; }
+  .logo span { color: #1a1a2e; }
+  .nav-links { display: flex; gap: 32px; align-items: center; }
+  .nav-links a { text-decoration: none; color: #555; font-size: 15px; font-weight: 500; }
+  .btn { padding: 10px 24px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; text-decoration: none; border: none; display: inline-block; }
+  .btn-outline { border: 2px solid #4f46e5; color: #4f46e5; background: transparent; }
+  .btn-primary { background: #4f46e5; color: #fff; }
+  .btn-primary:hover { background: #4338ca; }
+  .btn-large { padding: 14px 36px; font-size: 17px; }
+  .btn-white { background: #fff; color: #4f46e5; font-weight: 700; }
+
+  /* HERO SPLIT */
+  .hero { display: grid; grid-template-columns: 1fr 1fr; min-height: 520px; align-items: center; padding: 60px 48px; background: linear-gradient(135deg, #f0f0ff 0%, #ede9fe 100%); gap: 48px; }
+  .hero-text h1 { font-size: 48px; font-weight: 800; line-height: 1.15; margin-bottom: 20px; }
+  .hero-text h1 span { color: #4f46e5; }
+  .hero-text p { font-size: 18px; color: #555; line-height: 1.7; margin-bottom: 32px; max-width: 480px; }
+  .hero-terminal { background: #1e1e2e; border-radius: 12px; padding: 0; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+  .terminal-bar { background: #2d2d44; padding: 10px 16px; display: flex; gap: 8px; align-items: center; }
+  .terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
+  .terminal-dot.r { background: #ff5f57; }
+  .terminal-dot.y { background: #ffbd2e; }
+  .terminal-dot.g { background: #28c840; }
+  .terminal-body { padding: 20px; font-family: 'Consolas', 'Courier New', monospace; font-size: 14px; color: #a5b4fc; line-height: 2; min-height: 260px; }
+  .terminal-body .comment { color: #6b7280; }
+  .terminal-body .cmd { color: #22d3ee; }
+  .terminal-body .result { color: #34d399; }
+  .terminal-body .highlight { color: #fbbf24; }
+
+  /* TRUST BAR */
+  .trust { padding: 40px 48px; text-align: center; background: #fff; border-bottom: 1px solid #eee; }
+  .trust p { color: #999; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 20px; }
+  .trust-logos { display: flex; justify-content: center; gap: 48px; align-items: center; opacity: .4; font-size: 24px; font-weight: 700; color: #888; }
+
+  /* TABBED FEATURES */
+  .features { padding: 80px 48px; max-width: 1100px; margin: 0 auto; }
+  .features h2 { text-align: center; font-size: 36px; margin-bottom: 40px; }
+  .tab-bar { display: flex; justify-content: center; gap: 8px; margin-bottom: 40px; }
+  .tab-btn { padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; background: #f3f4f6; border: none; color: #555; transition: all .2s; }
+  .tab-btn.active { background: #4f46e5; color: #fff; }
+  .tab-content { display: none; }
+  .tab-content.active { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+  .tab-screenshot { background: #f8f9fa; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb; min-height: 320px; display: flex; align-items: center; justify-content: center; }
+  .tab-screenshot .mock { width: 100%; }
+  .tab-info h3 { font-size: 24px; margin-bottom: 16px; }
+  .tab-info p { color: #666; line-height: 1.7; margin-bottom: 20px; }
+  .tab-info ul { list-style: none; }
+  .tab-info ul li { padding: 8px 0; font-size: 15px; color: #444; }
+  .tab-info ul li::before { content: "✓ "; color: #22c55e; font-weight: bold; }
+
+  /* TESTIMONIALS */
+  .testimonials { padding: 80px 48px; background: #fafafe; }
+  .testimonials h2 { text-align: center; font-size: 36px; margin-bottom: 48px; }
+  .testimonial-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; max-width: 1100px; margin: 0 auto; }
+  .testimonial-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px; }
+  .testimonial-card .stars { color: #fbbf24; margin-bottom: 12px; font-size: 18px; }
+  .testimonial-card blockquote { color: #555; font-size: 15px; line-height: 1.7; margin-bottom: 16px; font-style: italic; }
+  .testimonial-card .author { font-weight: 600; font-size: 14px; }
+  .testimonial-card .role { color: #999; font-size: 13px; }
+
+  /* CTA BANNER */
+  .cta-banner { padding: 80px 48px; background: linear-gradient(135deg, #4f46e5, #7c3aed); text-align: center; color: #fff; }
+  .cta-banner h2 { font-size: 36px; margin-bottom: 16px; }
+  .cta-banner p { font-size: 18px; opacity: .85; margin-bottom: 32px; }
+
+  /* PRICING */
+  .pricing { padding: 80px 48px; max-width: 1100px; margin: 0 auto; }
+  .pricing h2 { text-align: center; font-size: 36px; margin-bottom: 12px; }
+  .pricing .subtitle { text-align: center; color: #777; font-size: 18px; margin-bottom: 56px; }
+  .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  .price-card { border: 1px solid #e5e7eb; border-radius: 16px; padding: 36px 28px; text-align: center; }
+  .price-card.featured { border: 2px solid #4f46e5; box-shadow: 0 8px 30px rgba(79,70,229,.15); position: relative; }
+  .price-card.featured::before { content: "POPULAR"; position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: #4f46e5; color: #fff; font-size: 12px; font-weight: 700; padding: 4px 16px; border-radius: 20px; }
+  .price-card h3 { font-size: 22px; margin-bottom: 8px; }
+  .price-card .price { font-size: 42px; font-weight: 800; margin: 16px 0; }
+  .price-card .price span { font-size: 16px; color: #888; font-weight: 400; }
+  .price-card ul { list-style: none; text-align: left; margin: 24px 0; }
+  .price-card ul li { padding: 8px 0; color: #555; font-size: 14px; border-bottom: 1px solid #f3f3f3; }
+  .price-card ul li::before { content: "✓ "; color: #22c55e; font-weight: bold; }
+
+  /* FAQ */
+  .faq { padding: 80px 48px; max-width: 800px; margin: 0 auto; }
+  .faq h2 { text-align: center; font-size: 36px; margin-bottom: 40px; }
+  .faq-item { border-bottom: 1px solid #e5e7eb; }
+  .faq-q { padding: 20px 0; font-weight: 600; font-size: 16px; cursor: pointer; display: flex; justify-content: space-between; }
+  .faq-a { padding: 0 0 20px; color: #666; line-height: 1.7; font-size: 15px; display: none; }
+  .faq-item.open .faq-a { display: block; }
+  .faq-item.open .faq-q::after { content: "−"; }
+  .faq-q::after { content: "+"; font-size: 20px; color: #4f46e5; }
+
+  footer { background: #1a1a2e; color: #aaa; padding: 48px; text-align: center; font-size: 14px; }
+  footer a { color: #818cf8; text-decoration: none; }
+
+  /* MOCK UI INSIDE TABS */
+  .mock-workspace { font-family: 'Consolas', monospace; font-size: 12px; width: 100%; }
+  .mock-workspace .mock-bar { background: #e5e7eb; border-radius: 6px 6px 0 0; padding: 8px 12px; font-size: 11px; color: #888; display: flex; gap: 12px; }
+  .mock-workspace .mock-panel { background: #f8f9fa; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 6px 6px; padding: 16px; display: grid; grid-template-columns: 160px 1fr; gap: 12px; min-height: 220px; }
+  .mock-tree { font-size: 12px; color: #555; line-height: 2; }
+  .mock-tree .folder { font-weight: 600; color: #4f46e5; }
+  .mock-editor { background: #1e1e2e; border-radius: 6px; padding: 12px; color: #a5b4fc; font-size: 12px; line-height: 1.8; }
+  .mock-editor .kw { color: #c084fc; }
+  .mock-editor .str { color: #34d399; }
+
+  .mock-api-list { width: 100%; font-size: 13px; }
+  .mock-api-row { display: flex; align-items: center; padding: 10px 12px; border-bottom: 1px solid #eee; gap: 12px; }
+  .mock-api-row:first-child { background: #f3f4f6; font-weight: 600; }
+  .mock-method { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }
+  .mock-method.get { background: #22c55e; }
+  .mock-method.post { background: #3b82f6; }
+  .mock-method.put { background: #f59e0b; }
+  .mock-method.del { background: #ef4444; }
+  .mock-status { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+
+  .mock-security { width: 100%; font-size: 13px; }
+  .mock-sec-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .mock-sec-card h4 { font-size: 14px; margin-bottom: 6px; }
+  .mock-sec-card p { font-size: 12px; color: #888; }
+  .mock-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .mock-badge.active { background: #dcfce7; color: #16a34a; }
+  .mock-badge.config { background: #dbeafe; color: #2563eb; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">API<span>Engine</span></div>
+  <div class="nav-links">
+    <a href="#features">Product</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#">Docs</a>
+    <a href="#" class="btn btn-outline">Log in</a>
+    <a href="#" class="btn btn-primary">Start Free Trial</a>
+  </div>
+</nav>
+
+<!-- SPLIT HERO -->
+<section class="hero">
+  <div class="hero-text">
+    <h1><span>Connect.</span> Generate. Ship.</h1>
+    <p>Bring your database, get production-ready APIs instantly. Protect them with built-in identity management. No backend code required.</p>
+    <a href="#" class="btn btn-primary btn-large">Start Free Trial — 14 days</a>
+  </div>
+  <div class="hero-terminal">
+    <div class="terminal-bar">
+      <div class="terminal-dot r"></div>
+      <div class="terminal-dot y"></div>
+      <div class="terminal-dot g"></div>
+    </div>
+    <div class="terminal-body">
+      <div class="comment"># Connect your database</div>
+      <div class="cmd">$ apiengine workspace create --name ecommerce</div>
+      <div class="result">✓ Workspace "ecommerce" created</div>
+      <br>
+      <div class="comment"># Tables detected automatically</div>
+      <div class="result">✓ Found 12 tables: users, orders, products...</div>
+      <br>
+      <div class="comment"># CRUD APIs generated</div>
+      <div class="result">✓ 48 endpoints ready</div>
+      <div class="highlight">  GET    /api/users</div>
+      <div class="highlight">  POST   /api/users</div>
+      <div class="highlight">  GET    /api/orders</div>
+      <div class="highlight">  ...</div>
+    </div>
+  </div>
+</section>
+
+<!-- TRUST BAR -->
+<section class="trust">
+  <p>Trusted by growing teams everywhere</p>
+  <div class="trust-logos">
+    <span>Acme Corp</span>
+    <span>TechFlow</span>
+    <span>DataPipe</span>
+    <span>CloudBase</span>
+    <span>NovaSoft</span>
+  </div>
+</section>
+
+<!-- TABBED FEATURES -->
+<section class="features" id="features">
+  <h2>One Platform, Three Superpowers</h2>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab(0)">Workspace & Query</button>
+    <button class="tab-btn" onclick="showTab(1)">API Management</button>
+    <button class="tab-btn" onclick="showTab(2)">Security & Identity</button>
+  </div>
+
+  <!-- Tab 0: Workspace -->
+  <div class="tab-content active" id="tab-0">
+    <div class="tab-screenshot">
+      <div class="mock-workspace">
+        <div class="mock-bar">
+          <span>📁 ecommerce-db</span>
+          <span>|</span>
+          <span>SQL Editor</span>
+        </div>
+        <div class="mock-panel">
+          <div class="mock-tree">
+            <div class="folder">📁 Tables</div>
+            <div>&nbsp;&nbsp;📄 users</div>
+            <div>&nbsp;&nbsp;📄 orders</div>
+            <div>&nbsp;&nbsp;📄 products</div>
+            <div>&nbsp;&nbsp;📄 categories</div>
+            <div class="folder">📁 Functions</div>
+            <div>&nbsp;&nbsp;⚡ calc_total</div>
+            <div class="folder">📁 Views</div>
+            <div>&nbsp;&nbsp;👁 active_orders</div>
+          </div>
+          <div class="mock-editor">
+            <span class="kw">SELECT</span> * <span class="kw">FROM</span> orders<br>
+            <span class="kw">WHERE</span> status = <span class="str">'pending'</span><br>
+            <span class="kw">ORDER BY</span> created_at <span class="kw">DESC</span><br>
+            <span class="kw">LIMIT</span> 100;
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tab-info">
+      <h3>Your Database, Your Way</h3>
+      <p>Create isolated workspaces backed by individual databases. Connect your external DB or let us host it for you.</p>
+      <ul>
+        <li>Connect external databases (provide credentials)</li>
+        <li>Or use our managed hosted databases</li>
+        <li>Browse tables, functions, views & all objects</li>
+        <li>Full SQL editor with syntax highlighting</li>
+        <li>Upload, download & backup databases</li>
+        <li>Run DDL transactions directly</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Tab 1: API -->
+  <div class="tab-content" id="tab-1">
+    <div class="tab-screenshot">
+      <div class="mock-api-list">
+        <div class="mock-api-row">
+          <span style="flex:0 0 60px">Method</span>
+          <span style="flex:1">Endpoint</span>
+          <span style="flex:0 0 60px">Status</span>
+        </div>
+        <div class="mock-api-row">
+          <span class="mock-method get">GET</span>
+          <span style="flex:1">/api/v1/users</span>
+          <div class="mock-status"></div>
+        </div>
+        <div class="mock-api-row">
+          <span class="mock-method post">POST</span>
+          <span style="flex:1">/api/v1/users</span>
+          <div class="mock-status"></div>
+        </div>
+        <div class="mock-api-row">
+          <span class="mock-method get">GET</span>
+          <span style="flex:1">/api/v1/orders</span>
+          <div class="mock-status"></div>
+        </div>
+        <div class="mock-api-row">
+          <span class="mock-method put">PUT</span>
+          <span style="flex:1">/api/v1/orders/:id</span>
+          <div class="mock-status"></div>
+        </div>
+        <div class="mock-api-row">
+          <span class="mock-method del">DEL</span>
+          <span style="flex:1">/api/v1/orders/:id</span>
+          <div class="mock-status"></div>
+        </div>
+        <div class="mock-api-row">
+          <span class="mock-method get">GET</span>
+          <span style="flex:1">/api/v1/products</span>
+          <div class="mock-status"></div>
+        </div>
+        <div class="mock-api-row">
+          <span class="mock-method post">POST</span>
+          <span style="flex:1">/api/custom/reports/monthly</span>
+          <div class="mock-status"></div>
+        </div>
+      </div>
+    </div>
+    <div class="tab-info">
+      <h3>APIs, Auto-Generated</h3>
+      <p>The moment your database is connected, CRUD endpoints appear for every table. Need custom logic? Deploy your own endpoints too.</p>
+      <ul>
+        <li>Auto CRUD generation per table</li>
+        <li>Custom API endpoint editor</li>
+        <li>API testing playground</li>
+        <li>Deployment management</li>
+        <li>Request logging & monitoring</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Tab 2: Security -->
+  <div class="tab-content" id="tab-2">
+    <div class="tab-screenshot">
+      <div class="mock-security">
+        <div class="mock-sec-card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h4>🔑 API Key Protection</h4>
+            <span class="mock-badge active">Active</span>
+          </div>
+          <p>12 APIs protected · 3 keys issued</p>
+        </div>
+        <div class="mock-sec-card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h4>🛡️ Built-in Identity Provider</h4>
+            <span class="mock-badge active">Active</span>
+          </div>
+          <p>48 users · OIDC protocol · 2 clients configured</p>
+        </div>
+        <div class="mock-sec-card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h4>🌐 External IdP: Okta</h4>
+            <span class="mock-badge config">Configured</span>
+          </div>
+          <p>SAML 2.0 · SSO enabled</p>
+        </div>
+      </div>
+    </div>
+    <div class="tab-info">
+      <h3>Security Built In</h3>
+      <p>Protect any API with API keys for simple auth, or use a full identity provider for OAuth/OIDC flows. Use our managed IdP or bring your own.</p>
+      <ul>
+        <li>API key generation & management</li>
+        <li>Built-in identity provider (managed)</li>
+        <li>Connect external IdPs (Okta, Auth0, etc.)</li>
+        <li>User management & roles</li>
+        <li>Protocol configuration (OIDC, SAML)</li>
+        <li>Per-API protection settings</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="testimonials">
+  <h2>Loved by Developers</h2>
+  <div class="testimonial-grid">
+    <div class="testimonial-card">
+      <div class="stars">★★★★★</div>
+      <blockquote>"We went from a raw Postgres database to a fully documented, secured REST API in under an hour. Unreal."</blockquote>
+      <div class="author">Sarah Chen</div>
+      <div class="role">CTO, TechFlow</div>
+    </div>
+    <div class="testimonial-card">
+      <div class="stars">★★★★★</div>
+      <blockquote>"The built-in identity provider saved us weeks of Keycloak configuration. It just works."</blockquote>
+      <div class="author">Marcus Rivera</div>
+      <div class="role">Backend Lead, DataPipe</div>
+    </div>
+    <div class="testimonial-card">
+      <div class="stars">★★★★★</div>
+      <blockquote>"Our team ships features 3x faster since we stopped writing boilerplate CRUD code."</blockquote>
+      <div class="author">Priya Patel</div>
+      <div class="role">VP Engineering, NovaSoft</div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA BANNER -->
+<section class="cta-banner">
+  <h2>Start Your 14-Day Free Trial</h2>
+  <p>No credit card required. Full access to all features.</p>
+  <a href="#" class="btn btn-white btn-large">Get Started Free</a>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <h2>Simple, Transparent Pricing</h2>
+  <p class="subtitle">Start free, scale as you grow</p>
+  <div class="price-grid">
+    <div class="price-card">
+      <h3>Free Trial</h3>
+      <div class="price">$0<span>/14 days</span></div>
+      <ul>
+        <li>1 Workspace</li>
+        <li>Hosted database (100 MB)</li>
+        <li>Auto CRUD generation</li>
+        <li>Basic API key protection</li>
+        <li>Community support</li>
+      </ul>
+      <a href="#" class="btn btn-outline" style="width:100%">Start Trial</a>
+    </div>
+    <div class="price-card featured">
+      <h3>Pro</h3>
+      <div class="price">$49<span>/month</span></div>
+      <ul>
+        <li>10 Workspaces</li>
+        <li>External + hosted databases</li>
+        <li>Custom API endpoints</li>
+        <li>Identity provider (built-in)</li>
+        <li>Backup & restore</li>
+        <li>Priority support</li>
+      </ul>
+      <a href="#" class="btn btn-primary" style="width:100%">Get Started</a>
+    </div>
+    <div class="price-card">
+      <h3>Enterprise</h3>
+      <div class="price">Custom</div>
+      <ul>
+        <li>Unlimited workspaces</li>
+        <li>External IdP integration</li>
+        <li>SSO & SAML</li>
+        <li>Dedicated infrastructure</li>
+        <li>SLA & dedicated support</li>
+      </ul>
+      <a href="#" class="btn btn-outline" style="width:100%">Contact Sales</a>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq">
+  <h2>Frequently Asked Questions</h2>
+  <div class="faq-item open">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I connect my own database?</div>
+    <div class="faq-a">Yes! You can connect any external PostgreSQL, MySQL, or SQL Server database by providing the connection credentials. Alternatively, use our hosted database service with zero configuration.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">How does the identity provider work?</div>
+    <div class="faq-a">We provide a fully managed identity provider built into the platform. You can create users, configure OAuth/OIDC protocols, and protect your APIs — all without managing external auth infrastructure. You can also connect your own external IdP.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">What happens after the free trial?</div>
+    <div class="faq-a">After 14 days, you can choose to upgrade to Pro or Enterprise. Your workspace and data remain intact — no disruption. If you don't upgrade, your account moves to a read-only state.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I deploy custom API endpoints?</div>
+    <div class="faq-a">Absolutely. While we auto-generate CRUD endpoints for every table, you can also create and deploy custom API endpoints with your own business logic.</div>
+  </div>
+</section>
+
+<footer>
+  <p>&copy; 2026 APIEngine. All rights reserved. | <a href="#">Privacy</a> | <a href="#">Terms</a> | <a href="#">Docs</a></p>
+</footer>
+
+<script>
+function showTab(idx) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  document.querySelectorAll('.tab-content').forEach((c, i) => c.classList.toggle('active', i === idx));
+}
+</script>
+
+</body>
+</html>

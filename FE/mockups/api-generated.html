@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generated APIs — APIEngine</title>
+<link rel="stylesheet" href="shared-styles.css">
+<style>
+  body { background: var(--gray-50); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .trial-banner { background: linear-gradient(90deg, var(--primary), var(--accent)); color: #fff; padding: 8px 24px; display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 13px; flex-shrink: 0; }
+  .trial-banner strong { font-weight: 700; }
+  .trial-banner a { color: #fff; font-weight: 700; background: rgba(255,255,255,.2); padding: 4px 14px; border-radius: 6px; font-size: 12px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: #fff; border-bottom: 1px solid var(--gray-200); flex-shrink: 0; }
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 18px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 6px; }
+  .logo span { color: var(--gray-900); }
+  .logo svg { width: 22px; height: 22px; }
+  .org-badge { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px; background: var(--primary-bg); color: var(--primary); font-size: 13px; font-weight: 700; }
+  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--gray-400); }
+  .breadcrumb a { color: var(--gray-500); }
+  .breadcrumb svg { width: 14px; height: 14px; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 32px; height: 32px; border-radius: 8px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  .layout { display: flex; flex: 1; overflow: hidden; }
+  .sidebar { width: 240px; background: #fff; border-right: 1px solid var(--gray-200); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+  .sidebar-section { padding: 16px 12px 8px; }
+  .sidebar-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gray-400); font-weight: 700; padding: 0 12px 8px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; font-size: 14px; color: var(--gray-600); cursor: pointer; transition: all .12s; font-weight: 500; text-decoration: none; }
+  .sidebar-item:hover { background: var(--gray-50); color: var(--gray-900); }
+  .sidebar-item.active { background: var(--primary-bg); color: var(--primary); font-weight: 600; }
+  .sidebar-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .sidebar-item .badge { margin-left: auto; background: var(--primary); color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+
+  .main { flex: 1; padding: 28px 32px; overflow-y: auto; }
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .page-title { font-size: 22px; font-weight: 700; }
+  .page-subtitle { color: var(--gray-400); font-size: 13px; margin-top: 2px; }
+
+  /* FILTER BAR */
+  .filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .filter-bar input { padding: 8px 14px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-size: 13px; font-family: var(--font); background: #fff; min-width: 260px; }
+  .filter-bar input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+  .filter-pill { padding: 6px 12px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--gray-500); cursor: pointer; background: #fff; }
+  .filter-pill.active { background: var(--primary-bg); border-color: var(--primary); color: var(--primary); }
+  .api-count-label { margin-left: auto; font-size: 13px; color: var(--gray-400); }
+  .api-count-label strong { color: var(--gray-700); }
+
+  /* TABLE CARD */
+  .table-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+  .table-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--gray-100); cursor: pointer; }
+  .table-card-header:hover { background: var(--gray-50); }
+  .table-name { display: flex; align-items: center; gap: 10px; }
+  .table-name svg { width: 18px; height: 18px; color: var(--primary); }
+  .table-name h3 { font-size: 15px; font-weight: 700; }
+  .table-name .col-count { font-size: 12px; color: var(--gray-400); font-weight: 400; }
+  .table-status { display: flex; align-items: center; gap: 8px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .status-dot.active { background: var(--success); }
+  .status-dot.inactive { background: var(--gray-300); }
+  .toggle-switch { width: 36px; height: 20px; border-radius: 10px; background: var(--success); position: relative; cursor: pointer; }
+  .toggle-switch::after { content: ''; width: 16px; height: 16px; background: #fff; border-radius: 50%; position: absolute; top: 2px; right: 2px; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .toggle-switch.off { background: var(--gray-300); }
+  .toggle-switch.off::after { right: auto; left: 2px; }
+
+  .endpoints-list { padding: 8px 12px; }
+  .endpoint-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+  .endpoint-row:hover { background: var(--gray-50); }
+  .method-badge { padding: 3px 10px; border-radius: 5px; font-size: 11px; font-weight: 700; font-family: var(--mono); min-width: 56px; text-align: center; }
+  .method-badge.get { background: #dbeafe; color: #1d4ed8; }
+  .method-badge.post { background: #dcfce7; color: #166534; }
+  .method-badge.put { background: #fef3c7; color: #92400e; }
+  .method-badge.delete { background: #fee2e2; color: #991b1b; }
+  .method-badge.patch { background: #f3e8ff; color: #7c3aed; }
+  .endpoint-path { font-family: var(--mono); color: var(--gray-700); font-weight: 500; }
+  .endpoint-desc { color: var(--gray-400); font-size: 12px; margin-left: auto; }
+  .endpoint-actions { display: flex; gap: 6px; margin-left: 8px; }
+  .endpoint-actions button { background: none; border: 1px solid var(--gray-200); border-radius: 5px; padding: 3px 8px; cursor: pointer; font-size: 11px; color: var(--gray-500); }
+  .endpoint-actions button:hover { border-color: var(--primary); color: var(--primary); }
+
+  .base-url-bar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 8px; margin-bottom: 20px; font-size: 13px; }
+  .base-url-bar .label { color: var(--gray-400); font-weight: 600; }
+  .base-url-bar .url { font-family: var(--mono); color: var(--primary); font-weight: 500; }
+  .base-url-bar button { margin-left: auto; background: none; border: 1px solid var(--gray-200); border-radius: 5px; padding: 4px 10px; cursor: pointer; font-size: 11px; color: var(--gray-500); font-family: var(--font); }
+  .base-url-bar button:hover { border-color: var(--primary); color: var(--primary); }
+</style>
+</head>
+<body>
+
+<div class="trial-banner">
+  Your <strong>Pro Trial</strong> has <strong>12 days</strong> remaining.
+  <a href="pricing.html">View Plans →</a>
+</div>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="landing.html" class="logo"><svg viewBox="0 0 32 32" fill="none"><rect x="2" y="6" width="28" height="20" rx="4" stroke="#4f46e5" stroke-width="2.5"/><path d="M9 16h6m-3-3v6" stroke="#4f46e5" stroke-width="2" stroke-linecap="round"/><circle cx="22" cy="16" r="3" stroke="#7c3aed" stroke-width="2"/></svg> API<span>Engine</span></a>
+    <div class="org-badge">Acme Corp</div>
+    <div class="breadcrumb">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      <a href="dashboard.html">Dashboard</a>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      <span style="color:var(--gray-700);font-weight:600">Generated APIs</span>
+    </div>
+  </div>
+  <div class="topbar-right"><div class="avatar">JD</div></div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-section"><div class="sidebar-label">Overview</div>
+      <a href="dashboard.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Dashboard</a>
+    </div>
+    <div class="sidebar-section"><div class="sidebar-label">Workspace</div>
+      <a href="new-workspace.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg> New Workspace</a>
+      <a href="workspace-manage.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg> Manage Workspace</a>
+      <a href="query-studio.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg> Query Studio</a>
+    </div>
+    <div class="sidebar-section"><div class="sidebar-label">APIs</div>
+      <a href="api-generated.html" class="sidebar-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> Generated APIs <span class="badge">48</span></a>
+      <a href="api-custom.html" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Custom APIs <span class="badge">2</span></a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Generated APIs</h1>
+        <div class="page-subtitle">Auto-generated CRUD endpoints for each table in your workspace</div>
+      </div>
+      <button class="btn btn-primary btn-sm">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+        Regenerate All
+      </button>
+    </div>
+
+    <div class="base-url-bar">
+      <span class="label">Base URL</span>
+      <span class="url">https://api.apiengine.io/v1/ws/ecommerce-db</span>
+      <button>Copy</button>
+    </div>
+
+    <!-- FILTER -->
+    <div class="filter-bar">
+      <input type="text" placeholder="Search tables or endpoints…">
+      <div class="filter-pill active">All</div>
+      <div class="filter-pill">GET</div>
+      <div class="filter-pill">POST</div>
+      <div class="filter-pill">PUT</div>
+      <div class="filter-pill">DELETE</div>
+      <div class="api-count-label">Showing <strong>48</strong> endpoints across <strong>12</strong> tables</div>
+    </div>
+
+    <!-- TABLE: users -->
+    <div class="table-card">
+      <div class="table-card-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="table-name">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          <h3>users</h3>
+          <span class="col-count">· 8 columns · 4 endpoints</span>
+        </div>
+        <div class="table-status">
+          <span class="status-dot active"></span>
+          <span style="font-size:12px;color:var(--gray-500)">Active</span>
+          <div class="toggle-switch"></div>
+        </div>
+      </div>
+      <div class="endpoints-list">
+        <div class="endpoint-row">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">/users</span>
+          <span class="endpoint-desc">List all users (paginated)</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">/users/:id</span>
+          <span class="endpoint-desc">Get user by ID</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge post">POST</span>
+          <span class="endpoint-path">/users</span>
+          <span class="endpoint-desc">Create a new user</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge put">PUT</span>
+          <span class="endpoint-path">/users/:id</span>
+          <span class="endpoint-desc">Update user by ID</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge delete">DELETE</span>
+          <span class="endpoint-path">/users/:id</span>
+          <span class="endpoint-desc">Delete user by ID</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE: products -->
+    <div class="table-card">
+      <div class="table-card-header">
+        <div class="table-name">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          <h3>products</h3>
+          <span class="col-count">· 12 columns · 5 endpoints</span>
+        </div>
+        <div class="table-status">
+          <span class="status-dot active"></span>
+          <span style="font-size:12px;color:var(--gray-500)">Active</span>
+          <div class="toggle-switch"></div>
+        </div>
+      </div>
+      <div class="endpoints-list">
+        <div class="endpoint-row">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">/products</span>
+          <span class="endpoint-desc">List all products (paginated)</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">/products/:id</span>
+          <span class="endpoint-desc">Get product by ID</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge post">POST</span>
+          <span class="endpoint-path">/products</span>
+          <span class="endpoint-desc">Create a new product</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge put">PUT</span>
+          <span class="endpoint-path">/products/:id</span>
+          <span class="endpoint-desc">Update product by ID</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge patch">PATCH</span>
+          <span class="endpoint-path">/products/:id</span>
+          <span class="endpoint-desc">Partial update product</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge delete">DELETE</span>
+          <span class="endpoint-path">/products/:id</span>
+          <span class="endpoint-desc">Delete product by ID</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE: orders -->
+    <div class="table-card">
+      <div class="table-card-header">
+        <div class="table-name">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          <h3>orders</h3>
+          <span class="col-count">· 10 columns · 4 endpoints</span>
+        </div>
+        <div class="table-status">
+          <span class="status-dot active"></span>
+          <span style="font-size:12px;color:var(--gray-500)">Active</span>
+          <div class="toggle-switch"></div>
+        </div>
+      </div>
+      <div class="endpoints-list">
+        <div class="endpoint-row">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">/orders</span>
+          <span class="endpoint-desc">List all orders (paginated)</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">/orders/:id</span>
+          <span class="endpoint-desc">Get order by ID</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge post">POST</span>
+          <span class="endpoint-path">/orders</span>
+          <span class="endpoint-desc">Create a new order</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+        <div class="endpoint-row">
+          <span class="method-badge delete">DELETE</span>
+          <span class="endpoint-path">/orders/:id</span>
+          <span class="endpoint-desc">Delete order by ID</span>
+          <div class="endpoint-actions"><button>Try</button><button>Docs</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE: categories (collapsed) -->
+    <div class="table-card">
+      <div class="table-card-header">
+        <div class="table-name">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          <h3>categories</h3>
+          <span class="col-count">· 4 columns · 4 endpoints</span>
+        </div>
+        <div class="table-status">
+          <span class="status-dot active"></span>
+          <span style="font-size:12px;color:var(--gray-500)">Active</span>
+          <div class="toggle-switch"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE: reviews (disabled) -->
+    <div class="table-card">
+      <div class="table-card-header">
+        <div class="table-name">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          <h3>reviews</h3>
+          <span class="col-count">· 7 columns · 4 endpoints</span>
+        </div>
+        <div class="table-status">
+          <span class="status-dot inactive"></span>
+          <span style="font-size:12px;color:var(--gray-400)">Disabled</span>
+          <div class="toggle-switch off"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE: shipping_zones -->
+    <div class="table-card">
+      <div class="table-card-header">
+        <div class="table-name">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          <h3>shipping_zones</h3>
+          <span class="col-count">· 4 columns · 4 endpoints</span>
+        </div>
+        <div class="table-status">
+          <span class="status-dot active"></span>
+          <span style="font-size:12px;color:var(--gray-500)">Active</span>
+          <div class="toggle-switch"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>
