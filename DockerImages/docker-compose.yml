@@ -3,7 +3,7 @@ services:
   keycloak:
     build: ./KeyClock
     container_name: keycloak
-    command: start-dev --import-realm
+    command: start-dev --import-realm -Dkeycloak.theme.default=apiengine
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
@@ -11,6 +11,12 @@ services:
       KC_DB_URL: jdbc:mysql://mysql:3306/keycloak
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: keycloak
+      KC_SMTP_HOST: smtp.gmail.com
+      KC_SMTP_PORT: 587
+      KC_SMTP_FROM: fadi.freij38601@gmail.com
+      KC_SMTP_USERNAME: fadi.freij38601@gmail.com
+      KC_SMTP_PASSWORD: eolpmkyblwesfjax
+      KC_SMTP_STARTTLS: true
     ports:
       - "8081:8080"
     depends_on:
@@ -18,6 +24,7 @@ services:
         condition: service_healthy
     volumes:
       - ./KeyClock/realm:/opt/keycloak/data/import
+      - ./KeyClock/theme:/opt/keycloak/themes
 
   mysql:
     build: ./mysql
