@@ -12,14 +12,7 @@ namespace AutoApiEngine.Presentation.Controllers
     [Route("api/auth")]
     public class AuthController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
-        
-        public AuthController(ApplicationDbContext context)
-        {
-            _context = context;  
-            
-        }
-
+     
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterRequest request, [FromServices] IAuthService authService)
         {

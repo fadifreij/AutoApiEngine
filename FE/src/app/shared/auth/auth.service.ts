@@ -53,7 +53,7 @@ export class AuthService {
       return '';
     }
     const redirectUri = encodeURIComponent(window.location.origin + '/auth/callback');
-    return `${this.KEYCLOAK_URL}/realms/ApiEngineRealm/protocol/openid-connect/auth?client_id=${this.CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=openid`;
+    return `${this.KEYCLOAK_URL}/realms/ApiEngineRealm/protocol/openid-connect/auth?client_id=${this.CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=openid%20organization`;
   }
 
   login(): void {

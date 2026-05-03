@@ -107,3 +107,5 @@ docker-compose.override.yml
 .azure/
 
 .claude
+BE/AutoApiEngine.ApiServices/Migrations/20260425141731_InitialCreate.Designer.cs
+BE/AutoApiEngine.ApiServices/Migrations/20260425141731_InitialCreate.cs

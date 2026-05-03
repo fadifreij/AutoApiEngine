@@ -100,8 +100,9 @@ namespace AutoApiEngine.Services.AuthServices
                 }
 
                 // 5. Create User in Keycloak
-                var keycloakUser = await _keycloakService.CreateUser(request.Email, request.Password);
+                var keycloakUser = await _keycloakService.CreateUser(request.Email, request.Password, organization.Name);
 
+                               
                 // 6. Send verification email
                 await _keycloakService.SendVerificationEmail(keycloakUser.Id);
 

@@ -56,7 +56,7 @@ namespace AutoApiEngine.Services.AuthServices
             _adminTokenExpiry = DateTime.UtcNow.AddSeconds(tokenResponse.GetProperty("expires_in").GetInt32() - 60);
         }
 
-        public async Task<KeycloakUser> CreateUser(string email, string password, string? firstName = null, string? lastName = null)
+        public async Task<KeycloakUser> CreateUser(string email, string password, string organization, string? firstName = null, string? lastName = null )
         {
             await EnsureAdminToken();
 
@@ -67,6 +67,10 @@ namespace AutoApiEngine.Services.AuthServices
                 firstName = firstName ?? email.Split('@')[0],
                 lastName = lastName ?? "",
                 enabled = true,
+                attributes = new
+                {
+                    org = new[] { organization }
+                },
                 credentials = new[]
                 {
                     new
@@ -78,7 +82,7 @@ namespace AutoApiEngine.Services.AuthServices
                 }
             };
 
-var json = JsonSerializer.Serialize(user);
+            var json = JsonSerializer.Serialize(user);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/admin/realms/{_realm}/users")
             {
