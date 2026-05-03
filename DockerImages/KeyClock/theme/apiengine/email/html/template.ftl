@@ -25,7 +25,7 @@
     <td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08);">
         <tr>
-          <td style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:28px 40px;">
+          <td style="background:#4f46e5;background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:28px 40px;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
               <tr>
                 <td style="vertical-align:middle;">
@@ -35,13 +35,13 @@
                         <div style="width:36px;height:36px;background:rgba(255,255,255,0.18);border-radius:8px;text-align:center;line-height:36px;color:#ffffff;font-weight:800;font-size:18px;">A</div>
                       </td>
                       <td style="vertical-align:middle;">
-                        <span style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.3px;">API<span style="color:#e0e7ff;font-weight:600;">Engine</span></span>
+                        <span style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.3px;">API<span style="color:#ffffff;font-weight:600;">Engine</span></span>
                       </td>
                     </tr>
                   </table>
                 </td>
                 <td align="right" style="vertical-align:middle;">
-                  <span style="color:#e0e7ff;font-size:12px;font-weight:500;letter-spacing:0.5px;text-transform:uppercase;">Account Notification</span>
+                  <span style="color:#ffffff;font-size:12px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;">Account Notification</span>
                 </td>
               </tr>
             </table>

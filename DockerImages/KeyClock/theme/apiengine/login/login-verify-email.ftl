@@ -28,7 +28,7 @@
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
 
             <p style="font-size:13px;color:#9ca3af;margin:0;">
-                <a href="${properties.kcLogoutUrl!''}" style="color:#6b7280;text-decoration:none;">&laquo; Back to sign in</a>
+                <a href="${url.loginRestartFlowUrl}" style="color:#6b7280;text-decoration:none;">&laquo; Back to sign in</a>
             </p>
         </div>
     </#if>
