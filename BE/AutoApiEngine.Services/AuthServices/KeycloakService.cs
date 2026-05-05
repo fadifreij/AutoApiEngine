@@ -1,6 +1,9 @@
+using AutoApiEngine.ServiceAbstraction.DTO;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -10,21 +13,21 @@ namespace AutoApiEngine.Services.AuthServices
     public class KeycloakService
     {
         private readonly HttpClient _httpClient;
-        private readonly string _realm;
-        private readonly string _baseUrl;
-        private readonly string _clientId = "api-engine-service";
-        private readonly string _clientSecret = "api-engine-service-secret";
+        
         private string? _adminToken;
         private DateTime _adminTokenExpiry;
 
-        public KeycloakService(
-            string baseUrl = "http://localhost:8081", 
-            string realm = "ApiEngineRealm")
+        private readonly KeyclockSettings _settings;
+
+        //private string KeycloakTokenUrl =>
+        //  $"{_settings.Url}/realms/{_settings.Realm}/protocol/openid-connect/token";
+
+        public KeycloakService(IOptions<KeyclockSettings> settings)
         {
             _httpClient = new HttpClient();
-            _realm = realm;
-            _baseUrl = baseUrl;
-        }
+            _settings = settings.Value;
+       
+         }
 
         private async Task EnsureAdminToken()
         {
@@ -34,13 +37,13 @@ namespace AutoApiEngine.Services.AuthServices
             var tokenRequest = new Dictionary<string, string>
             {
                 {"grant_type", "client_credentials"},
-                {"client_id", _clientId},
-                {"client_secret", _clientSecret}
+                {"client_id", _settings.ApiClientId},
+                {"client_secret", _settings.ApiClientSecret}
             };
 
             var content = new FormUrlEncodedContent(tokenRequest);
             var response = await _httpClient.PostAsync(
-                $"{_baseUrl}/realms/{_realm}/protocol/openid-connect/token",
+                $"{_settings.Url}/realms/{_settings.Realm}/protocol/openid-connect/token",
                 content);
 
             if (!response.IsSuccessStatusCode)
@@ -84,7 +87,7 @@ namespace AutoApiEngine.Services.AuthServices
 
             var json = JsonSerializer.Serialize(user);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/admin/realms/{_realm}/users")
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.Url}/admin/realms/{_settings.Realm}/users")
             {
                 Content = content
             };
@@ -124,13 +127,13 @@ namespace AutoApiEngine.Services.AuthServices
                 parameters.Add($"state={state}");
             }
 
-            return $"{_baseUrl}/realms/{_realm}/protocol/openid-connect/auth?{string.Join("&", parameters)}";
+            return $"{_settings.Url}/realms/{_settings.Realm}/protocol/openid-connect/auth?{string.Join("&", parameters)}";
         }
        
 
         public async Task<KeycloakUserInfo> GetUserInfo(string accessToken)
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}/realms/{_realm}/protocol/openid-connect/userinfo");
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{_settings.Url}/realms/{_settings.Realm}/protocol/openid-connect/userinfo");
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
             var response = await _httpClient.SendAsync(request);
@@ -167,8 +170,8 @@ namespace AutoApiEngine.Services.AuthServices
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var url = string.IsNullOrEmpty(parentId)
-                ? $"{_baseUrl}/admin/realms/{_realm}/groups"
-                : $"{_baseUrl}/admin/realms/{_realm}/groups/{parentId}/children";
+                ? $"{_settings.Url}/admin/realms/{_settings.Realm}/groups"
+                : $"{_settings.Url}/admin/realms/{_settings.Realm}/groups/{parentId}/children";
             var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
                 Content = content
@@ -198,7 +201,7 @@ namespace AutoApiEngine.Services.AuthServices
         {
             await EnsureAdminToken();
 
-            var request = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}/admin/realms/{_realm}/groups");
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{_settings.Url}/admin/realms/{_settings.Realm}/groups");
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _adminToken);
 
             var response = await _httpClient.SendAsync(request);
@@ -226,7 +229,7 @@ namespace AutoApiEngine.Services.AuthServices
         {
             await EnsureAdminToken();
 
-            var url = $"{_baseUrl}/admin/realms/{_realm}/users/{userId}/groups/{groupId}";
+            var url = $"{_settings.Url}/admin/realms/{_settings.Realm}/users/{userId}/groups/{groupId}";
             var request = new HttpRequestMessage(HttpMethod.Put, url);
             request.Content = new StringContent("", Encoding.UTF8, "application/json");
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _adminToken);
@@ -244,7 +247,7 @@ namespace AutoApiEngine.Services.AuthServices
         {
             await EnsureAdminToken();
 
-            var url = $"{_baseUrl}/admin/realms/{_realm}/users/{userId}/groups/{groupId}";
+            var url = $"{_settings.Url}/admin/realms/{_settings.Realm}/users/{userId}/groups/{groupId}";
             var request = new HttpRequestMessage(HttpMethod.Delete, url);
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _adminToken);
 
@@ -261,7 +264,7 @@ namespace AutoApiEngine.Services.AuthServices
         {
             await EnsureAdminToken();
 
-            var request = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}/admin/realms/{_realm}/users/{userId}/groups");
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{_settings.Url}/admin/realms/{_settings.Realm}/users/{userId}/groups");
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _adminToken);
 
             var response = await _httpClient.SendAsync(request);
@@ -301,7 +304,7 @@ namespace AutoApiEngine.Services.AuthServices
             await EnsureAdminToken();
 
             var request = new HttpRequestMessage(HttpMethod.Get, 
-                $"{_baseUrl}/admin/realms/{_realm}/users?username={username}");
+                $"{_settings.Url}/admin/realms/{_settings.Realm}/users?username={username}");
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _adminToken);
 
             var response = await _httpClient.SendAsync(request);
@@ -323,7 +326,7 @@ namespace AutoApiEngine.Services.AuthServices
             await EnsureAdminToken();
 
             var request = new HttpRequestMessage(HttpMethod.Put, 
-                $"{_baseUrl}/admin/realms/{_realm}/users/{userId}/send-verify-email");
+                $"{_settings.Url}/admin/realms/{_settings.Realm}/users/{userId}/send-verify-email");
             request.Content = new StringContent("", Encoding.UTF8, "application/json");
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _adminToken);
 
@@ -335,6 +338,73 @@ namespace AutoApiEngine.Services.AuthServices
                 throw new Exception($"Failed to send verification email: {error}");
             }
         }
+
+
+        // Token exchange and refresh methods can be implemented here as needed
+        public async Task<TokenResponse> LoginAsync(LoginRequest request) 
+        {
+            //  var url = $"{keycloakUrl}/realms/{realm}/protocol/openid-connect/auth" +
+            //            $"?client_id={clientId}" +
+            //$"&redirect_uri={redirectUri}" +
+            //$"&response_type=code" +
+            //$"&scope=openid";
+            string url = $"{_settings.Url}/realms/{_settings.Realm}/protocol/openid-connect/token";
+            return await ExchangeTokenAsync(url, new Dictionary<string, string>
+            {
+                ["grant_type"] = "authorization_code",
+                ["code"] = request.Code,
+                ["redirect_uri"] = request.RedirectUri,
+                ["client_id"] = _settings.ClientId,
+                ["scope"]= "openid organization"
+
+            });
+        }
+        public async Task<TokenResponse> GetRefreshToken(string refreshToken) {
+            string url = $"{_settings.Url}/realms/{_settings.Realm}/protocol/openid-connect/token";
+            return await ExchangeTokenAsync(url, new Dictionary<string, string>
+            {
+                ["grant_type"] = "refresh_token",
+                ["refresh_token"] = refreshToken,
+                ["client_id"] = _settings.ClientId,
+                
+            });
+        }
+
+        public async Task<string> LogoutAsync(string postLogoutRedirectUri, string? idTokenHint = null)
+        {
+            string logoutUrl =
+              $"{_settings.Url}/realms/{_settings.Realm}/protocol/openid-connect/logout" +
+              $"?client_id={_settings.ClientId}" +
+              $"&post_logout_redirect_uri={Uri.EscapeDataString(postLogoutRedirectUri)}";
+
+            if (!string.IsNullOrEmpty(idTokenHint))
+                logoutUrl += $"&id_token_hint={Uri.EscapeDataString(idTokenHint)}";
+
+            return await Task.FromResult(logoutUrl);
+        }
+        private async Task<TokenResponse> ExchangeTokenAsync(string url, Dictionary<string, string> parameters)
+        {
+
+            var body = new FormUrlEncodedContent(parameters);
+
+            var response = await _httpClient.PostAsync(url, body);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                return new TokenResponse { Success = false,
+                    Error = $"Keycloak token exchange failed: {error}"};
+            }
+
+            var content = await response.Content.ReadFromJsonAsync<KeycloakTokenResponse>();
+
+
+            if (content == null) return new TokenResponse { Success = false, Error = "Failed to deserialize Keycloak response" };
+
+            return new TokenResponse { Success = true, Response = content };
+        }
+        
+    
     }
 
     public class KeycloakUser
@@ -365,5 +435,23 @@ namespace AutoApiEngine.Services.AuthServices
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
         public string? ParentId { get; set; }
+    }
+
+    public class TokenResponse
+    {
+        public Boolean Success { get; set; }
+        public KeycloakTokenResponse? Response { get; set; }
+        public string? Error { get; set; }
+    }
+
+
+
+    public class KeycloakTokenResponse
+    {
+        public string Access_Token { get; set; } = string.Empty;
+        public string Refresh_Token { get; set; } = string.Empty;
+        public string Id_Token { get; set; } = string.Empty;
+        public int Expires_In { get; set; }
+        public string Token_Type { get; set; } = string.Empty;
     }
 }

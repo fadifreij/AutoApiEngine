@@ -31,8 +31,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddOpenApi();
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped(typeof(KeycloakService));
+builder.Services.AddApiServices(builder.Configuration);
 
 var databaseProvider = builder.Configuration["DatabaseProvider"] ?? "";
 builder.AddDatabaseContext(databaseProvider);
