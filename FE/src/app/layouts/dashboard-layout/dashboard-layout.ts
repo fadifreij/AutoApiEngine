@@ -1,4 +1,4 @@
-import { Component, HostListener, inject, signal } from '@angular/core';
+﻿import { Component, HostListener, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../shared/auth/auth.service';
 
@@ -12,6 +12,11 @@ import { AuthService } from '../../shared/auth/auth.service';
 export class DashboardLayout {
   private authService = inject(AuthService);
   profileOpen = signal(false);
+  organizationName = signal<string | null>(null);
+
+  constructor() {
+    this.organizationName.set(this.authService.getOrganization());
+  }
 
   toggleProfile(event: MouseEvent) {
     event.stopPropagation();

@@ -1,7 +1,7 @@
 ﻿import { HttpClient } from '@angular/common/http';
 import { Inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { catchError, map, Observable, of, switchMap, tap } from 'rxjs';
+import { catchError, map, Observable, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 export interface RegisterRequest {
@@ -58,6 +58,7 @@ export class AuthService {
     return this.refreshToken().pipe(
       map(res => {
         if (res.success && res.token) {
+          console.log(res.token);
           this.isAuthenticated.set(true);
           return true;
         } else {
@@ -107,68 +108,17 @@ export class AuthService {
       { code, redirectUri },
       { withCredentials: true }
     ).pipe(
-      switchMap((response: any) => {
+      map((response: any) => {
         if (response.success) {
           this.accessToken.set(response.token);
           this.setIdToken(response.idToken);
           this.isAuthenticated.set(true);
-          return this.http.post(
-            `${this.API_URL}/refresh-token`,
-            { refreshToken: response.refreshToken },
-            { withCredentials: true }
-          ).pipe(
-            map(() => ({
-              success: true,
-              token: response.token
-            }))
-          );
-
-
+          return { success: true, token: response.token } as AuthResponse;
         }
-        else {
-          return new Observable<AuthResponse>(observer => {
-            observer.next({ success: false, error: response.error });
-            observer.complete();
-          });
-        }
+        return { success: false, error: response.error } as AuthResponse;
       })
+    );
 
-    )
-      ;
-
-    // const body = new URLSearchParams();
-    // body.set('grant_type', 'authorization_code');
-    // body.set('code', code);
-    // body.set('redirect_uri', redirectUri);
-    // body.set('client_id', this.CLIENT_ID);
-
-    // return this.http.post<any>(
-    //   `${this.KEYCLOAK_URL}/realms/ApiEngineRealm/protocol/openid-connect/token`,
-    //   body.toString(),
-    //   {
-    //     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    //   }
-    // ).pipe(
-    //   switchMap((response: any) => {
-
-    //     // ✅ store access token ONLY in memory and refresh token ONLY in HTTP-only cookie (via backend) — no localStorage or sessionStorage
-    //     this.accessToken.set(response.access_token);
-    //     this.idToken = response.id_token;
-    //     this.isAuthenticated.set(true);
-
-
-    //     return this.http.post(
-    //       `${this.API_URL}/set-refresh-token`,
-    //       { refreshToken: response.refresh_token },
-    //       { withCredentials: true }
-    //     ).pipe(
-    //       map(() => ({
-    //         success: true,
-    //         token: response.access_token
-    //       }))
-    //     );
-    //   })
-    // );
   }
 
   // -------------------------
@@ -220,6 +170,21 @@ export class AuthService {
   // -------------------------
   getAccessToken(): string | null {
     return this.accessToken();
+  }
+
+  // -------------------------
+  // GET ORGANIZATION FROM TOKEN
+  // -------------------------
+  getOrganization(): string | null {
+    const token = this.accessToken();
+    if (!token) return null;
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload['organization'] || null;
+    } catch {
+      return null;
+    }
   }
 
   // -------------------------
