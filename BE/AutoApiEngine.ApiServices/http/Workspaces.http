@@ -1,0 +1,47 @@
+﻿@Workspaces_HostAddress = http://localhost:5145
+@WorkspaceId = DC966DDE-1B91-40BE-9ED7-08DEABA00B74
+@OrganizationId = 7D9F289D-2271-455E-9720-08DEA901E821
+
+### Get All Workspaces
+GET {{Workspaces_HostAddress}}/api/Workspaces
+Accept: application/json
+
+### Get Workspace By Id
+GET {{Workspaces_HostAddress}}/api/Workspaces/{{WorkspaceId}}
+Accept: application/json
+
+### Get Workspaces By Organization Id
+GET {{Workspaces_HostAddress}}/api/Workspaces/organization/{{OrganizationId}}
+Accept: application/json
+
+### Create Workspace
+POST {{Workspaces_HostAddress}}/api/Workspaces
+Content-Type: application/json
+
+{
+  "name": "My Workspace",
+  "apiKey": "wk_test123",
+  "dbUserName": "sa",
+  "dbPassword": "P@ssw0rd",
+  "databaseName": "TestDB",
+  "databaseEngine": "SqlServer",
+  "organizationId": "7D9F289D-2271-455E-9720-08DEA901E821"
+}
+
+### Update Workspace
+PUT {{Workspaces_HostAddress}}/api/Workspaces/{{WorkspaceId}}
+Content-Type: application/json
+
+{
+  "name": "Updated Workspace",
+  "apiKey": "wk_updated456",
+  "dbUserName": "admin",
+  "dbPassword": "NewP@ss",
+  "databaseName": "UpdatedDB",
+  "databaseEngine": "PostgreSql",
+  "isActive": true
+}
+
+### Delete Workspace
+DELETE {{Workspaces_HostAddress}}/api/Workspaces/{{WorkspaceId}}
+Accept: application/json

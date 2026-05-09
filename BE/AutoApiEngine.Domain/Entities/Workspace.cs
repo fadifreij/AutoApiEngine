@@ -16,7 +16,7 @@ namespace AutoApiEngine.Domain.Entities
         public string Name { get; set; } = string.Empty;
         [Column(TypeName = "VARCHAR")]
         [StringLength(75)]
-        public string ApiKey { get; set; } = string.Empty;
+        public string? EncryptionKey { get; set; } = string.Empty;
         [Column(TypeName = "VARCHAR")]
         [StringLength(50)]
         public string? DbUserName{ get; set; }

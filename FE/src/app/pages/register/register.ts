@@ -69,7 +69,7 @@ export class Register {
       'Accept': 'application/json'
     });
 
-    this.http.post<any>(`${environment.apiUrl}/register`, {
+    this.http.post<any>(`${environment.apiUrl}/auth/register`, {
       Email: this.formData.email,
       Password: this.formData.password,
       OrganizationName: this.formData.organizationName

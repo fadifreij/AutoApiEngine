@@ -8,5 +8,6 @@ namespace AutoApiEngine.ServiceAbstraction
 {
     public interface IWorkspaceRepository : IGenericRepository<Workspace>   
     {
+        Task<IEnumerable<Workspace>> GetByOrganizationIdAsync(Guid organizationId, CancellationToken cancellationToken);
     }
 }

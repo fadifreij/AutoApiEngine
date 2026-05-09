@@ -1,6 +1,7 @@
 ﻿using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.ServiceAbstraction.DTO;
 using AutoApiEngine.Services.AuthServices;
+using AutoApiEngine.Services.Repositories;
 
 namespace AutoApiEngine.ApiServices.Providers
 {
@@ -12,6 +13,7 @@ namespace AutoApiEngine.ApiServices.Providers
             // e.g. services.AddScoped<IMyService, MyService>();
             services.Configure<KeyclockSettings>(config.GetSection("KeyClock"));
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
             services.AddScoped(typeof(KeycloakService));
             return services;
         }

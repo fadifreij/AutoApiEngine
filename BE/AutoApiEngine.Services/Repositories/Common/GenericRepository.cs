@@ -24,19 +24,24 @@ namespace AutoApiEngine.Services.Repositories.Common
         {
             return await _dbSet.ToListAsync(cancellationToken);
         }
+
         public async Task<T> GetByIdAsync(string id, CancellationToken cancellationToken = default)
         {
+            if (!Guid.TryParse(id, out var guidId))
+                throw new KeyNotFoundException($"Entity with id {id} not found.");
 
-            var entity = await _dbSet.FindAsync(id, cancellationToken);
+            var entity = await _dbSet.FindAsync(new object[] { guidId }, cancellationToken);
             if (entity == null)
                 throw new KeyNotFoundException($"Entity with id {id} not found.");
 
             return entity;
         }
+
         public async Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default)
         {
             return await _dbSet.Where(predicate).ToListAsync(cancellationToken);
         }
+
         public async Task AddAsync(T entity, CancellationToken cancellationToken = default)
         {
             await _dbSet.AddAsync(entity, cancellationToken);
@@ -51,7 +56,10 @@ namespace AutoApiEngine.Services.Repositories.Common
 
         public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
         {
-            var entity = await _dbSet.FindAsync(id);
+            if (!Guid.TryParse(id, out var guidId))
+                throw new KeyNotFoundException($"Entity with id {id} not found.");
+
+            var entity = await _dbSet.FindAsync(new object[] { guidId });
             if (entity != null)
             {
                 _dbSet.Remove(entity);
