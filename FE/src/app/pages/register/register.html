@@ -66,21 +66,46 @@
             </button>
           </div>
         </div>
-        <div *ngIf="success" class="success-message success-animated">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="9 12 11 14 15 10" />
-          </svg>
-          Registration successful! Redirecting you now…
+        <div *ngIf="error && !showFailureOverlay" class="error-message">{{ error }}</div>
+
+        <div *ngIf="showSuccessOverlay" class="result-overlay success">
+          <div class="result-animation">
+            <svg viewBox="0 0 80 80" class="result-svg">
+              <circle class="result-circle result-circle--success" cx="40" cy="40" r="36" />
+              <path class="result-mark result-mark--check" d="M24 40l10 10 22-22" />
+            </svg>
+          </div>
+          <h2 class="result-title">Registration Successful!</h2>
+          <p class="result-text">A verification email has been sent to <strong>{{ registeredEmail }}</strong></p>
+          <p class="result-hint">Please check your inbox and verify your email to complete registration.</p>
         </div>
-        <div *ngIf="error" class="error-message">{{ error }}</div>
-        <button type="submit" class="btn btn-primary btn-submit">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-          </svg>
-          Start Free Trial
+
+        <div *ngIf="showFailureOverlay" class="result-overlay failure">
+          <div class="result-animation">
+            <svg viewBox="0 0 80 80" class="result-svg">
+              <circle class="result-circle result-circle--failure" cx="40" cy="40" r="36" />
+              <path class="result-mark result-mark--cross" d="M28 28l24 24" />
+              <path class="result-mark result-mark--cross" d="M52 28l-24 24" />
+            </svg>
+          </div>
+          <h2 class="result-title">Registration Failed</h2>
+          <p class="result-text">{{ error }}</p>
+          <button type="button" class="btn btn-outline" (click)="showFailureOverlay = false; error = ''">Try
+            Again</button>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-submit" [disabled]="submitting || showSuccessOverlay">
+          <span *ngIf="!submitting" style="display:flex;align-items:center;gap:8px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+            Start Free Trial
+          </span>
+          <span *ngIf="submitting" style="display:flex;align-items:center;gap:8px">
+            <span class="loader"></span>
+            Submitting…
+          </span>
         </button>
       </form>
       <p class="terms">By signing up you agree to our <a>Terms</a> and <a>Privacy Policy</a></p>

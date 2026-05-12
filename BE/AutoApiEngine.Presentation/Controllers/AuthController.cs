@@ -54,7 +54,13 @@ namespace AutoApiEngine.Presentation.Controllers
             {
                 // ✅ reuse generic method
                 var tokens = await keycloakService.GetRefreshToken(refreshToken);
-               
+
+                if (tokens is null || tokens.Response is null)
+                {
+                    ClearRefreshTokenCookie();
+                    return Unauthorized(new { success = false, error = "Invalid refresh token" });
+                }
+
                 AppendRefreshTokenCookie(tokens.Response!.Refresh_Token);
 
                 return Ok(new { success = true, token = tokens.Response!.Access_Token , refreshToken = tokens.Response!.Refresh_Token, idToken = tokens.Response!.Id_Token });
@@ -93,6 +99,18 @@ namespace AutoApiEngine.Presentation.Controllers
                 SameSite = SameSiteMode.None,
                 Path = "/",
                 Expires = DateTimeOffset.UtcNow.AddDays(7)
+            });
+        }
+
+        private void ClearRefreshTokenCookie()
+        {
+            // Must delete with the same options the cookie was set with.
+            Response.Cookies.Delete("refresh_token", new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.None,
+                Path = "/"
             });
         }
 

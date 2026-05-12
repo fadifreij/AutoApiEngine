@@ -44,6 +44,7 @@
 }
 
 .auth-card {
+  position: relative;
   width: 100%;
   max-width: 460px;
 
@@ -306,33 +307,132 @@
   margin-bottom: 12px;
 }
 
-.success-message {
-  padding: 12px 16px;
-  border-radius: 8px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  color: #16a34a;
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 12px;
+.result-overlay {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  border-radius: inherit;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  padding: 40px 32px;
+  text-align: center;
+  z-index: 10;
+  animation: overlayIn .45s cubic-bezier(.22, 1, .36, 1) both;
+
+  &.success {
+    .result-title {
+      color: #16a34a;
+    }
+  }
+
+  &.failure {
+    .result-title {
+      color: #dc2626;
+    }
+  }
 }
 
-.success-animated {
-  animation: successPop .4s cubic-bezier(.34, 1.56, .64, 1) both;
+.result-animation {
+  margin-bottom: 20px;
 }
 
-@keyframes successPop {
+.result-svg {
+  width: 80px;
+  height: 80px;
+}
+
+.result-circle {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+
+  &--success {
+    stroke: #16a34a;
+    stroke-dasharray: 226;
+    stroke-dashoffset: 226;
+    animation: drawCircle .5s ease-out .15s forwards;
+  }
+
+  &--failure {
+    stroke: #dc2626;
+    stroke-dasharray: 226;
+    stroke-dashoffset: 226;
+    animation: drawCircle .5s ease-out .15s forwards;
+  }
+}
+
+.result-mark {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+
+  &--check {
+    stroke: #16a34a;
+    stroke-dasharray: 50;
+    stroke-dashoffset: 50;
+    animation: drawMark .35s ease-out .65s forwards;
+  }
+
+  &--cross {
+    stroke: #dc2626;
+    stroke-dasharray: 34;
+    stroke-dashoffset: 34;
+    animation: drawMark .3s ease-out .65s forwards;
+
+    &:last-child {
+      animation-delay: .8s;
+    }
+  }
+}
+
+.result-title {
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.result-text {
+  font-size: 15px;
+  color: var(--gray-600);
+  line-height: 1.5;
+  margin-bottom: 4px;
+
+  strong {
+    color: var(--gray-900);
+    font-weight: 600;
+  }
+}
+
+.result-hint {
+  font-size: 13px;
+  color: var(--gray-400);
+  margin-top: 4px;
+}
+
+@keyframes overlayIn {
   from {
     opacity: 0;
-    transform: translateY(-8px) scale(.96);
+    transform: scale(.92);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: scale(1);
+  }
+}
+
+@keyframes drawCircle {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes drawMark {
+  to {
+    stroke-dashoffset: 0;
   }
 }
 

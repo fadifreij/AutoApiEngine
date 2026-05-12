@@ -3,9 +3,9 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { catchError, finalize, throwError, timeout } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../shared/auth/auth.service';
-import { LoadingService } from '../../shared/loading/loading.service';
 
 @Component({
   selector: 'app-register',
@@ -18,7 +18,6 @@ export class Register {
   private authService = inject(AuthService);
   private http = inject(HttpClient);
   private router = inject(Router);
-  private loadingService = inject(LoadingService);
   private cdr = inject(ChangeDetectorRef);
 
   formData = {
@@ -31,7 +30,10 @@ export class Register {
   showPassword = false;
   showConfirmPassword = false;
   error = '';
-  success = false;
+  submitting = false;
+  showSuccessOverlay = false;
+  showFailureOverlay = false;
+  registeredEmail = '';
 
   onLogin(): void {
     this.authService.login();
@@ -61,8 +63,10 @@ export class Register {
       return;
     }
 
-    this.loadingService.show();
+    this.submitting = true;
     this.error = '';
+    this.showSuccessOverlay = false;
+    this.showFailureOverlay = false;
 
     const headers = new HttpHeaders({
       'Content-Type': 'application/json',
@@ -73,28 +77,38 @@ export class Register {
       Email: this.formData.email,
       Password: this.formData.password,
       OrganizationName: this.formData.organizationName
-    }, { headers }).subscribe({
+    }, { headers }).pipe(
+      timeout(15000),
+      catchError(err => {
+        if (err.name === 'TimeoutError') {
+          return throwError(() => ({ error: 'Server is not responding. Please try again later.' }));
+        }
+        return throwError(() => err);
+      }),
+      finalize(() => {
+        this.submitting = false;
+        this.cdr.detectChanges();
+      })
+    ).subscribe({
       next: (response) => {
         if (response.success) {
-          this.loadingService.hide();
-          this.success = true;
+          this.registeredEmail = this.formData.email;
+          this.showSuccessOverlay = true;
           this.cdr.detectChanges();
-          setTimeout(() => this.router.navigate(['/']), 2500);
+          setTimeout(() => this.router.navigate(['/']), 5000);
         } else {
-          Promise.resolve().then(() => {
-            this.error = response.error || 'Registration failed';
-            this.loadingService.hide();
-            this.cdr.detectChanges();
-          });
+          this.error = response.error || 'Registration failed';
+          this.showFailureOverlay = true;
+          this.cdr.detectChanges();
         }
       },
       error: (err) => {
-        Promise.resolve().then(() => {
-          const body = err.error;
-          this.error = (typeof body === 'string' ? body : body?.error || body?.message) || 'Registration failed';
-          this.loadingService.hide();
-          this.cdr.detectChanges();
-        });
+        const body = err?.error;
+        const message = typeof body === 'string' ? body
+          : body?.error || body?.message || err?.message || err?.statusText;
+        this.error = message || 'Could not connect to the server. Please try again later.';
+        this.showFailureOverlay = true;
+        this.cdr.detectChanges();
       }
     });
   }

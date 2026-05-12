@@ -1,6 +1,5 @@
 ﻿import { HttpClient } from '@angular/common/http';
 import { Inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
-import { Router } from '@angular/router';
 import { catchError, map, Observable, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
@@ -13,6 +12,7 @@ export interface RegisterRequest {
 export interface AuthResponse {
   success: boolean;
   token?: string;
+  idToken?: string;
   error?: string;
   refreshToken?: string;
 }
@@ -32,21 +32,36 @@ export class AuthService {
 
   private idToken: string | null = null;
 
+  // Used as a cross-tab hint to avoid spamming refresh-token for anonymous visitors.
+  private static readonly ID_TOKEN_KEY = 'id_token';
+
   constructor(
     private http: HttpClient,
-    private router: Router,
     @Inject(PLATFORM_ID) private platformId: Object
   ) {
     if (this.isBrowser()) {
-      this.idToken = sessionStorage.getItem('id_token');
+      this.idToken = localStorage.getItem(AuthService.ID_TOKEN_KEY);
+
+      // Keep tabs in sync: if one tab logs out, others should stop treating the user as authenticated.
+      window.addEventListener('storage', (e) => {
+        if (e.key !== AuthService.ID_TOKEN_KEY) return;
+        if (e.newValue) {
+          this.idToken = e.newValue;
+        } else {
+          this.idToken = null;
+          this.accessToken.set(null);
+          this.isAuthenticated.set(false);
+          this.currentUser.set(null);
+        }
+      });
     }
   }
 
   private setIdToken(token: string | null): void {
     this.idToken = token;
     if (this.isBrowser()) {
-      if (token) sessionStorage.setItem('id_token', token);
-      else sessionStorage.removeItem('id_token');
+      if (token) localStorage.setItem(AuthService.ID_TOKEN_KEY, token);
+      else localStorage.removeItem(AuthService.ID_TOKEN_KEY);
     }
   }
 
@@ -55,10 +70,23 @@ export class AuthService {
   }
 
   initAuth(): Observable<boolean> {
+    if (!this.isBrowser()) {
+      return of(false);
+    }
+
+    // Only attempt refresh if we have a prior login hint (shared across tabs).
+    const savedIdToken = localStorage.getItem(AuthService.ID_TOKEN_KEY);
+    if (!savedIdToken) {
+      this.isAuthenticated.set(false);
+      return of(false);
+    }
+
+    // Keep in-memory copy in sync.
+    this.idToken = savedIdToken;
+
     return this.refreshToken().pipe(
       map(res => {
         if (res.success && res.token) {
-          console.log(res.token);
           this.isAuthenticated.set(true);
           return true;
         } else {

@@ -195,6 +195,7 @@
           cursor: pointer;
           text-decoration: none;
           font-family: var(--font);
+          box-sizing: border-box;
         }
 
         .btn-primary {

@@ -13,7 +13,7 @@ services:
       KC_DB_PASSWORD: keycloak
       KC_SMTP_HOST: smtp.gmail.com
       KC_SMTP_PORT: 587
-      KC_SMTP_FROM: fadi.freij38601@gmail.com
+      KC_SMTP_FROM: "API engine email verification <fadi.freij38601@gmail.com>"
       KC_SMTP_USERNAME: fadi.freij38601@gmail.com
       KC_SMTP_PASSWORD: eolpmkyblwesfjax
       KC_SMTP_STARTTLS: true
@@ -31,9 +31,9 @@ services:
     container_name: mysql
     restart: always
     environment:
-      MYSQL_DATABASE: ApiEngineDB
-      MYSQL_USER: admin
-      MYSQL_PASSWORD: Welcome@123
+      MYSQL_DATABASE: keycloak
+      MYSQL_USER: keycloak
+      MYSQL_PASSWORD: keycloak
       MYSQL_ROOT_PASSWORD: root
     ports:
       - "3307:3306"
@@ -45,21 +45,21 @@ services:
       timeout: 5s
       retries: 10
 
-  sqlserver:
-    build: ./sqlserver
-    container_name: sqlserver
-    environment:
-      ACCEPT_EULA: "Y"
-      SA_PASSWORD: "Welcome@123"
-    ports:
-      - "1433:1433"
-    volumes:
-      - sqlserver_data:/var/opt/mssql
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Welcome@123' -Q 'SELECT 1' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+  # sqlserver:
+  #   build: ./sqlserver
+  #   container_name: sqlserver
+  #   environment:
+  #     ACCEPT_EULA: "Y"
+  #     SA_PASSWORD: "Welcome@123"
+  #   ports:
+  #     - "1433:1433"
+  #   volumes:
+  #     - sqlserver_data:/var/opt/mssql
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Welcome@123' -Q 'SELECT 1' || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
 
   # dotnet-app:
   #   build: ./back-end-app
