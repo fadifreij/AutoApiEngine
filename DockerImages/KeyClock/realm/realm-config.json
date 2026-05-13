@@ -384,6 +384,10 @@
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
       "protocol": "openid-connect",
+      "attributes": {
+        "use.jwks.string": "true",
+        "jwks.string": "{\"keys\":[{\"kty\":\"RSA\",\"kid\":\"7275707a-691a-45d2-b019-7a9dd9e7ff89\",\"use\":\"sig\",\"alg\":\"RS256\",\"n\":\"65J-xoPIVbEEJXdX-aaGKb0dOyZUjuALDlnMrWpvRioECdAKsp73tmlY05mwsOkdyzWoEDh07IQQJDPcdKpmXT5RDo40bUd9HqiXAXMQ58eW6DvTgezWXVn6r9_0SIo0_WCgGxqbdUSBvxx9FDGYFezgeH1CGr_XqCi-rXEz893f8UrMqfdJEqc5AI8qlIERpvM5ubL3u542LaFKcfhWKJut_nQOBrCgrH4_2M6j5OEAakrQbDR7-eTSVVwt7iAWbOYLM7GBH7RnodlU_Rs90r6wCjakIrDq5FRlNtiKw6o_gyb3TW4gwRTzEceyUrM4AJ_oa9w1DoZwSyl1hRyUwQ\",\"e\":\"AQAB\"}]}"
+      },
       "defaultClientScopes": [
         "web-origins",
         "email",

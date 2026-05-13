@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -343,31 +344,28 @@ namespace AutoApiEngine.Services.AuthServices
         // Token exchange and refresh methods can be implemented here as needed
         public async Task<TokenResponse> LoginAsync(LoginRequest request) 
         {
-            //  var url = $"{keycloakUrl}/realms/{realm}/protocol/openid-connect/auth" +
-            //            $"?client_id={clientId}" +
-            //$"&redirect_uri={redirectUri}" +
-            //$"&response_type=code" +
-            //$"&scope=openid";
             string url = $"{_settings.Url}/realms/{_settings.Realm}/protocol/openid-connect/token";
-            return await ExchangeTokenAsync(url, new Dictionary<string, string>
+            var parameters = new Dictionary<string, string>
             {
                 ["grant_type"] = "authorization_code",
                 ["code"] = request.Code,
                 ["redirect_uri"] = request.RedirectUri,
                 ["client_id"] = _settings.ClientId,
                 ["scope"]= "openid organization"
-
-            });
+            };
+            AddClientAssertion(parameters);
+            return await ExchangeTokenAsync(url, parameters);
         }
         public async Task<TokenResponse> GetRefreshToken(string refreshToken) {
             string url = $"{_settings.Url}/realms/{_settings.Realm}/protocol/openid-connect/token";
-            return await ExchangeTokenAsync(url, new Dictionary<string, string>
+            var parameters = new Dictionary<string, string>
             {
                 ["grant_type"] = "refresh_token",
                 ["refresh_token"] = refreshToken,
                 ["client_id"] = _settings.ClientId,
-                
-            });
+            };
+            AddClientAssertion(parameters);
+            return await ExchangeTokenAsync(url, parameters);
         }
 
         public async Task<string> LogoutAsync(string postLogoutRedirectUri, string? idTokenHint = null)
@@ -402,6 +400,77 @@ namespace AutoApiEngine.Services.AuthServices
             if (content == null) return new TokenResponse { Success = false, Error = "Failed to deserialize Keycloak response" };
 
             return new TokenResponse { Success = true, Response = content };
+        }
+
+        private void AddClientAssertion(Dictionary<string, string> parameters)
+        {
+            if (_settings.ClientJwtKey == null) return;
+
+            var assertion = GenerateClientAssertion();
+            parameters["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
+            parameters["client_assertion"] = assertion;
+        }
+
+        private string GenerateClientAssertion()
+        {
+            var key = _settings.ClientJwtKey!;
+            var tokenUrl = $"{_settings.Url}/realms/{_settings.Realm}/protocol/openid-connect/token";
+
+            // Build RSA key from JWK components
+            var rsaParams = new RSAParameters
+            {
+                Modulus = Base64UrlDecode(key.N),
+                Exponent = Base64UrlDecode(key.E),
+                D = Base64UrlDecode(key.D),
+                P = Base64UrlDecode(key.P),
+                Q = Base64UrlDecode(key.Q),
+                DP = Base64UrlDecode(key.DP),
+                DQ = Base64UrlDecode(key.DQ),
+                InverseQ = Base64UrlDecode(key.QI)
+            };
+
+            using var rsa = RSA.Create();
+            rsa.ImportParameters(rsaParams);
+
+            // JWT header
+            var header = JsonSerializer.Serialize(new { alg = "RS256", typ = "JWT", kid = key.Kid });
+            var headerB64 = Base64UrlEncode(Encoding.UTF8.GetBytes(header));
+
+            // JWT payload
+            var now = DateTimeOffset.UtcNow;
+            var payload = JsonSerializer.Serialize(new
+            {
+                iss = _settings.ClientId,
+                sub = _settings.ClientId,
+                aud = tokenUrl,
+                jti = Guid.NewGuid().ToString(),
+                exp = now.AddMinutes(5).ToUnixTimeSeconds(),
+                iat = now.ToUnixTimeSeconds()
+            });
+            var payloadB64 = Base64UrlEncode(Encoding.UTF8.GetBytes(payload));
+
+            // Sign
+            var dataToSign = Encoding.UTF8.GetBytes($"{headerB64}.{payloadB64}");
+            var signature = rsa.SignData(dataToSign, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            var signatureB64 = Base64UrlEncode(signature);
+
+            return $"{headerB64}.{payloadB64}.{signatureB64}";
+        }
+
+        private static string Base64UrlEncode(byte[] data)
+        {
+            return Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        private static byte[] Base64UrlDecode(string input)
+        {
+            var s = input.Replace('-', '+').Replace('_', '/');
+            switch (s.Length % 4)
+            {
+                case 2: s += "=="; break;
+                case 3: s += "="; break;
+            }
+            return Convert.FromBase64String(s);
         }
         
     
