@@ -15,25 +15,25 @@ export interface AuthResponse {
   idToken?: string;
   error?: string;
   refreshToken?: string;
+  organizationId?: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly API_URL = `${environment.apiUrl}/auth`;
 
-
   private readonly KEYCLOAK_URL = environment.keycloakUrl;
   private readonly CLIENT_ID = environment.clientId;
-
 
   accessToken = signal<string | null>(null);
   currentUser = signal<string | null>(null);
   isAuthenticated = signal<boolean>(false);
+  organizationId = signal<string | null>(null);
 
   private idToken: string | null = null;
 
-  // Used as a cross-tab hint to avoid spamming refresh-token for anonymous visitors.
   private static readonly ID_TOKEN_KEY = 'id_token';
+  private static readonly ORG_ID_KEY = 'organization_id';
 
   constructor(
     private http: HttpClient,
@@ -41,9 +41,13 @@ export class AuthService {
   ) {
     if (this.isBrowser()) {
       this.idToken = localStorage.getItem(AuthService.ID_TOKEN_KEY);
+      const savedOrgId = localStorage.getItem(AuthService.ORG_ID_KEY);
+      if (savedOrgId) this.organizationId.set(savedOrgId);
 
-      // Keep tabs in sync: if one tab logs out, others should stop treating the user as authenticated.
       window.addEventListener('storage', (e) => {
+        if (e.key === AuthService.ORG_ID_KEY && e.newValue) {
+          this.organizationId.set(e.newValue);
+        }
         if (e.key !== AuthService.ID_TOKEN_KEY) return;
         if (e.newValue) {
           this.idToken = e.newValue;
@@ -52,6 +56,8 @@ export class AuthService {
           this.accessToken.set(null);
           this.isAuthenticated.set(false);
           this.currentUser.set(null);
+          this.organizationId.set(null);
+          localStorage.removeItem(AuthService.ORG_ID_KEY);
         }
       });
     }
@@ -65,6 +71,14 @@ export class AuthService {
     }
   }
 
+  private setOrganizationId(id: string | null): void {
+    this.organizationId.set(id);
+    if (this.isBrowser()) {
+      if (id) localStorage.setItem(AuthService.ORG_ID_KEY, id);
+      else localStorage.removeItem(AuthService.ORG_ID_KEY);
+    }
+  }
+
   private isBrowser(): boolean {
     return this.platformId === 'browser';
   }
@@ -74,14 +88,12 @@ export class AuthService {
       return of(false);
     }
 
-    // Only attempt refresh if we have a prior login hint (shared across tabs).
     const savedIdToken = localStorage.getItem(AuthService.ID_TOKEN_KEY);
     if (!savedIdToken) {
       this.isAuthenticated.set(false);
       return of(false);
     }
 
-    // Keep in-memory copy in sync.
     this.idToken = savedIdToken;
 
     return this.refreshToken().pipe(
@@ -100,9 +112,7 @@ export class AuthService {
       })
     );
   }
-  // -------------------------
-  // LOGIN REDIRECT
-  // -------------------------
+
   getKeycloakLoginUrl(): string {
     if (!this.isBrowser()) return '';
 
@@ -119,16 +129,11 @@ export class AuthService {
 
   login(): void {
     if (this.isBrowser()) {
-
-      window.location.href = this.getKeycloakLoginUrl();
+      window.location.replace(this.getKeycloakLoginUrl());
     }
   }
 
-  // -------------------------
-  // CALLBACK FLOW
-  // -------------------------
   handleCallback(code: string): Observable<AuthResponse> {
-
     const redirectUri = window.location.origin + '/auth/callback';
 
     return this.http.post<any>(
@@ -141,46 +146,42 @@ export class AuthService {
           this.accessToken.set(response.token);
           this.setIdToken(response.idToken);
           this.isAuthenticated.set(true);
-          return { success: true, token: response.token } as AuthResponse;
+          if (response.organizationId) this.setOrganizationId(response.organizationId);
+          return { success: true, token: response.token, organizationId: response.organizationId } as AuthResponse;
         }
         return { success: false, error: response.error } as AuthResponse;
       })
     );
-
   }
 
-  // -------------------------
-  // REGISTER
-  // -------------------------
   register(data: RegisterRequest): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(
+    return this.http.post<any>(
       `${this.API_URL}/register`,
       data
     ).pipe(
-      tap(res => {
+      map((res: any) => {
         if (res.success) {
           this.isAuthenticated.set(true);
           this.currentUser.set(data.email);
+          if (res.organizationId) this.setOrganizationId(res.organizationId);
+          return { success: true, organizationId: res.organizationId } as AuthResponse;
         }
+        return { success: false, error: res.error } as AuthResponse;
       })
     );
   }
 
-  // -------------------------
-  // LOGOUT
-  // -------------------------
   logout(): void {
     if (!this.isBrowser()) return;
-    // debugger;
 
     this.accessToken.set(null);
     this.isAuthenticated.set(false);
     this.currentUser.set(null);
+    this.setOrganizationId(null);
 
     const postLogoutRedirect = window.location.origin;
     const idTokenHint = this.idToken;
     this.setIdToken(null);
-    // Clear HTTP-only refresh token cookie via backend
     this.http.post(`${this.API_URL}/logout`, { postLogoutRedirectUri: postLogoutRedirect, idTokenHint }, {
       headers: { 'Content-Type': 'application/json' },
       withCredentials: true
@@ -190,19 +191,12 @@ export class AuthService {
         window.location.href = res["logoutUrl"];
       }
     );
-
   }
 
-  // -------------------------
-  // ACCESS TOKEN (memory only)
-  // -------------------------
   getAccessToken(): string | null {
     return this.accessToken();
   }
 
-  // -------------------------
-  // GET ORGANIZATION FROM TOKEN
-  // -------------------------
   getOrganization(): string | null {
     const token = this.accessToken();
     if (!token) return null;
@@ -215,9 +209,10 @@ export class AuthService {
     }
   }
 
-  // -------------------------
-  // REFRESH TOKEN (cookie-based backend)
-  // -------------------------
+  getOrganizationId(): string | null {
+    return this.organizationId();
+  }
+
   refreshToken(): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(
       `${this.API_URL}/refresh-token`,
@@ -228,6 +223,7 @@ export class AuthService {
         if (res.success && res.token) {
           this.accessToken.set(res.token);
           if (res.idToken) this.setIdToken(res.idToken);
+          if (res.organizationId) this.setOrganizationId(res.organizationId);
         }
       })
     );
