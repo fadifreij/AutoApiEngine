@@ -1,4 +1,5 @@
-﻿using AutoApiEngine.Domain.Entities;
+﻿using AutoApiEngine.Domain.Common;
+using AutoApiEngine.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 
@@ -9,6 +10,30 @@ namespace AutoApiEngine.Persistence.Context
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
         {
+        }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            SetAuditTimestamps();
+            return base.SaveChangesAsync(cancellationToken);
+        }
+
+        public override int SaveChanges()
+        {
+            SetAuditTimestamps();
+            return base.SaveChanges();
+        }
+
+        private void SetAuditTimestamps()
+        {
+            var entries = ChangeTracker
+                .Entries<BaseEntity>()
+                .Where(e => e.State == EntityState.Added);
+
+            foreach (var entry in entries)
+            {
+                entry.Entity.CreatedAt = DateTime.UtcNow;
+            }
         }
 
         public DbSet<Organization> Organizations { get; set; } = null!;

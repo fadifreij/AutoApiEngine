@@ -33,6 +33,35 @@ builder.Services.AddCors(options =>
 builder.Services.AddOpenApi();
 builder.Services.AddApiServices(builder.Configuration);
 
+var keyclockSection = builder.Configuration.GetSection("KeyClock");
+var realmUrl = $"{keyclockSection["Url"]}/realms/{keyclockSection["Realm"]}";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = realmUrl;
+        options.RequireHttpsMetadata = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = realmUrl,
+            ValidateAudience = false,
+            ValidateLifetime = true
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = context =>
+            {
+                if (context.AuthenticateFailure != null)
+                {
+                    context.HandleResponse();
+                }
+                return Task.CompletedTask;
+            }
+        };
+    });
+builder.Services.AddAuthorization();
+
 var databaseProvider = builder.Configuration["DatabaseProvider"] ?? "";
 builder.AddDatabaseContext(databaseProvider);
 
@@ -45,6 +74,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("AllowFrontend");
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

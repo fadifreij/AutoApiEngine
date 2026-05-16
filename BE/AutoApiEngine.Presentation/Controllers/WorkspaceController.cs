@@ -2,12 +2,14 @@
 using AutoApiEngine.Domain.Enums;
 using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.ServiceAbstraction.DTO;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AutoApiEngine.Presentation.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class WorkspacesController : BaseController
     {
         private readonly IWorkspaceRepository _workspaceRepository;
@@ -61,6 +63,10 @@ namespace AutoApiEngine.Presentation.Controllers
                 if (!Enum.TryParse<DatabaseEngine>(dto.DatabaseEngine, true, out var engine))
                     throw new ArgumentException($"Invalid database engine: {dto.DatabaseEngine}");
 
+                var exists = await _workspaceRepository.ExistsByNameAndOrganizationAsync(dto.Name, dto.OrganizationId, null, cancellationToken);
+                if (exists)
+                    throw new ArgumentException("A workspace with this name already exists in your organization. Please choose a different name.");
+
                 var workspace = new Workspace
                 {
                     Name = dto.Name,
@@ -89,6 +95,10 @@ namespace AutoApiEngine.Presentation.Controllers
 
                 if (!Enum.TryParse<DatabaseEngine>(dto.DatabaseEngine, true, out var engine))
                     throw new ArgumentException($"Invalid database engine: {dto.DatabaseEngine}");
+
+                var duplicate = await _workspaceRepository.ExistsByNameAndOrganizationAsync(dto.Name, workspace.OrganizationId, workspace.Id, cancellationToken);
+                if (duplicate)
+                    throw new ArgumentException("A workspace with this name already exists in your organization. Please choose a different name.");
 
                 workspace.Name = dto.Name;
                 workspace.EncryptionKey = dto.EncryptionKey ;

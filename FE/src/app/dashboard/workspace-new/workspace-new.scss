@@ -2,7 +2,7 @@
 .form-container { width: 100%; max-width: 640px; }
 .page-title { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
 .page-subtitle { color: var(--gray-500); font-size: 14px; margin-bottom: 32px; }
-.form-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 14px; padding: 32px; box-shadow: var(--shadow-sm); }
+.form-card { position: relative; background: #fff; border: 1px solid var(--gray-200); border-radius: 14px; padding: 32px; box-shadow: var(--shadow-sm); }
 .form-section { margin-bottom: 28px;
   &:last-child { margin-bottom: 0; }
 }
@@ -14,9 +14,13 @@
   label { display: block; font-size: 13px; font-weight: 600; color: var(--gray-700); margin-bottom: 6px; }
   input, select { width: 100%; padding: 10px 14px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-size: 14px; font-family: var(--font); background: var(--gray-50); transition: border-color .15s;
     &:focus { outline: none; border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+    &:disabled { background: var(--gray-100); color: var(--gray-400); cursor: not-allowed; }
   }
 }
 .form-hint { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+.form-group.disabled { opacity: .45; pointer-events: none;
+  label { color: var(--gray-400); }
+}
 .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .db-type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
 .db-type-option { border: 2px solid var(--gray-200); border-radius: 12px; padding: 20px; cursor: pointer; transition: all .15s; text-align: center;
@@ -37,6 +41,7 @@
 }
 .eye-toggle { position: absolute; right: 8px; background: none; border: none; padding: 4px; cursor: pointer; color: var(--gray-400); display: flex; align-items: center; transition: color .15s;
   &:hover { color: var(--gray-600); }
+  &:disabled { cursor: not-allowed; color: var(--gray-300); }
   svg { width: 18px; height: 18px; }
 }
 .external-fields { padding: 20px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px; margin-top: 16px; }
@@ -44,3 +49,37 @@
   span { font-size: 12px; color: var(--gray-400); }
 }
 .form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--gray-100); }
+.loader { width: 16px; height: 16px; border: 2px solid var(--gray-200); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error-message { padding: 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; font-size: 14px; margin-bottom: 12px; }
+
+.result-overlay { position: absolute; inset: 0; background: #fff; border-radius: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 32px; text-align: center; z-index: 10; animation: overlayIn .45s cubic-bezier(.22, 1, .36, 1) both;
+  &.success {
+    .result-title { color: #16a34a; }
+  }
+  &.failure {
+    .result-title { color: #dc2626; }
+  }
+}
+.result-animation { margin-bottom: 20px; }
+.result-svg { width: 80px; height: 80px; }
+.result-circle { fill: none; stroke-width: 3; stroke-linecap: round;
+  &--success { stroke: #16a34a; stroke-dasharray: 226; stroke-dashoffset: 226; animation: drawCircle .5s ease-out .15s forwards; }
+  &--failure { stroke: #dc2626; stroke-dasharray: 226; stroke-dashoffset: 226; animation: drawCircle .5s ease-out .15s forwards; }
+}
+.result-mark { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+  &--check { stroke: #16a34a; stroke-dasharray: 50; stroke-dashoffset: 50; animation: drawMark .35s ease-out .65s forwards; }
+  &--cross { stroke: #dc2626; stroke-dasharray: 34; stroke-dashoffset: 34; animation: drawMark .3s ease-out .65s forwards;
+    &:last-child { animation-delay: .8s; }
+  }
+}
+.result-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+.result-text { font-size: 15px; color: var(--gray-600); line-height: 1.5; margin-bottom: 4px;
+  strong { color: var(--gray-900); font-weight: 600; }
+}
+.result-hint { font-size: 13px; color: var(--gray-400); margin-top: 4px; }
+
+@keyframes overlayIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes drawCircle { to { stroke-dashoffset: 0; } }
+@keyframes drawMark { to { stroke-dashoffset: 0; } }

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System;
+using System.IdentityModel.Tokens.Jwt;
 using System.Runtime;
 
 namespace AutoApiEngine.Presentation.Controllers
@@ -29,7 +30,7 @@ namespace AutoApiEngine.Presentation.Controllers
         }
         
         [HttpPost("login")]
-        public async Task<IActionResult> Login(LoginRequest request, [FromServices] KeycloakService keycloakService)
+        public async Task<IActionResult> Login(LoginRequest request, [FromServices] KeycloakService keycloakService, [FromServices] ApplicationDbContext context)
         {
            if (request is null ||  request is { Code: null, RedirectUri: null })
                 return BadRequest(new { success = false, error = "Code and redirectUri are required" });
@@ -37,13 +38,16 @@ namespace AutoApiEngine.Presentation.Controllers
             var result = await keycloakService.LoginAsync(request);
             if (!result.Success)
                 return Unauthorized(new { success = false, error = result.Error });
-            // ✅ set refresh token cookie
+
             AppendRefreshTokenCookie(result.Response!.Refresh_Token);
-            return Ok(new { success = true, token = result.Response!.Access_Token  , refreshToken = result.Response!.Refresh_Token , idToken = result.Response!.Id_Token });
+
+            var orgId = await ResolveOrganizationId(result.Response!.Access_Token, context);
+
+            return Ok(new { success = true, token = result.Response!.Access_Token  , refreshToken = result.Response!.Refresh_Token , idToken = result.Response!.Id_Token, organizationId = orgId });
         }
 
         [HttpPost("refresh-token")]
-        public async Task<IActionResult> Refresh([FromServices] KeycloakService keycloakService)
+        public async Task<IActionResult> Refresh([FromServices] KeycloakService keycloakService, [FromServices] ApplicationDbContext context)
         {
             var refreshToken = Request.Cookies["refresh_token"];
 
@@ -63,7 +67,9 @@ namespace AutoApiEngine.Presentation.Controllers
 
                 AppendRefreshTokenCookie(tokens.Response!.Refresh_Token);
 
-                return Ok(new { success = true, token = tokens.Response!.Access_Token , refreshToken = tokens.Response!.Refresh_Token, idToken = tokens.Response!.Id_Token });
+                var orgId = await ResolveOrganizationId(tokens.Response!.Access_Token, context);
+
+                return Ok(new { success = true, token = tokens.Response!.Access_Token , refreshToken = tokens.Response!.Refresh_Token, idToken = tokens.Response!.Id_Token, organizationId = orgId });
             }
             catch (Exception ex)
             {
@@ -100,6 +106,26 @@ namespace AutoApiEngine.Presentation.Controllers
                 Path = "/",
                 Expires = DateTimeOffset.UtcNow.AddDays(7)
             });
+        }
+
+        private static async Task<string?> ResolveOrganizationId(string accessToken, ApplicationDbContext context)
+        {
+            try
+            {
+                var handler = new JwtSecurityTokenHandler();
+                var jwt = handler.ReadJwtToken(accessToken);
+                var orgName = jwt.Claims.FirstOrDefault(c => c.Type == "organization")?.Value;
+
+                if (string.IsNullOrEmpty(orgName))
+                    return null;
+
+                var org = await context.Organizations.FirstOrDefaultAsync(o => o.Name == orgName);
+                return org?.Id.ToString();
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private void ClearRefreshTokenCookie()

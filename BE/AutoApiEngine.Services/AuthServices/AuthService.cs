@@ -78,7 +78,6 @@ namespace AutoApiEngine.Services.AuthServices
                         Name = request.OrganizationName,
                         RegistrationCode = slug,
                         TrialEndsAt = DateTime.UtcNow.AddDays(14),
-                        CreatedAt = DateTime.UtcNow,
                         IsActive = true
                     };
 
@@ -126,8 +125,7 @@ namespace AutoApiEngine.Services.AuthServices
                     PlanId = plan!.Id,
                     StartDate = DateTime.UtcNow,
                     EndDate = DateTime.UtcNow.AddDays(plan.DurationInDays),
-                    AmountPaid = plan.Price,
-                    CreatedAt = DateTime.UtcNow
+                    AmountPaid = plan.Price
                 };
 
                 _context.Subscriptions.Add(subscription);
@@ -140,7 +138,8 @@ namespace AutoApiEngine.Services.AuthServices
                 return new RegisterResult
                 {
                     Success = true,
-                    Error = string.Empty
+                    Error = string.Empty,
+                    OrganizationId = organization.Id.ToString()
                 };
             }
             catch

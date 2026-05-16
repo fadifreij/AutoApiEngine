@@ -24,5 +24,14 @@ namespace AutoApiEngine.Services.Repositories
                 .Where(w => w.OrganizationId == organizationId)
                 .ToListAsync(cancellationToken);
         }
+
+        public async Task<bool> ExistsByNameAndOrganizationAsync(string name, Guid organizationId, Guid? excludeId = null, CancellationToken cancellationToken = default)
+        {
+            return await _context.Workspaces
+                .AnyAsync(w =>
+                    w.Name == name &&
+                    w.OrganizationId == organizationId &&
+                    (excludeId == null || w.Id != excludeId.Value), cancellationToken);
+        }
     }
 }
