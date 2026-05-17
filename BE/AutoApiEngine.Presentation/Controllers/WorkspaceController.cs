@@ -8,15 +8,17 @@ using Microsoft.AspNetCore.Mvc;
 namespace AutoApiEngine.Presentation.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/workspaces")]
     [Authorize]
     public class WorkspacesController : BaseController
     {
         private readonly IWorkspaceRepository _workspaceRepository;
+        private readonly IOrganizationRepository _organizationRepository;
 
-        public WorkspacesController(IWorkspaceRepository workspaceRepository)
+        public WorkspacesController(IWorkspaceRepository workspaceRepository, IOrganizationRepository organizationRepository)
         {
             _workspaceRepository = workspaceRepository;
+            _organizationRepository = organizationRepository;
         }
 
         [HttpGet]
@@ -42,7 +44,35 @@ namespace AutoApiEngine.Presentation.Controllers
             });
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("current-organization")]
+        public async Task<IActionResult> GetCurrentOrganizationWorkspaces(CancellationToken cancellationToken = default)
+        {
+            var organizationName = User.FindFirst("organization")?.Value;
+
+            if (string.IsNullOrWhiteSpace(organizationName))
+                return Unauthorized(new { message = "Organization claim is missing from token." });
+
+            return await HandleRequestAsync(async () =>
+            {
+                var organizations = await _organizationRepository.FindAsync(o => o.Name == organizationName, cancellationToken);
+                var organization = organizations.FirstOrDefault();
+
+                if (organization is null)
+                    throw new KeyNotFoundException($"Organization '{organizationName}' was not found.");
+
+                var workspaces = await _workspaceRepository.GetByOrganizationIdAsync(organization.Id, cancellationToken);
+
+                return workspaces.Select(workspace => new
+                {
+                    workspace.Id,
+                    workspace.Name,
+                    workspace.DatabaseEngine,
+                    workspace.IsActive
+                });
+            });
+        }
+
+        [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById(string id, CancellationToken cancellationToken = default)
         {
             return await HandleRequestAsync(async () =>
@@ -83,7 +113,7 @@ namespace AutoApiEngine.Presentation.Controllers
             });
         }
 
-        [HttpPut("{id}")]
+        [HttpPut("{id:guid}")]
         public async Task<IActionResult> Update(string id, [FromBody] UpdateWorkspaceDto dto, CancellationToken cancellationToken = default)
         {
             return await HandleRequestAsync(async () =>
@@ -113,7 +143,7 @@ namespace AutoApiEngine.Presentation.Controllers
             });
         }
 
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete(string id, CancellationToken cancellationToken = default)
         {
             return await HandleRequestAsync(async () =>

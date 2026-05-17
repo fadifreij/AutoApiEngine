@@ -1,4 +1,4 @@
-<div class="form-container">
+﻿<div class="form-container">
   <h1 class="page-title">Create New Workspace</h1>
   <p class="page-subtitle">Each workspace is backed by its own database. Connect an external DB or use our hosted service.</p>
 
@@ -15,11 +15,11 @@
           <input type="text" [(ngModel)]="formData.name" name="name" placeholder="e.g. ecommerce-db, analytics-prod" required>
           <div class="form-hint">Use lowercase letters, numbers, and hyphens only</div>
         </div>
-        <div class="form-group" [class.disabled]="dbType() === 'external'">
-          <label>Encryption Key</label>
+        <div class="form-group" [class.disabled]="dbType() === 'hosted'">
+          <label>Backup Password</label>
           <div class="input-with-toggle">
-            <input [type]="showEncryptionKey() ? 'text' : 'password'" [(ngModel)]="formData.encryptionKey" name="encryptionKey" placeholder="Enter encryption key" [disabled]="dbType() === 'external'">
-            <button type="button" class="eye-toggle" (click)="showEncryptionKey.set(!showEncryptionKey())" [disabled]="dbType() === 'external'">
+            <input [type]="showEncryptionKey() ? 'text' : 'password'" [(ngModel)]="formData.encryptionKey" name="encryptionKey" placeholder="Enter backup password" [disabled]="dbType() === 'hosted'">
+            <button type="button" class="eye-toggle" (click)="showEncryptionKey.set(!showEncryptionKey())" [disabled]="dbType() === 'hosted'">
               @if (showEncryptionKey()) {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
               } @else {
@@ -27,7 +27,7 @@
               }
             </button>
           </div>
-          <div class="form-hint">Used to encrypt sensitive data in your workspace</div>
+          <div class="form-hint">Password for encrypted backup files (.zip/.sql) during upload or restore. Must match the password used to create the backup.</div>
         </div>
       </div>
 
@@ -53,14 +53,7 @@
 
         @if (dbType() === 'hosted') {
           <div class="hosted-fields">
-            <div class="form-group">
-              <label>Database Engine</label>
-              <select [(ngModel)]="formData.databaseEngine" name="hostedEngine">
-                @for (opt of dbEngineOptions; track opt) {
-                  <option [value]="opt">{{ opt }}</option>
-                }
-              </select>
-            </div>
+
             <div class="hosted-note">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
               No credentials needed. We'll provision a managed database for you automatically.
@@ -70,14 +63,33 @@
 
         @if (dbType() === 'external') {
           <div class="external-fields">
+
             <div class="form-group">
               <label>Database Engine</label>
-              <select [(ngModel)]="formData.databaseEngine" name="externalEngine">
-                @for (opt of dbEngineOptions; track opt) {
-                  <option [value]="opt">{{ opt }}</option>
+              <div class="db-engine-widget" (blur)="closeDbEngine()" tabindex="0">
+                <button type="button" class="db-engine-trigger" (click)="toggleDbEngine()">
+                  @let sel = selectedEngine;
+                  @if (sel) {
+                    <span class="db-engine-selected">
+                      <span class="db-engine-icon" [innerHTML]="sel.icon"></span>
+                      {{ sel.label }}
+                    </span>
+                  }
+                  <svg class="chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 8l4 4 4-4"/></svg>
+                </button>
+                @if (dbEngineOpen()) {
+                  <div class="db-engine-dropdown" (mousedown)="$event.preventDefault()">
+                    @for (opt of dbEngineOptions; track opt.value) {
+                      <button type="button" class="db-engine-option" [class.active]="opt.value === formData.databaseEngine" (click)="selectDbEngine(opt.value)">
+                        <span class="db-engine-icon" [innerHTML]="opt.icon"></span>
+                        {{ opt.label }}
+                      </button>
+                    }
+                  </div>
                 }
-              </select>
+              </div>
             </div>
+
             <div class="form-group">
               <label>Host / Connection String</label>
               <input type="text" [(ngModel)]="formData.host" name="host" placeholder="e.g. db.example.com:5432/mydb">

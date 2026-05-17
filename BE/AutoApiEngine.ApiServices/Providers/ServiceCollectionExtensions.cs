@@ -15,6 +15,7 @@ namespace AutoApiEngine.ApiServices.Providers
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
             services.AddScoped(typeof(KeycloakService));
+            services.AddScoped<IOrganizationRepository, OrganizationRepository>();
             return services;
         }
     }
