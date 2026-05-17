@@ -1,4 +1,5 @@
-﻿import { HttpClient } from '@angular/common/http';
+﻿import { isPlatformBrowser } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { Inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
 import { catchError, map, Observable, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -80,7 +81,7 @@ export class AuthService {
   }
 
   private isBrowser(): boolean {
-    return this.platformId === 'browser';
+    return isPlatformBrowser(this.platformId);
   }
 
   initAuth(): Observable<boolean> {

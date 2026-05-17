@@ -1,4 +1,4 @@
-using AutoApiEngine.ServiceAbstraction.DTO;
+﻿using AutoApiEngine.ServiceAbstraction.DTO;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -363,6 +363,7 @@ namespace AutoApiEngine.Services.AuthServices
                 ["grant_type"] = "refresh_token",
                 ["refresh_token"] = refreshToken,
                 ["client_id"] = _settings.ClientId,
+                ["scope"] = "openid organization",
             };
             AddClientAssertion(parameters);
             return await ExchangeTokenAsync(url, parameters);

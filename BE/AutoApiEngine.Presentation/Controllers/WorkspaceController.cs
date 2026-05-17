@@ -1,4 +1,5 @@
-﻿using AutoApiEngine.Domain.Entities;
+﻿using Microsoft.Extensions.Configuration;
+using AutoApiEngine.Domain.Entities;
 using AutoApiEngine.Domain.Enums;
 using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.ServiceAbstraction.DTO;
@@ -17,15 +18,18 @@ namespace AutoApiEngine.Presentation.Controllers
         private readonly IWorkspaceRepository _workspaceRepository;
         private readonly IOrganizationRepository _organizationRepository;
         private readonly IServiceProvider _serviceProvider;
+        private readonly IConfiguration _configuration;
 
         public WorkspacesController(
             IWorkspaceRepository workspaceRepository,
             IOrganizationRepository organizationRepository,
-            IServiceProvider serviceProvider)
+            IServiceProvider serviceProvider,
+            IConfiguration configuration)
         {
             _workspaceRepository = workspaceRepository;
             _organizationRepository = organizationRepository;
             _serviceProvider = serviceProvider;
+            _configuration = configuration;
         }
 
         private IDatabaseManagementService GetDatabaseService(DatabaseEngine engine)
@@ -35,6 +39,13 @@ namespace AutoApiEngine.Presentation.Controllers
                 DatabaseEngine.MySql => _serviceProvider.GetRequiredService<MySqlDatabaseManagementService>(),
                 _ => _serviceProvider.GetRequiredService<IDatabaseManagementService>()
             };
+        }
+
+        private static DatabaseEngine ParseEngine(string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value) && Enum.TryParse<DatabaseEngine>(value, true, out var engine))
+                return engine;
+            return DatabaseEngine.SqlServer;
         }
 
         [HttpGet]
@@ -155,14 +166,35 @@ namespace AutoApiEngine.Presentation.Controllers
                 if (string.IsNullOrWhiteSpace(dto.Name))
                     throw new ArgumentException("Workspace name is required.");
 
-                if (!Enum.TryParse<DatabaseEngine>(dto.DatabaseEngine, true, out var engine))
-                    throw new ArgumentException($"Invalid database engine: {dto.DatabaseEngine}");
+                var isHosted = string.IsNullOrWhiteSpace(dto.DbUserName) && string.IsNullOrWhiteSpace(dto.DatabaseName);
 
-                var exists = await _workspaceRepository.ExistsByNameAndOrganizationAsync(dto.Name, dto.OrganizationId, null, cancellationToken);
+                var engine = ParseEngine(
+                    !string.IsNullOrWhiteSpace(dto.DatabaseEngine)
+                        ? dto.DatabaseEngine
+                        : _configuration["DatabaseProvider"]);
+
+                // Resolve organization: prefer dto.OrganizationId, fallback to JWT claim
+                Domain.Entities.Organization? organization = null;
+                if (dto.OrganizationId != Guid.Empty)
+                {
+                    organization = (await _organizationRepository.FindAsync(o => o.Id == dto.OrganizationId, cancellationToken)).FirstOrDefault();
+                }
+
+                if (organization is null)
+                {
+                    var orgName = User.FindFirst("organization")?.Value;
+                    if (!string.IsNullOrWhiteSpace(orgName))
+                        organization = (await _organizationRepository.FindAsync(o => o.Name == orgName, cancellationToken)).FirstOrDefault();
+                }
+
+                if (organization is null)
+                    throw new ArgumentException("Organization not found.");
+
+                var orgId = organization.Id;
+
+                var exists = await _workspaceRepository.ExistsByNameAndOrganizationAsync(dto.Name, orgId, null, cancellationToken);
                 if (exists)
                     throw new ArgumentException("A workspace with this name already exists in your organization. Please choose a different name.");
-
-                var isHosted = string.IsNullOrWhiteSpace(dto.DbUserName) && string.IsNullOrWhiteSpace(dto.DatabaseName);
 
                 var workspace = new Workspace
                 {
@@ -172,7 +204,8 @@ namespace AutoApiEngine.Presentation.Controllers
                     DbUserName = dto.DbUserName,
                     DbPassword = dto.DbPassword,
                     DatabaseEngine = engine,
-                    OrganizationId = dto.OrganizationId,
+                    OrganizationId = orgId,
+                    Organization = organization,
                     LastSyncAt = isHosted ? DateTime.UtcNow : null,
                     TablesCount = 0,
                     FunctionsCount = 0,
@@ -183,7 +216,7 @@ namespace AutoApiEngine.Presentation.Controllers
                 if (isHosted)
                 {
                     var safeName = string.Join("_", dto.Name.Split(Path.GetInvalidFileNameChars()));
-                                        var dbName = "ws_" + string.Join("", safeName.Where(c => char.IsLetterOrDigit(c) || c == '_')) + "_" + workspace.Id.ToString("N")[..8];
+                    var dbName = "ws_" + string.Join("", safeName.Where(c => char.IsLetterOrDigit(c) || c == '_')) + "_" + workspace.Id.ToString("N")[..8];
                     var dbService = GetDatabaseService(engine);
                     var createdName = await dbService.CreateDatabaseAsync(dbName, engine, cancellationToken);
                     workspace.DatabaseName = createdName;
@@ -194,7 +227,15 @@ namespace AutoApiEngine.Presentation.Controllers
                 }
 
                 await _workspaceRepository.AddAsync(workspace, cancellationToken);
-                return workspace;
+                return new
+                {
+                    workspace.Id,
+                    workspace.Name,
+                    workspace.DatabaseName,
+                    workspace.DatabaseEngine,
+                    workspace.IsActive,
+                    workspace.OrganizationId
+                };
             });
         }
 
@@ -208,8 +249,12 @@ namespace AutoApiEngine.Presentation.Controllers
                 if (string.IsNullOrWhiteSpace(dto.Name))
                     throw new ArgumentException("Workspace name is required.");
 
-                if (!Enum.TryParse<DatabaseEngine>(dto.DatabaseEngine, true, out var engine))
-                    throw new ArgumentException($"Invalid database engine: {dto.DatabaseEngine}");
+                var isHosted = string.IsNullOrWhiteSpace(dto.DbUserName) && string.IsNullOrWhiteSpace(dto.DatabaseName);
+
+                var engine = ParseEngine(
+                    !string.IsNullOrWhiteSpace(dto.DatabaseEngine)
+                        ? dto.DatabaseEngine
+                        : _configuration["DatabaseProvider"]);
 
                 var duplicate = await _workspaceRepository.ExistsByNameAndOrganizationAsync(dto.Name, workspace.OrganizationId, workspace.Id, cancellationToken);
                 if (duplicate)

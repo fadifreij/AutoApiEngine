@@ -267,7 +267,7 @@
           color: var(--gray-700);
           margin-bottom: 6px;
           letter-spacing: .02em;
-          text-transform: uppercase;
+          
         }
 
         .form-control {

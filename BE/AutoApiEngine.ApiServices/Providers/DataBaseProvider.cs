@@ -8,18 +8,16 @@ namespace AutoApiEngine.ApiServices.Providers
         public static void AddDatabaseContext(this WebApplicationBuilder builder, string databaseProvider)
         {
             if (databaseProvider == "MySql")
-            {   //ToDo: till now mysql is not supported 
-                //builder.Services.AddDbContext<ApplicationDbContext>(options =>
-                //    options.UseMySql(builder.Configuration.GetConnectionString("MySqlConnection"),
-                //        new MySqlServerVersion(new Version(8, 0, 32))));
-                throw new InvalidOperationException("Till now mysql is not supported.");
+            {
+                builder.Services.AddDbContext<ApplicationDbContext>(options =>
+                    options.UseMySQL(builder.Configuration.GetConnectionString("MySqlConnection"),
+                        b => b.MigrationsAssembly("AutoApiEngine.ApiServices")));
             }
             else if (databaseProvider == "SqlServer")
             {
                 builder.Services.AddDbContext<ApplicationDbContext>(options =>
                     options.UseSqlServer(builder.Configuration.GetConnectionString("SqlServerConnection"),
-                    b=>b.MigrationsAssembly("AutoApiEngine.ApiServices")
-                    ));
+                    b => b.MigrationsAssembly("AutoApiEngine.ApiServices")));
             }
             else
             {

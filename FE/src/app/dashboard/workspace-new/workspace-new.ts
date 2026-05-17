@@ -100,7 +100,7 @@ export class WorkspaceNew {
       this.error = 'Workspace name is required';
       return;
     }
-
+    
     this.submitting = true;
     this.error = '';
     this.showSuccessOverlay = false;
@@ -110,13 +110,13 @@ export class WorkspaceNew {
 
     const body: any = {
       name: this.formData.name,
-      databaseEngine: this.formData.databaseEngine,
-      organizationId: orgId
+      organizationId: orgId || undefined
     };
 
     if (this.dbType() === 'hosted') {
       body.encryptionKey = this.formData.encryptionKey || null;
     } else {
+      body.databaseEngine = this.formData.databaseEngine;
       body.dbUserName = this.formData.userName || null;
       body.dbPassword = this.formData.password || null;
       body.databaseName = this.formData.host || null;

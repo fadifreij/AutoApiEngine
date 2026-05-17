@@ -51,7 +51,7 @@
                                type="text"
                                autofocus
                                autocomplete="username"
-                               placeholder="Enter your email or username"
+                               placeholder="Enter your email"
                                aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"/>
                     </div>
 
