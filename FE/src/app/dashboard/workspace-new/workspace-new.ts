@@ -1,10 +1,11 @@
-﻿import { ChangeDetectorRef, Component, inject, signal } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { HttpClient } from '@angular/common/http';
+﻿import { HttpClient } from '@angular/common/http';
+import { ChangeDetectorRef, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../shared/auth/auth.service';
+import { WorkspaceStateService } from '../../shared/workspace-state.service';
 
 interface DbEngineOption {
   value: string;
@@ -50,6 +51,7 @@ export class WorkspaceNew {
   private http = inject(HttpClient);
   private router = inject(Router);
   private authService = inject(AuthService);
+  private workspaceState = inject(WorkspaceStateService);
   private cdr = inject(ChangeDetectorRef);
   private sanitizer = inject(DomSanitizer);
 
@@ -121,10 +123,13 @@ export class WorkspaceNew {
       body.encryptionKey = null;
     }
 
-    this.http.post(`${environment.apiUrl}/workspaces`, body, { withCredentials: true }).subscribe({
-      next: () => {
+    this.http.post<any>(`${environment.apiUrl}/workspaces`, body, { withCredentials: true }).subscribe({
+      next: (res) => {
         this.submitting = false;
         this.showSuccessOverlay = true;
+        if (res?.id && res?.name) {
+          this.workspaceState.setSelectedWorkspace(res.id, res.name);
+        }
         this.cdr.detectChanges();
         setTimeout(() => this.router.navigate(['/app/dashboard']), 3000);
       },

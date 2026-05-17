@@ -2,8 +2,10 @@
 using AutoApiEngine.Domain.Enums;
 using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.ServiceAbstraction.DTO;
+using AutoApiEngine.Services.DatabaseManagementServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AutoApiEngine.Presentation.Controllers
 {
@@ -14,11 +16,25 @@ namespace AutoApiEngine.Presentation.Controllers
     {
         private readonly IWorkspaceRepository _workspaceRepository;
         private readonly IOrganizationRepository _organizationRepository;
+        private readonly IServiceProvider _serviceProvider;
 
-        public WorkspacesController(IWorkspaceRepository workspaceRepository, IOrganizationRepository organizationRepository)
+        public WorkspacesController(
+            IWorkspaceRepository workspaceRepository,
+            IOrganizationRepository organizationRepository,
+            IServiceProvider serviceProvider)
         {
             _workspaceRepository = workspaceRepository;
             _organizationRepository = organizationRepository;
+            _serviceProvider = serviceProvider;
+        }
+
+        private IDatabaseManagementService GetDatabaseService(DatabaseEngine engine)
+        {
+            return engine switch
+            {
+                DatabaseEngine.MySql => _serviceProvider.GetRequiredService<MySqlDatabaseManagementService>(),
+                _ => _serviceProvider.GetRequiredService<IDatabaseManagementService>()
+            };
         }
 
         [HttpGet]
@@ -67,7 +83,12 @@ namespace AutoApiEngine.Presentation.Controllers
                     workspace.Id,
                     workspace.Name,
                     workspace.DatabaseEngine,
-                    workspace.IsActive
+                    workspace.IsActive,
+                    workspace.LastSyncAt,
+                    workspace.TablesCount,
+                    workspace.FunctionsCount,
+                    workspace.StoredProceduresCount,
+                    workspace.DatabaseSizeBytes
                 });
             });
         }
@@ -79,6 +100,50 @@ namespace AutoApiEngine.Presentation.Controllers
             {
                 var workspace = await _workspaceRepository.GetByIdAsync(id, cancellationToken);
                 return workspace;
+            });
+        }
+
+        [HttpGet("{id:guid}/stats")]
+        public async Task<IActionResult> GetStats(string id, CancellationToken cancellationToken = default)
+        {
+            return await HandleRequestAsync(async () =>
+            {
+                var workspace = await _workspaceRepository.GetByIdAsync(id, cancellationToken);
+
+                DatabaseStatsResult? dbStats = null;
+                if (!string.IsNullOrWhiteSpace(workspace.DatabaseName))
+                {
+                    try
+                    {
+                        var dbService = GetDatabaseService(workspace.DatabaseEngine);
+                        var connectionString = workspace.DatabaseEngine == DatabaseEngine.MySql
+                            ? "Server=localhost;Port=3307;Uid=root;Pwd=root;"
+                            : "Server=LAPTOP-II43H7KF;Trusted_Connection=True;TrustServerCertificate=True;";
+
+                        dbStats = await dbService.GetDatabaseStatsAsync(
+                            workspace.DatabaseName,
+                            workspace.DatabaseEngine,
+                            connectionString,
+                            cancellationToken);
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                return new WorkspaceStatsDto
+                {
+                    Id = workspace.Id,
+                    Name = workspace.Name,
+                    DatabaseName = workspace.DatabaseName,
+                    DatabaseEngine = workspace.DatabaseEngine,
+                    TablesCount = dbStats is not null ? dbStats.TablesCount : workspace.TablesCount,
+                    FunctionsCount = dbStats is not null ? dbStats.FunctionsCount : workspace.FunctionsCount,
+                    StoredProceduresCount = dbStats is not null ? dbStats.StoredProceduresCount : workspace.StoredProceduresCount,
+                    DatabaseSizeBytes = dbStats is not null ? dbStats.DatabaseSizeBytes : (workspace.DatabaseSizeBytes ?? 0),
+                    LastSyncAt = workspace.LastSyncAt,
+                    IsActive = workspace.IsActive
+                };
             });
         }
 
@@ -97,16 +162,36 @@ namespace AutoApiEngine.Presentation.Controllers
                 if (exists)
                     throw new ArgumentException("A workspace with this name already exists in your organization. Please choose a different name.");
 
+                var isHosted = string.IsNullOrWhiteSpace(dto.DbUserName) && string.IsNullOrWhiteSpace(dto.DatabaseName);
+
                 var workspace = new Workspace
                 {
+                    Id = Guid.NewGuid(),
                     Name = dto.Name,
                     EncryptionKey = dto.EncryptionKey,
                     DbUserName = dto.DbUserName,
                     DbPassword = dto.DbPassword,
-                    DatabaseName = dto.DatabaseName,
                     DatabaseEngine = engine,
-                    OrganizationId = dto.OrganizationId
+                    OrganizationId = dto.OrganizationId,
+                    LastSyncAt = isHosted ? DateTime.UtcNow : null,
+                    TablesCount = 0,
+                    FunctionsCount = 0,
+                    StoredProceduresCount = 0,
+                    DatabaseSizeBytes = 0
                 };
+
+                if (isHosted)
+                {
+                    var safeName = string.Join("_", dto.Name.Split(Path.GetInvalidFileNameChars()));
+                                        var dbName = "ws_" + string.Join("", safeName.Where(c => char.IsLetterOrDigit(c) || c == '_')) + "_" + workspace.Id.ToString("N")[..8];
+                    var dbService = GetDatabaseService(engine);
+                    var createdName = await dbService.CreateDatabaseAsync(dbName, engine, cancellationToken);
+                    workspace.DatabaseName = createdName;
+                }
+                else
+                {
+                    workspace.DatabaseName = dto.DatabaseName;
+                }
 
                 await _workspaceRepository.AddAsync(workspace, cancellationToken);
                 return workspace;
@@ -131,7 +216,7 @@ namespace AutoApiEngine.Presentation.Controllers
                     throw new ArgumentException("A workspace with this name already exists in your organization. Please choose a different name.");
 
                 workspace.Name = dto.Name;
-                workspace.EncryptionKey = dto.EncryptionKey ;
+                workspace.EncryptionKey = dto.EncryptionKey;
                 workspace.DbUserName = dto.DbUserName;
                 workspace.DbPassword = dto.DbPassword;
                 workspace.DatabaseName = dto.DatabaseName;

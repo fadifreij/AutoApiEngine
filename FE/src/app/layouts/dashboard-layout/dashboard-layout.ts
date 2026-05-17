@@ -1,9 +1,11 @@
-import { isPlatformBrowser } from '@angular/common';
+﻿import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, inject, PLATFORM_ID, signal } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { AuthService } from '../../shared/auth/auth.service';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
+import { AuthService } from '../../shared/auth/auth.service';
+import { WorkspaceStateService } from '../../shared/workspace-state.service';
 
 interface WorkspaceListItem {
   id: string;
@@ -23,6 +25,8 @@ export class DashboardLayout {
   private authService = inject(AuthService);
   private http = inject(HttpClient);
   private platformId = inject(PLATFORM_ID);
+  private workspaceState = inject(WorkspaceStateService);
+  private router = inject(Router);
 
   profileOpen = signal(false);
   organizationName = signal<string | null>(null);
@@ -37,6 +41,12 @@ export class DashboardLayout {
     this.organizationName.set(this.authService.getOrganization());
     this.loadUserInfo();
     this.loadWorkspaces();
+
+    this.router.events.pipe(
+      filter(e => e instanceof NavigationEnd)
+    ).subscribe(() => {
+      this.loadWorkspaces();
+    });
   }
 
   private loadUserInfo() {
@@ -65,10 +75,16 @@ export class DashboardLayout {
         this.workspaces.set(workspaces);
         this.workspacesLoading.set(false);
 
-        const currentId = this.selectedWorkspaceId();
-        if (!currentId || !workspaces.some(workspace => workspace.id === currentId)) {
-          this.selectedWorkspaceId.set(workspaces[0]?.id ?? '');
+        const stateId = this.workspaceState.selectedWorkspaceId();
+        if (stateId && workspaces.some(w => w.id === stateId)) {
+          this.selectedWorkspaceId.set(stateId);
+        } else {
+          const currentId = this.selectedWorkspaceId();
+          if (!currentId || !workspaces.some(w => w.id === currentId)) {
+            this.selectedWorkspaceId.set(workspaces[0]?.id ?? '');
+          }
         }
+        this.syncWorkspaceState();
       },
       error: () => {
         this.workspaces.set([]);
@@ -80,16 +96,13 @@ export class DashboardLayout {
 
   selectedWorkspaceName(): string {
     if (this.workspacesLoading()) return 'Loading workspaces...';
-
-    const selected = this.workspaces().find(workspace => workspace.id === this.selectedWorkspaceId());
+    const selected = this.workspaces().find(w => w.id === this.selectedWorkspaceId());
     return selected?.name ?? 'No workspaces';
   }
 
   toggleWorkspaceDropdown(event: MouseEvent): void {
     event.stopPropagation();
-
     if (this.workspacesLoading() || this.workspaces().length === 0) return;
-
     this.profileOpen.set(false);
     this.workspaceDropdownOpen.set(!this.workspaceDropdownOpen());
   }
@@ -97,6 +110,8 @@ export class DashboardLayout {
   selectWorkspace(workspaceId: string, event: MouseEvent): void {
     event.stopPropagation();
     this.selectedWorkspaceId.set(workspaceId);
+    const name = this.workspaces().find(w => w.id === workspaceId)?.name ?? '';
+    this.workspaceState.setSelectedWorkspace(workspaceId, name);
     this.workspaceDropdownOpen.set(false);
   }
 
@@ -120,6 +135,12 @@ export class DashboardLayout {
   onDocClick() {
     this.profileOpen.set(false);
     this.workspaceDropdownOpen.set(false);
+  }
+
+  private syncWorkspaceState(): void {
+    const id = this.selectedWorkspaceId();
+    const name = this.selectedWorkspaceName();
+    this.workspaceState.setSelectedWorkspace(id, name);
   }
 
   signOut(event: MouseEvent) {

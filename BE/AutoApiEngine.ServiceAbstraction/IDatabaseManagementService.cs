@@ -1,24 +1,32 @@
 ﻿using AutoApiEngine.Domain.Entities;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using AutoApiEngine.Domain.Enums;
 
 namespace AutoApiEngine.ServiceAbstraction
 {
+    public class DatabaseStatsResult
+    {
+        public int TablesCount { get; set; }
+        public int FunctionsCount { get; set; }
+        public int StoredProceduresCount { get; set; }
+        public long DatabaseSizeBytes { get; set; }
+    }
+
     public interface IDatabaseManagementService
     {
+        Task<string> CreateDatabaseAsync(string databaseName, DatabaseEngine engine, CancellationToken cancellationToken = default);
+
+        Task<DatabaseStatsResult> GetDatabaseStatsAsync(string databaseName, DatabaseEngine engine, string connectionString, CancellationToken cancellationToken = default);
+
         Task BackupAsync(
             string backupPath,
-             DatabaseOptions databaseOptions,
+            DatabaseOptions databaseOptions,
             IProgress<DatabaseProgress>? progress = null,
             CancellationToken cancellationToken = default);
 
         Task RestoreAsync(
             string backupPath,
-             DatabaseOptions databaseOptions,
+            DatabaseOptions databaseOptions,
             IProgress<DatabaseProgress>? progress = null,
             CancellationToken cancellationToken = default);
     }
-
 }
-

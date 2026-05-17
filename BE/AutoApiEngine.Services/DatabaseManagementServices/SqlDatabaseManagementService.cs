@@ -1,31 +1,95 @@
 ﻿using AutoApiEngine.ServiceAbstraction;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Microsoft.Extensions.Configuration;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Options;
 using AutoApiEngine.Domain.Entities;
+using AutoApiEngine.Domain.Enums;
 using Microsoft.Data.SqlClient;
+
 namespace AutoApiEngine.Services.DatabaseManagementServices
 {
     public class SqlDatabaseManagementService : IDatabaseManagementService
     {
         private static readonly Regex PercentRegex = new(@"(\d+)\spercent", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        
-        private readonly ILogger<SqlDatabaseManagementService> _logger;
 
-        public SqlDatabaseManagementService(
-         ILogger<SqlDatabaseManagementService> logger)
+        private readonly ILogger<SqlDatabaseManagementService> _logger;
+        private readonly string _appConnectionString;
+
+        public SqlDatabaseManagementService(ILogger<SqlDatabaseManagementService> logger, IConfiguration configuration)
         {
-           
             _logger = logger;
+            _appConnectionString = configuration.GetConnectionString("SqlServerConnection")
+                ?? throw new InvalidOperationException("SqlServerConnection is not configured.");
         }
+
+        public async Task<string> CreateDatabaseAsync(string databaseName, DatabaseEngine engine, CancellationToken cancellationToken = default)
+        {
+            var csb = new SqlConnectionStringBuilder(_appConnectionString)
+            {
+                InitialCatalog = "master"
+            };
+
+            await using var connection = new SqlConnection(csb.ConnectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            var sql = $@"
+                IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = @name)
+                BEGIN
+                    CREATE DATABASE [{databaseName}]
+                END";
+
+            await using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@name", databaseName);
+            await cmd.ExecuteNonQueryAsync(cancellationToken);
+
+            return databaseName;
+        }
+
+        public async Task<DatabaseStatsResult> GetDatabaseStatsAsync(string databaseName, DatabaseEngine engine, string connectionString, CancellationToken cancellationToken = default)
+        {
+            var result = new DatabaseStatsResult();
+
+            var targetConn = string.IsNullOrWhiteSpace(connectionString) ? _appConnectionString : connectionString;
+            var csb = new SqlConnectionStringBuilder(targetConn)
+            {
+                InitialCatalog = databaseName
+            };
+
+            await using var connection = new SqlConnection(csb.ConnectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using (var cmd = new SqlCommand(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'", connection))
+            {
+                result.TablesCount = (int)await cmd.ExecuteScalarAsync(cancellationToken);
+            }
+
+            await using (var cmd = new SqlCommand(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'FUNCTION'", connection))
+            {
+                result.FunctionsCount = (int)await cmd.ExecuteScalarAsync(cancellationToken);
+            }
+
+            await using (var cmd = new SqlCommand(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE'", connection))
+            {
+                result.StoredProceduresCount = (int)await cmd.ExecuteScalarAsync(cancellationToken);
+            }
+
+            await using (var cmd = new SqlCommand(
+                "SELECT ISNULL(SUM(CAST(size AS BIGINT) * 8 * 1024), 0) FROM sys.database_files WHERE type = 0", connection))
+            {
+                result.DatabaseSizeBytes = (long)await cmd.ExecuteScalarAsync(cancellationToken);
+            }
+
+            return result;
+        }
+
         public async Task BackupAsync(
-          string backupPath,
-          DatabaseOptions databaseOptions,
-          IProgress<DatabaseProgress>? progress = null,
-          CancellationToken cancellationToken = default)
+            string backupPath,
+            DatabaseOptions databaseOptions,
+            IProgress<DatabaseProgress>? progress = null,
+            CancellationToken cancellationToken = default)
         {
             await using var connection = new SqlConnection(databaseOptions.ConnectionString);
 
@@ -59,11 +123,12 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
             progress?.Report(new DatabaseProgress { Percentage = 100, Message = "Backup completed" });
         }
+
         public async Task RestoreAsync(
-          string backupPath,
-          DatabaseOptions databaseOptions,
-          IProgress<DatabaseProgress>? progress = null,
-          CancellationToken cancellationToken = default)
+            string backupPath,
+            DatabaseOptions databaseOptions,
+            IProgress<DatabaseProgress>? progress = null,
+            CancellationToken cancellationToken = default)
         {
             await using var connection = new SqlConnection(databaseOptions.ConnectionString);
 
@@ -104,11 +169,11 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
             progress?.Report(new DatabaseProgress { Percentage = 100, Message = "Restore completed" });
         }
+
         private static async Task ExecuteAsync(SqlConnection connection, string sql, CancellationToken ct)
         {
             await using var cmd = new SqlCommand(sql, connection);
             await cmd.ExecuteNonQueryAsync(ct);
         }
-
     }
 }
