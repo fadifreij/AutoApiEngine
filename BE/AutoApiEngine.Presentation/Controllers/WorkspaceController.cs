@@ -216,7 +216,8 @@ namespace AutoApiEngine.Presentation.Controllers
                 if (isHosted)
                 {
                     var safeName = string.Join("_", dto.Name.Split(Path.GetInvalidFileNameChars()));
-                    var dbName = "ws_" + string.Join("", safeName.Where(c => char.IsLetterOrDigit(c) || c == '_')) + "_" + workspace.Id.ToString("N")[..8];
+                    //var dbName = "ws_" + string.Join("", safeName.Where(c => char.IsLetterOrDigit(c) || c == '_')) + "_" + workspace.Id.ToString("N")[..8];
+                    var dbName = dto.Name;
                     var dbService = GetDatabaseService(engine);
                     var createdName = await dbService.CreateDatabaseAsync(dbName, engine, cancellationToken);
                     workspace.DatabaseName = createdName;

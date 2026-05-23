@@ -18,12 +18,14 @@ namespace AutoApiEngine.ServiceAbstraction
         Task<DatabaseStatsResult> GetDatabaseStatsAsync(string databaseName, DatabaseEngine engine, string connectionString, CancellationToken cancellationToken = default);
 
         Task BackupAsync(
+            DatabaseEngine engine,
             string backupPath,
             DatabaseOptions databaseOptions,
             IProgress<DatabaseProgress>? progress = null,
             CancellationToken cancellationToken = default);
 
         Task RestoreAsync(
+            DatabaseEngine engine,
             string backupPath,
             DatabaseOptions databaseOptions,
             IProgress<DatabaseProgress>? progress = null,

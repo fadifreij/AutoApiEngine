@@ -86,6 +86,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         }
 
         public async Task BackupAsync(
+            DatabaseEngine engine,
             string backupPath,
             DatabaseOptions databaseOptions,
             IProgress<DatabaseProgress>? progress = null,
@@ -125,6 +126,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         }
 
         public async Task RestoreAsync(
+            DatabaseEngine engine,
             string backupPath,
             DatabaseOptions databaseOptions,
             IProgress<DatabaseProgress>? progress = null,

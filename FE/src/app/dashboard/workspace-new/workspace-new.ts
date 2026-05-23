@@ -1,5 +1,5 @@
 ﻿import { HttpClient } from '@angular/common/http';
-import { ChangeDetectorRef, Component, inject, signal } from '@angular/core';
+import { ChangeDetectorRef, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
@@ -64,9 +64,32 @@ export class WorkspaceNew {
     icon: this.sanitizer.bypassSecurityTrustHtml(o.icon)
   }));
 
+  name = signal('');
+  nameTouched = signal(false);
+  encryptionKeyTouched = signal(false);
+  // true when name meets DB identifier rules: lowercase letters, numbers, hyphens; 1-50 chars; cannot start/end with hyphen
+  isNameValid = computed(() => {
+    const v = (this.name() || '').trim();
+    if (!v) return false;
+    if (v.length > 50) return false;
+    // must start and end with alphanumeric, only allow lowercase letters, numbers, and hyphens
+    const re = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+    return re.test(v);
+  });
+
+  onNameInput(value: string): void {
+    this.name.set(value);
+    // mark as touched as soon as the user types
+    if (!this.nameTouched()) this.nameTouched.set(true);
+  }
+
+  onEncryptionKeyInput(value: string): void {
+    this.encryptionKey.set(value);
+    if (!this.encryptionKeyTouched()) this.encryptionKeyTouched.set(true);
+  }
+  encryptionKey = signal('');
+
   formData = {
-    name: '',
-    encryptionKey: '',
     databaseEngine: 'SqlServer',
     host: '',
     userName: '',
@@ -95,12 +118,22 @@ export class WorkspaceNew {
     this.dbEngineOpen.set(false);
   }
 
+  canSubmit = computed(() => {
+    // require a valid workspace/database name in all cases
+    if (!this.isNameValid()) return false;
+    if (this.dbType() === 'hosted') {
+      const key = (this.encryptionKey() || '').trim();
+      return key.length > 0;
+    }
+    return true;
+  });
+
   onSubmit(): void {
-    if (!this.formData.name) {
+    if (!this.name()) {
       this.error = 'Workspace name is required';
       return;
     }
-    
+
     this.submitting = true;
     this.error = '';
     this.showSuccessOverlay = false;
@@ -109,12 +142,12 @@ export class WorkspaceNew {
     const orgId = this.authService.getOrganizationId();
 
     const body: any = {
-      name: this.formData.name,
+      name: this.name(),
       organizationId: orgId || undefined
     };
 
     if (this.dbType() === 'hosted') {
-      body.encryptionKey = this.formData.encryptionKey || null;
+      body.encryptionKey = this.encryptionKey() || null;
     } else {
       body.databaseEngine = this.formData.databaseEngine;
       body.dbUserName = this.formData.userName || null;

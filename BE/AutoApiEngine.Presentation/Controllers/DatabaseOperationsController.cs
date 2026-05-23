@@ -51,8 +51,9 @@ namespace AutoApiEngine.Presentation.Controllers
                 DatabaseName = workspace.DatabaseName?? ""
             };
 
+            var engine = workspace.DatabaseEngine;
             _ = Task.Run(() =>
-                _databaseManagementService.BackupAsync(GetTempPath("temp"),databaseOptions, progress));
+                _databaseManagementService.BackupAsync(engine, GetTempPath("temp"), databaseOptions, progress));
 
             return Accepted(new { message = "Backup started." });
         }
@@ -109,8 +110,10 @@ namespace AutoApiEngine.Presentation.Controllers
                 DatabaseName = workspace.DatabaseName ?? ""
             };
 
+            var engine = workspace.DatabaseEngine;
             _ = Task.Run(() =>
                 _databaseManagementService.RestoreAsync(
+                    engine,
                     filePath,
                     databaseOptions,
                     restoreProgress));

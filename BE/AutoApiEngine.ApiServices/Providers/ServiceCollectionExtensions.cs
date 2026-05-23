@@ -16,8 +16,11 @@ namespace AutoApiEngine.ApiServices.Providers
             services.AddScoped(typeof(KeycloakService));
             services.AddScoped<IOrganizationRepository, OrganizationRepository>();
 
-            services.AddScoped<IDatabaseManagementService, SqlDatabaseManagementService>();
+            // Register concrete implementations
+            services.AddScoped<SqlDatabaseManagementService>();
             services.AddScoped<MySqlDatabaseManagementService>();
+            // Register resolver as the primary IDatabaseManagementService
+            services.AddScoped<IDatabaseManagementService, DatabaseManagementServiceResolver>();
 
             return services;
         }
