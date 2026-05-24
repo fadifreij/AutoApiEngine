@@ -1,6 +1,7 @@
-import { Injectable, signal } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
 import * as signalR from '@microsoft/signalr';
 import { environment } from '../../environments/environment';
+import { AuthService } from './auth/auth.service';
 
 export interface ProgressEvent {
     operation: string;
@@ -12,6 +13,7 @@ export interface ProgressEvent {
 @Injectable({ providedIn: 'root' })
 export class DatabaseProgressService {
     private connection: signalR.HubConnection | null = null;
+    private authService = inject(AuthService);
 
     latestProgress = signal<ProgressEvent | null>(null);
     connected = signal(false);
@@ -27,7 +29,9 @@ export class DatabaseProgressService {
         const hubUrl = `${baseUrl}/hubs/progress`;
 
         this.connection = new signalR.HubConnectionBuilder()
-            .withUrl(hubUrl)
+            .withUrl(hubUrl, {
+                accessTokenFactory: () => this.authService.getAccessToken() || ''
+            })
             .withAutomaticReconnect()
             .build();
 
@@ -51,4 +55,22 @@ export class DatabaseProgressService {
             this.connected.set(false);
         }
     }
+    async joinUser(userId: string): Promise<void> {
+        if (!this.connection) {
+            await this.start();
+        }
+        try {
+            await this.connection?.invoke('JoinUser', userId);
+        } catch (err) {
+            console.warn('JoinUser failed', err);
+        }
+    }
+    async leaveUser(userId: string): Promise<void> {
+        if (!this.connection) return;
+        try {
+            await this.connection.invoke('LeaveUser', userId);
+        } catch { }
+    }
+
+
 }

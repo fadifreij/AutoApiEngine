@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System;
+using System.Security.Claims;
 using System.Collections.Generic;
 using System.Text;
 
@@ -64,8 +64,9 @@ namespace AutoApiEngine.Presentation.Controllers
         {
             if (string.IsNullOrWhiteSpace(request.WorkspaceId))
                 return BadRequest("Database should be selected.");
-
-            var progress = CreateProgressReporter("backup");
+            
+            var userId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var progress = CreateProgressReporter("backup", userId);
 
             var workspace = await _workspaceRepository.GetByIdWithOrganizationAsync(request.WorkspaceId, cancellationToken);
 
@@ -93,13 +94,16 @@ namespace AutoApiEngine.Presentation.Controllers
             {
                 await _databaseManagementService.BackupAsync(engine, backupPath, databaseName, progress, cancellationToken);
 
-                await _hub.Clients.All.SendAsync("ReceiveProgress", new
+                if (!string.IsNullOrWhiteSpace(userId))
                 {
-                    Operation = "backup",
-                    Percentage = 100,
-                    Message = "Backup completed",
-                    FileName = fileName
-                }, cancellationToken);
+                    await _hub.Clients.Group($"user-{userId}").SendAsync("ReceiveProgress", new
+                    {
+                        Operation = "backup",
+                        Percentage = 100,
+                        Message = "Backup completed",
+                        FileName = fileName
+                    }, cancellationToken);
+                }
 
                 return Ok(new { message = "Backup completed.", fileName });
             }
@@ -158,8 +162,9 @@ namespace AutoApiEngine.Presentation.Controllers
             if (file == null || file.Length == 0)
                 return BadRequest("Backup file is required.");
 
-            var uploadProgress = CreateProgressReporter("upload");
-            var restoreProgress = CreateProgressReporter("restore");
+            var userId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var uploadProgress = CreateProgressReporter("upload", userId);
+            var restoreProgress = CreateProgressReporter("restore", userId);
 
             var tempPath = GetTempPath("restore");
             var filePath = Path.Combine(tempPath, file.FileName);
@@ -230,17 +235,29 @@ namespace AutoApiEngine.Presentation.Controllers
             }
         }
 
-        private IProgress<DatabaseProgress> CreateProgressReporter(string operation)
+        private IProgress<DatabaseProgress> CreateProgressReporter(string operation, string? userId = null)
         {
             // Use a direct callback instead of Progress<T> which relies on SynchronizationContext
             return new DirectProgress<DatabaseProgress>(async p =>
             {
-                await _hub.Clients.All.SendAsync("ReceiveProgress", new
+                if (!string.IsNullOrWhiteSpace(userId))
                 {
-                    Operation = operation,
-                    p.Percentage,
-                    p.Message
-                });
+                    await _hub.Clients.Group($"user-{userId}").SendAsync("ReceiveProgress", new
+                    {
+                        Operation = operation,
+                        p.Percentage,
+                        p.Message
+                    });
+                }
+                else
+                {
+                    await _hub.Clients.All.SendAsync("ReceiveProgress", new
+                    {
+                        Operation = operation,
+                        p.Percentage,
+                        p.Message
+                    });
+                }
             });
         }
 

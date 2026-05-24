@@ -198,6 +198,18 @@ export class AuthService {
     return this.accessToken();
   }
 
+  getUserId(): string | null {
+    const token = this.accessToken();
+    if (!token) return null;
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload['sub'] || null;
+    } catch {
+      return null;
+    }
+  }
+
   getOrganization(): string | null {
     const token = this.accessToken();
     if (!token) return null;

@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, computed, effect, inject, OnDestroy, signal } from '@angular/core';
 import { environment } from '../../../environments/environment';
+import { AuthService } from '../../shared/auth/auth.service';
 import { DatabaseProgressService, ProgressEvent } from '../../shared/database-progress.service';
 import { WorkspaceStateService } from '../../shared/workspace-state.service';
 
@@ -16,6 +17,7 @@ export class WorkspaceManage implements OnDestroy {
   private http = inject(HttpClient);
   private workspaceState = inject(WorkspaceStateService);
   private progressService = inject(DatabaseProgressService);
+  private authService = inject(AuthService);
 
   showPopup = signal(false);
   operationType = signal<OperationType>(null);
@@ -99,6 +101,8 @@ export class WorkspaceManage implements OnDestroy {
     this.step2Progress.set(0);
     this.backupFileName = '';
     this.downloadStarted = false;
+    const userId = this.authService.getUserId();
+    if (userId) this.progressService.leaveUser(userId);
     this.progressService.stop();
   }
 
@@ -110,15 +114,19 @@ export class WorkspaceManage implements OnDestroy {
 
     // Connect SignalR first, then call API
     await this.progressService.start();
+    const userId = this.authService.getUserId();
+    if (userId) await this.progressService.joinUser(userId);
     this.callBackupApi();
   }
 
-  private openPopup(type: OperationType): void {
+  private async openPopup(type: OperationType): Promise<void> {
     this.operationType.set(type);
     this.step1Progress.set(0);
     this.step2Progress.set(0);
     this.showPopup.set(true);
-    this.progressService.start();
+    await this.progressService.start();
+    const userId = this.authService.getUserId();
+    if (userId) await this.progressService.joinUser(userId);
   }
 
   private callBackupApi(): void {
@@ -230,6 +238,8 @@ export class WorkspaceManage implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    const userId = this.authService.getUserId();
+    if (userId) this.progressService.leaveUser(userId);
     this.progressService.stop();
   }
 }
