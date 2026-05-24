@@ -21,6 +21,10 @@ namespace AutoApiEngine.ApiServices.Providers
             services.AddScoped<MySqlDatabaseManagementService>();
             // Register resolver as the primary IDatabaseManagementService
             services.AddScoped<IDatabaseManagementService, DatabaseManagementServiceResolver>();
+            // Connection string builders (concrete + default interface)
+            services.AddScoped<SqlServerConnectionStringBuilder>();
+            services.AddScoped<MySqlConnectionStringBuilder>();
+            services.AddScoped<IConnectionStringBuilder, SqlServerConnectionStringBuilder>();
 
             return services;
         }

@@ -20,7 +20,7 @@ namespace AutoApiEngine.ServiceAbstraction
         Task BackupAsync(
             DatabaseEngine engine,
             string backupPath,
-            DatabaseOptions databaseOptions,
+            string connectionString,
             IProgress<DatabaseProgress>? progress = null,
             CancellationToken cancellationToken = default);
 

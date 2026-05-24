@@ -1,5 +1,6 @@
 ﻿using AutoApiEngine.ApiServices.Providers;
 using AutoApiEngine.Persistence.Context;
+using AutoApiEngine.Presentation.HubServices;
 using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.Services.AuthServices;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -62,6 +63,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+builder.Services.AddSignalR();
 
 var databaseProvider = builder.Configuration["DatabaseProvider"] ?? "";
 builder.AddDatabaseContext(databaseProvider);
@@ -78,6 +80,7 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHub<ProgressHub>("/hubs/progress").AllowAnonymous();
 app.MapControllers();
 
 app.Run();

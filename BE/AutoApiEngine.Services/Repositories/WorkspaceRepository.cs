@@ -33,5 +33,20 @@ namespace AutoApiEngine.Services.Repositories
                     w.OrganizationId == organizationId &&
                     (excludeId == null || w.Id != excludeId.Value), cancellationToken);
         }
+
+        public async Task<Workspace> GetByIdWithOrganizationAsync(string id, CancellationToken cancellationToken = default)
+        {
+            if (!Guid.TryParse(id, out var guidId))
+                throw new KeyNotFoundException($"Workspace with id {id} not found.");
+
+            var entity = await _context.Workspaces
+                .Include(w => w.Organization)
+                .FirstOrDefaultAsync(w => w.Id == guidId, cancellationToken);
+
+            if (entity == null)
+                throw new KeyNotFoundException($"Workspace with id {id} not found.");
+
+            return entity;
+        }
     }
 }

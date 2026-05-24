@@ -7,38 +7,68 @@
 </div>
 
 <div class="info-strip">
-  <div class="info-card"><div class="label">Database Engine</div><div class="value purple">PostgreSQL 15.4</div></div>
-  <div class="info-card"><div class="label">Size</div><div class="value">245 MB</div></div>
-  <div class="info-card"><div class="label">Status</div><div class="value green">● Connected</div></div>
-  <div class="info-card"><div class="label">Last Backup</div><div class="value">1 hour ago</div></div>
+  <div class="info-card">
+    <div class="label">Database Engine</div>
+    <div class="value purple">PostgreSQL 15.4</div>
+  </div>
+  <div class="info-card">
+    <div class="label">Size</div>
+    <div class="value">245 MB</div>
+  </div>
+  <div class="info-card">
+    <div class="label">Status</div>
+    <div class="value green">● Connected</div>
+  </div>
+  <div class="info-card">
+    <div class="label">Last Backup</div>
+    <div class="value">1 hour ago</div>
+  </div>
 </div>
 
 <div class="action-grid">
   <!-- UPLOAD DB -->
   <div class="action-card">
     <h3>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
       Upload Database
     </h3>
     <p>Upload a database dump file to restore into this workspace.</p>
-    <div class="upload-zone">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    <div class="upload-zone" (click)="fileInput.click()">
+      <input #fileInput type="file" accept=".zip,.sql,.dump,.gz,.bak" hidden (change)="onFileSelected($event)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
       <p>Drop file here or <strong>browse</strong></p>
       <div class="upload-hint">.zip archive containing .sql, .dump, or .gz files</div>
     </div>
-    <button class="btn btn-primary btn-sm full-w" (click)="startUploadRestore()">Upload & Restore</button>
+    <button class="btn btn-primary btn-sm full-w" (click)="fileInput.click()">Upload & Restore</button>
   </div>
 
   <!-- DOWNLOAD / BACKUP -->
   <div class="action-card">
     <h3>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
       Download & Backup
     </h3>
     <p>Download a full backup of your database or create a new snapshot.</p>
     <div class="action-btns">
       <button class="btn btn-primary btn-sm" (click)="startDownload()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
         Backup & Download Now
       </button>
       <button class="btn btn-outline btn-sm" (click)="startBackup()">Create Backup</button>
@@ -66,7 +96,10 @@
   <!-- DDL SCRIPT -->
   <div class="action-card full-span">
     <h3>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <polyline points="16 18 22 12 16 6" />
+        <polyline points="8 6 2 12 8 18" />
+      </svg>
       Run DDL Script
     </h3>
     <p>Execute Data Definition Language scripts to create, alter, or drop database objects.</p>
@@ -83,7 +116,10 @@
         </div>
         <div class="ddl-actions">
           <button class="btn btn-primary btn-sm">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
             Execute DDL
           </button>
           <button class="btn btn-outline btn-sm">Upload .sql File</button>
@@ -107,9 +143,17 @@
 
     <div class="popup-icon">
       @if (operationType() === 'upload') {
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
       } @else {
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
       }
     </div>
 
@@ -120,7 +164,8 @@
     </h2>
 
     <!-- Step 1 -->
-    <div class="progress-step" [class.active]="step1Progress() > 0 && step1Progress() < 100" [class.done]="step1Progress() >= 100">
+    <div class="progress-step" [class.active]="step1Progress() > 0 && step1Progress() < 100"
+      [class.done]="step1Progress() >= 100">
       <div class="step-header">
         <span class="step-label">
           @if (step1Progress() >= 100) { <span class="check">✓</span> }
@@ -136,7 +181,8 @@
 
     <!-- Step 2 -->
     @if (hasStep2()) {
-    <div class="progress-step" [class.active]="step2Progress() > 0 && step2Progress() < 100" [class.done]="step2Progress() >= 100" [class.waiting]="step1Progress() < 100">
+    <div class="progress-step" [class.active]="step2Progress() > 0 && step2Progress() < 100"
+      [class.done]="step2Progress() >= 100" [class.waiting]="step1Progress() < 100">
       <div class="step-header">
         <span class="step-label">
           @if (step2Progress() >= 100) { <span class="check">✓</span> }
@@ -152,11 +198,13 @@
     }
 
     @if (isComplete()) {
-      <div class="popup-success">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
-        Operation completed successfully!
-      </div>
-      <button class="btn btn-primary btn-sm full-w" (click)="closePopup()">Done</button>
+    <div class="popup-success">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <path d="M20 6L9 17l-5-5" />
+      </svg>
+      Operation completed successfully!
+    </div>
+    <button class="btn btn-primary btn-sm full-w" (click)="closePopup()">Done</button>
     }
   </div>
 </div>

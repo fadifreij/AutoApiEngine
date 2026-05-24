@@ -88,11 +88,11 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         public async Task BackupAsync(
             DatabaseEngine engine,
             string backupPath,
-            DatabaseOptions databaseOptions,
+            string databaseName,
             IProgress<DatabaseProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            await using var connection = new SqlConnection(databaseOptions.ConnectionString);
+            await using var connection = new SqlConnection(_appConnectionString);
 
             connection.InfoMessage += (_, e) =>
             {
@@ -113,7 +113,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             await connection.OpenAsync(cancellationToken);
 
             var commandText = $@"
-                BACKUP DATABASE [{databaseOptions.DatabaseName}]
+                BACKUP DATABASE [{databaseName}]
                 TO DISK = @BackupPath
                 WITH STATS = 5";
 

@@ -43,12 +43,12 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             };
         }
 
-        public Task BackupAsync(DatabaseEngine engine, string backupPath, DatabaseOptions databaseOptions, IProgress<DatabaseProgress>? progress = null, CancellationToken cancellationToken = default)
+        public Task BackupAsync(DatabaseEngine engine, string backupPath, string databaseName, IProgress<DatabaseProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             return engine switch
             {
-                DatabaseEngine.MySql => _mysql.BackupAsync(engine, backupPath, databaseOptions, progress, cancellationToken),
-                _ => _sql.BackupAsync(engine, backupPath, databaseOptions, progress, cancellationToken)
+                DatabaseEngine.MySql => _mysql.BackupAsync(engine, backupPath, databaseName, progress, cancellationToken),
+                _ => _sql.BackupAsync(engine, backupPath, databaseName, progress, cancellationToken)
             };
         }
 
