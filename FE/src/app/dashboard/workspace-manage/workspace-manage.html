@@ -1,7 +1,7 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">Manage Workspace</h1>
-    <div class="page-subtitle">ecommerce-db · Hosted PostgreSQL · Created Apr 10, 2026</div>
+    <div class="page-subtitle">{{ workspaceName() }} · {{ dbEngineLabel() }} · {{ createdLabel() }}</div>
   </div>
   <button class="btn btn-outline btn-sm btn-danger">Delete Workspace</button>
 </div>
@@ -9,11 +9,11 @@
 <div class="info-strip">
   <div class="info-card">
     <div class="label">Database Engine</div>
-    <div class="value purple">PostgreSQL 15.4</div>
+    <div class="value purple">{{ dbEngineLabel() }}</div>
   </div>
   <div class="info-card">
     <div class="label">Size</div>
-    <div class="value">245 MB</div>
+    <div class="value">{{ sizeLabel() }}</div>
   </div>
   <div class="info-card">
     <div class="label">Status</div>
@@ -21,7 +21,7 @@
   </div>
   <div class="info-card">
     <div class="label">Last Backup</div>
-    <div class="value">1 hour ago</div>
+    <div class="value">{{ lastBackupLabel() }}</div>
   </div>
 </div>
 

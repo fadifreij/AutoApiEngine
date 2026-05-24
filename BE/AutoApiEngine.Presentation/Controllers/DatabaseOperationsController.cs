@@ -151,6 +151,51 @@ namespace AutoApiEngine.Presentation.Controllers
             }
         }
 
+        [HttpGet("last-backup/{workspaceId}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetLastBackup(string workspaceId, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(workspaceId))
+                return BadRequest(new { message = "Workspace id is required." });
+
+            var workspace = await _workspaceRepository.GetByIdWithOrganizationAsync(workspaceId, cancellationToken);
+            if (workspace == null)
+                return NotFound(new { message = "Workspace not found." });
+
+            var backupDir = GetTempPath("backups");
+
+            string orgName = !string.IsNullOrWhiteSpace(workspace.Organization?.Name)
+                ? workspace.Organization.Name
+                : workspace.OrganizationId.ToString();
+            string workspaceName = workspace.Name ?? workspace.DatabaseName ?? "workspace";
+
+            string safeOrg = MakeSafeFolderName(orgName);
+            string safeWorkspace = MakeSafeFolderName(workspaceName);
+
+            var workspaceFolder = Path.Combine(backupDir, safeOrg, safeWorkspace);
+            if (!Directory.Exists(workspaceFolder))
+                return NotFound(new { message = "No backups found." });
+
+            var files = Directory.GetFiles(workspaceFolder);
+            if (files == null || files.Length == 0)
+                return NotFound(new { message = "No backups found." });
+
+            var latest = files
+                .Select(p => new FileInfo(p))
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .FirstOrDefault();
+
+            if (latest == null)
+                return NotFound(new { message = "No backups found." });
+
+            return Ok(new
+            {
+                fileName = latest.Name,
+                size = latest.Length,
+                createdAt = latest.LastWriteTimeUtc
+            });
+        }
+
 
         [HttpPost("restore")]
         [AllowAnonymous]

@@ -17,6 +17,18 @@ export class WorkspaceManage implements OnDestroy {
   private http = inject(HttpClient);
   private workspaceState = inject(WorkspaceStateService);
   private progressService = inject(DatabaseProgressService);
+
+  workspaceName = computed(() => this.workspaceState.selectedWorkspaceName());
+  dbEngineLabel = signal('');
+  createdLabel = signal('');
+  sizeLabel = signal('');
+  lastBackupLabel = signal('');
+
+  private workspaceEffect = effect(() => {
+    const id = this.workspaceState.selectedWorkspaceId();
+    if (!id) return;
+    this.loadWorkspaceDetails(id);
+  });
   private authService = inject(AuthService);
 
   showPopup = signal(false);
@@ -147,6 +159,7 @@ export class WorkspaceManage implements OnDestroy {
     ).subscribe({
       next: (res) => {
         this.backupFileName = res.fileName;
+        this.refreshLastBackup();
         if (usesFallback) {
           this.stopFallback();
           this.step1Progress.set(100);
@@ -241,5 +254,122 @@ export class WorkspaceManage implements OnDestroy {
     const userId = this.authService.getUserId();
     if (userId) this.progressService.leaveUser(userId);
     this.progressService.stop();
+  }
+
+  private loadWorkspaceDetails(id: string): void {
+    this.http.get<any>(`${environment.apiUrl}/workspaces/${id}`).subscribe({
+      next: (ws) => {
+        const engine = ws.databaseEngine ?? ws.DatabaseEngine ?? ws.DatabaseEngine;
+        this.dbEngineLabel.set(this.engineToLabel(engine));
+
+        const created = ws.createdAt ?? ws.CreatedAt;
+        if (created) {
+          try {
+            const d = new Date(created);
+            const label = `Created ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+            this.createdLabel.set(label);
+          } catch {
+            this.createdLabel.set('');
+          }
+        } else {
+          this.createdLabel.set('');
+        }
+
+        // Fetch stats for size
+        this.http.get<any>(`${environment.apiUrl}/workspaces/${id}/stats`).subscribe({
+          next: (stats) => {
+            if (stats && typeof stats.databaseSizeBytes === 'number') {
+              this.sizeLabel.set(this.formatBytes(stats.databaseSizeBytes));
+            } else {
+              this.sizeLabel.set('');
+            }
+          },
+          error: () => this.sizeLabel.set('')
+        });
+
+        // Fetch last backup info
+        this.http.get<any>(`${environment.apiUrl}/database/last-backup/${id}`).subscribe({
+          next: (b) => {
+            if (b && b.createdAt) {
+              try {
+                const d = new Date(b.createdAt);
+                this.lastBackupLabel.set(this.timeAgo(d));
+                if (b.size) this.sizeLabel.set(this.formatBytes(b.size));
+              } catch {
+                this.lastBackupLabel.set('');
+              }
+            } else {
+              this.lastBackupLabel.set('');
+            }
+          },
+          error: () => this.lastBackupLabel.set('')
+        });
+      },
+      error: () => {
+        this.dbEngineLabel.set('');
+        this.createdLabel.set('');
+        this.sizeLabel.set('');
+        this.lastBackupLabel.set('');
+      }
+    });
+  }
+
+  private refreshLastBackup(): void {
+    const id = this.workspaceState.selectedWorkspaceId();
+    if (!id) return;
+    this.http.get<any>(`${environment.apiUrl}/database/last-backup/${id}`).subscribe({
+      next: (b) => {
+        if (b && b.createdAt) {
+          try {
+            const d = new Date(b.createdAt);
+            this.lastBackupLabel.set(this.timeAgo(d));
+            if (b.size) this.sizeLabel.set(this.formatBytes(b.size));
+          } catch {
+            this.lastBackupLabel.set('');
+          }
+        }
+      },
+      error: () => { }
+    });
+  }
+
+  private formatBytes(bytes: number): string {
+    if (!bytes) return '0 B';
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0)} ${sizes[i]}`;
+  }
+
+  private timeAgo(d: Date): string {
+    const sec = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (sec < 60) return `${sec}s ago`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr}h ago`;
+    const days = Math.floor(hr / 24);
+    return `${days}d ago`;
+  }
+
+  private engineToLabel(engine: any): string {
+    if (engine == null) return '';
+    if (typeof engine === 'number') {
+      switch (engine) {
+        case 0: return 'SQL Server';
+        case 1: return 'PostgreSQL';
+        case 2: return 'MySQL';
+        case 3: return 'SQLite';
+        default: return 'Unknown';
+      }
+    }
+    if (typeof engine === 'string') {
+      const e = engine.toLowerCase();
+      if (e.includes('postgres')) return 'PostgreSQL';
+      if (e.includes('mysql')) return 'MySQL';
+      if (e.includes('sqlserver') || e.includes('sql server')) return 'SQL Server';
+      if (e.includes('sqlite')) return 'SQLite';
+      return engine;
+    }
+    return String(engine);
   }
 }
