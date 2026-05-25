@@ -106,7 +106,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
                 result.BackupHistory = result.BackupHistory
                     .OrderByDescending(h => h.CreatedAt)
-                    .Take(10)
+                    .Take(5)
                     .ToList();
             }
             catch
