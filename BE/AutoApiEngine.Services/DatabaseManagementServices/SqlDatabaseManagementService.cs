@@ -1,4 +1,4 @@
-﻿using AutoApiEngine.ServiceAbstraction;
+using AutoApiEngine.ServiceAbstraction;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using System.Text.RegularExpressions;
@@ -82,8 +82,10 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 result.DatabaseSizeBytes = (long)await cmd.ExecuteScalarAsync(cancellationToken);
             }
 
+
             return result;
         }
+
 
         public async Task BackupAsync(
             DatabaseEngine engine,

@@ -1,10 +1,10 @@
-﻿<div class="main-header">
+<div class="main-header">
   <div>
     <h1>Dashboard</h1>
-    @if (loading) {
+    @if (loading()) {
       <div class="subtitle">Loading workspace...</div>
-    } @else if (error) {
-      <div class="subtitle">{{ error }}</div>
+    } @else if (error()) {
+      <div class="subtitle">{{ error() }}</div>
     } @else {
       <div class="subtitle">Workspace: {{ workspaceName }} · Last sync: {{ lastSyncLabel }}</div>
     }
@@ -29,7 +29,7 @@
     </div>
     <div>
       <div class="stat-label">Tables</div>
-      <div class="stat-value">{{ stats?.tablesCount ?? 0 }}</div>
+      <div class="stat-value">{{ stats()?.tablesCount ?? 0 }}</div>
       <div class="stat-change muted">Fresh workspace</div>
     </div>
   </div>
@@ -39,7 +39,7 @@
     </div>
     <div>
       <div class="stat-label">Stored Procedures</div>
-      <div class="stat-value">{{ stats?.storedProceduresCount ?? 0 }}</div>
+      <div class="stat-value">{{ stats()?.storedProceduresCount ?? 0 }}</div>
       <div class="stat-change muted">Fresh workspace</div>
     </div>
   </div>
@@ -49,7 +49,7 @@
     </div>
     <div>
       <div class="stat-label">Functions</div>
-      <div class="stat-value">{{ stats?.functionsCount ?? 0 }}</div>
+      <div class="stat-value">{{ stats()?.functionsCount ?? 0 }}</div>
       <div class="stat-change muted">Fresh workspace</div>
     </div>
   </div>
@@ -171,15 +171,15 @@
       <div class="panel-body">
         <div class="health-row">
           <div class="health-chip ok">
-            <div class="h-num">{{ stats?.tablesCount ?? 0 }}</div>
+            <div class="h-num">{{ stats()?.tablesCount ?? 0 }}</div>
             <div class="h-label">Tables</div>
           </div>
           <div class="health-chip warn">
-            <div class="h-num">{{ stats?.functionsCount ?? 0 }}</div>
+            <div class="h-num">{{ stats()?.functionsCount ?? 0 }}</div>
             <div class="h-label">Functions</div>
           </div>
           <div class="health-chip total">
-            <div class="h-num">{{ stats?.storedProceduresCount ?? 0 }}</div>
+            <div class="h-num">{{ stats()?.storedProceduresCount ?? 0 }}</div>
             <div class="h-label">Stored Procedures</div>
           </div>
         </div>

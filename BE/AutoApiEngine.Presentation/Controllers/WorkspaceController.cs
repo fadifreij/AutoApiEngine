@@ -153,6 +153,7 @@ namespace AutoApiEngine.Presentation.Controllers
                     StoredProceduresCount = dbStats is not null ? dbStats.StoredProceduresCount : workspace.StoredProceduresCount,
                     DatabaseSizeBytes = dbStats is not null ? dbStats.DatabaseSizeBytes : (workspace.DatabaseSizeBytes ?? 0),
                     LastSyncAt = workspace.LastSyncAt,
+                    BackupHistory = dbStats?.BackupHistory ?? new(),
                     IsActive = workspace.IsActive
                 };
             });

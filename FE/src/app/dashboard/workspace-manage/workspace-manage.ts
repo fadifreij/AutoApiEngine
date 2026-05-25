@@ -5,6 +5,12 @@ import { AuthService } from '../../shared/auth/auth.service';
 import { DatabaseProgressService, ProgressEvent } from '../../shared/database-progress.service';
 import { WorkspaceStateService } from '../../shared/workspace-state.service';
 
+interface BackupItem {
+  fileName: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 type OperationType = 'upload' | 'download' | 'backup' | null;
 
 @Component({
@@ -23,6 +29,7 @@ export class WorkspaceManage implements OnDestroy {
   createdLabel = signal('');
   sizeLabel = signal('');
   lastBackupLabel = signal('');
+  backups = signal<BackupItem[]>([]);
 
   private workspaceEffect = effect(() => {
     const id = this.workspaceState.selectedWorkspaceId();
@@ -104,6 +111,26 @@ export class WorkspaceManage implements OnDestroy {
 
   startBackup(): void {
     this.openPopupAndRun('backup');
+  }
+
+  downloadBackup(fileName: string): void {
+    this.http.get(
+      `${environment.apiUrl}/database/download/${encodeURIComponent(fileName)}`,
+      { responseType: 'blob', withCredentials: true }
+    ).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 1000);
+      }
+    });
   }
 
   closePopup(): void {
@@ -278,8 +305,13 @@ export class WorkspaceManage implements OnDestroy {
         // Fetch stats for size
         this.http.get<any>(`${environment.apiUrl}/workspaces/${id}/stats`).subscribe({
           next: (stats) => {
-            if (stats && typeof stats.databaseSizeBytes === 'number') {
-              this.sizeLabel.set(this.formatBytes(stats.databaseSizeBytes));
+            if (stats) {
+              if (typeof stats.databaseSizeBytes === 'number') {
+                this.sizeLabel.set(this.formatBytes(stats.databaseSizeBytes));
+              }
+              if (stats.backupHistory && Array.isArray(stats.backupHistory)) {
+                this.backups.set(stats.backupHistory);
+              }
             } else {
               this.sizeLabel.set('');
             }
@@ -333,14 +365,17 @@ export class WorkspaceManage implements OnDestroy {
     });
   }
 
-  private formatBytes(bytes: number): string {
+  formatBytes(bytes: number): string {
     if (!bytes) return '0 B';
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return `${(bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0)} ${sizes[i]}`;
   }
 
-  private timeAgo(d: Date): string {
+  timeAgo(d: Date | string): string {
+    if (typeof d === 'string') {
+      d = new Date(d);
+    }
     const sec = Math.floor((Date.now() - d.getTime()) / 1000);
     if (sec < 60) return `${sec}s ago`;
     const min = Math.floor(sec / 60);

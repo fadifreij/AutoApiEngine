@@ -85,17 +85,6 @@
                     </div>
 
                     <div class="login-pf-actions">
-                        <#if realm.rememberMe && !usernameEditDisabled??>
-                            <label>
-                                <input tabindex="3"
-                                       id="rememberMe"
-                                       type="checkbox"
-                                       name="rememberMe"
-                                       <#if login.rememberMe??>checked</#if>>
-                                Remember me
-                            </label>
-                        </#if>
-
                         <#if realm.resetPasswordAllowed>
                             <a tabindex="5" href="${url.loginResetCredentialsUrl}">
                                 Forgot password?

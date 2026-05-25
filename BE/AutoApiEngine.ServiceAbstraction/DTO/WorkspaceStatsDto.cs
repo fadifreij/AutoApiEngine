@@ -1,4 +1,4 @@
-﻿using AutoApiEngine.Domain.Enums;
+using AutoApiEngine.Domain.Enums;
 
 namespace AutoApiEngine.ServiceAbstraction.DTO
 {
@@ -14,5 +14,6 @@ namespace AutoApiEngine.ServiceAbstraction.DTO
         public long? DatabaseSizeBytes { get; set; }
         public DateTime? LastSyncAt { get; set; }
         public bool IsActive { get; set; }
+        public List<BackupHistoryItem> BackupHistory { get; set; } = new();
     }
 }

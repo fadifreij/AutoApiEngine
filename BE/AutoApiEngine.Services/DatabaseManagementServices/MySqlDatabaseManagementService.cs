@@ -1,4 +1,4 @@
-﻿using AutoApiEngine.ServiceAbstraction;
+using AutoApiEngine.ServiceAbstraction;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using System.Text;
@@ -78,7 +78,40 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 result.DatabaseSizeBytes = val is DBNull or null ? 0L : Convert.ToInt64(val);
             }
 
+            PopulateBackupHistory(result, databaseName);
+
             return result;
+        }
+
+        private void PopulateBackupHistory(DatabaseStatsResult result, string databaseName)
+        {
+            try
+            {
+                var backupDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "backups");
+                if (!Directory.Exists(backupDir))
+                    return;
+
+                var matchingFiles = Directory.GetFiles(backupDir, $"{databaseName}_*", SearchOption.AllDirectories);
+
+                foreach (var filePath in matchingFiles)
+                {
+                    var fi = new FileInfo(filePath);
+                    result.BackupHistory.Add(new BackupHistoryItem
+                    {
+                        FileName = fi.Name,
+                        SizeBytes = fi.Length,
+                        CreatedAt = fi.LastWriteTimeUtc
+                    });
+                }
+
+                result.BackupHistory = result.BackupHistory
+                    .OrderByDescending(h => h.CreatedAt)
+                    .Take(10)
+                    .ToList();
+            }
+            catch
+            {
+            }
         }
 
         public async Task BackupAsync(
@@ -91,11 +124,19 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             var (user, password, server, port) = ParseConnectionString(_mySqlConnection);
             string containerName = _configuration["MySql:ContainerName"] ?? "mysql";
 
-            progress?.Report(new DatabaseProgress { Percentage = 5, Message = "Initializing backup" });
+            progress?.Report(new DatabaseProgress { Percentage = 0, Message = "Initializing backup" });
 
-            // Determine strategy: host mysqldump or docker exec
+            int totalTables = 0;
+            try
+            {
+                totalTables = await GetTableCountAsync(server, port, user, password, databaseName, cancellationToken);
+            }
+            catch
+            {
+                _logger.LogWarning("Could not query table count for progress reporting");
+            }
+
             bool useDocker = ShouldUseDocker();
-
             var tempPath = backupPath + ".part";
 
             try
@@ -104,8 +145,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 {
                     try
                     {
-                        progress?.Report(new DatabaseProgress { Percentage = 10, Message = "Running mysqldump" });
-                        await RunHostMysqldump(server, port, user, password, databaseName, tempPath, cancellationToken);
+                        await RunHostMysqldump(server, port, user, password, databaseName, tempPath, totalTables, progress, cancellationToken);
                     }
                     catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex.InnerException is System.ComponentModel.Win32Exception)
                     {
@@ -116,40 +156,44 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
                 if (useDocker)
                 {
-                    progress?.Report(new DatabaseProgress { Percentage = 10, Message = "Running mysqldump via Docker" });
-                    await RunDockerMysqldump(containerName, user, password, databaseName, tempPath, cancellationToken);
+                    await RunDockerMysqldump(containerName, user, password, databaseName, tempPath, totalTables, progress, cancellationToken);
                 }
 
-                progress?.Report(new DatabaseProgress { Percentage = 80, Message = "Writing backup file" });
+                progress?.Report(new DatabaseProgress { Percentage = 98, Message = "Finalizing backup file" });
 
-                // Move temp file to final path
                 File.Move(tempPath, backupPath, overwrite: true);
 
-                // Validate
                 var fileInfo = new FileInfo(backupPath);
                 if (!fileInfo.Exists || fileInfo.Length == 0)
-                {
                     throw new InvalidOperationException("mysqldump produced an empty file.");
-                }
 
                 _logger.LogInformation("Backup completed: {Path} ({Size} bytes)", backupPath, fileInfo.Length);
                 progress?.Report(new DatabaseProgress { Percentage = 100, Message = "Backup completed" });
             }
             catch
             {
-                // Clean up partial files on failure
                 TryDelete(tempPath);
                 TryDelete(backupPath);
                 throw;
             }
         }
 
-        private async Task RunHostMysqldump(string server, string port, string user, string password, string databaseName, string outputPath, CancellationToken ct)
+        private async Task RunHostMysqldump(
+            string server, string port, string user, string password,
+            string databaseName, string outputPath, int totalTables,
+            IProgress<DatabaseProgress>? progress,
+            CancellationToken ct)
         {
+            progress?.Report(new DatabaseProgress { Percentage = 5, Message = "Connecting to database" });
+
+            int tablesProcessed = 0;
+
+            progress?.Report(new DatabaseProgress { Percentage = 10, Message = $"Starting mysqldump ({totalTables} tables)" });
+
             var psi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "mysqldump",
-                Arguments = $"-h {server} -P {port} -u {user} --single-transaction --routines --triggers {databaseName}",
+                Arguments = $"-h {server} -P {port} -u {user} --single-transaction --routines --triggers --verbose {databaseName}",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -160,41 +204,69 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             using var process = System.Diagnostics.Process.Start(psi)
                 ?? throw new InvalidOperationException("Failed to start mysqldump process.");
 
-            // Read stderr asynchronously to prevent deadlock
-            var stderrTask = process.StandardError.ReadToEndAsync(ct);
+            var stderrLines = new System.Text.StringBuilder();
+
+            var stderrTask = Task.Run(async () =>
+            {
+                while (await process.StandardError.ReadLineAsync(ct) is { } line)
+                {
+                    stderrLines.AppendLine(line);
+
+                    const string marker = "-- Dumping data for table ";
+                    if (line.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var table = line[marker.Length..].Trim('`', '\'', '"', ' ');
+                        tablesProcessed++;
+
+                        int pct = totalTables > 0
+                            ? 10 + (int)Math.Round((tablesProcessed / (double)totalTables) * 85)
+                            : 50;
+
+                        progress?.Report(new DatabaseProgress
+                        {
+                            Percentage = pct,
+                            Message = $"Dumping table {tablesProcessed}/{totalTables}: {table}"
+                        });
+                    }
+                }
+            }, ct);
 
             await using (var fs = File.Create(outputPath))
             {
                 await process.StandardOutput.BaseStream.CopyToAsync(fs, ct);
             }
 
-            var stderr = await stderrTask;
+            await stderrTask;
             await process.WaitForExitAsync(ct);
 
             if (process.ExitCode != 0)
-            {
-                throw new InvalidOperationException($"mysqldump exited with code {process.ExitCode}: {stderr}");
-            }
+                throw new InvalidOperationException($"mysqldump exited with code {process.ExitCode}: {stderrLines}");
         }
 
-        private async Task RunDockerMysqldump(string containerName, string user, string password, string databaseName, string outputPath, CancellationToken ct)
+        private async Task RunDockerMysqldump(
+            string containerName, string user, string password,
+            string databaseName, string outputPath, int totalTables,
+            IProgress<DatabaseProgress>? progress,
+            CancellationToken ct)
         {
-            // Write credentials file (no BOM) and copy into container
+            progress?.Report(new DatabaseProgress { Percentage = 5, Message = "Preparing Docker credentials" });
+
             var credsContent = $"[client]\nuser={user}\npassword={password}\nhost=127.0.0.1\nport=3306\n";
             var hostTemp = Path.GetTempFileName();
 
             try
             {
                 await File.WriteAllTextAsync(hostTemp, credsContent, new UTF8Encoding(false), ct);
-
                 await RunProcessAsync("docker", $"cp \"{hostTemp}\" {containerName}:/tmp/backup_creds", ct);
+
+                progress?.Report(new DatabaseProgress { Percentage = 10, Message = "Running mysqldump via Docker" });
 
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "docker",
-                    Arguments = $"exec {containerName} mysqldump --defaults-extra-file=/tmp/backup_creds --single-transaction --routines --triggers {databaseName}",
+                    Arguments = $"exec {containerName} sh -c \"mysqldump --defaults-extra-file=/tmp/backup_creds --single-transaction --routines --triggers --verbose {databaseName} 2>&1\"",
                     RedirectStandardOutput = true,
-                    RedirectStandardError = true,
+                    RedirectStandardError = false,
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
@@ -202,22 +274,49 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 using var process = System.Diagnostics.Process.Start(psi)
                     ?? throw new InvalidOperationException("Failed to start docker exec process.");
 
-                var stderrTask = process.StandardError.ReadToEndAsync(ct);
+                int tablesProcessed = 0;
+                var processErrors = new System.Text.StringBuilder();
 
                 await using (var fs = File.Create(outputPath))
+                await using (var writer = new StreamWriter(fs, new UTF8Encoding(false)) { AutoFlush = false })
                 {
-                    await process.StandardOutput.BaseStream.CopyToAsync(fs, ct);
+                    string? line;
+                    while ((line = await process.StandardOutput.ReadLineAsync(ct)) != null)
+                    {
+                        if (line.StartsWith("mysqldump: ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            processErrors.AppendLine(line);
+                            continue;
+                        }
+
+                        await writer.WriteLineAsync(line.AsMemory(), ct);
+
+                        const string marker = "-- Dumping data for table ";
+                        if (line.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var table = line[marker.Length..].Trim('`', '\'', '"', ' ');
+                            tablesProcessed++;
+
+                            int pct = totalTables > 0
+                                ? 10 + (int)Math.Round((tablesProcessed / (double)totalTables) * 85)
+                                : Math.Min(10 + (tablesProcessed * 5), 90);
+
+                            progress?.Report(new DatabaseProgress
+                            {
+                                Percentage = pct,
+                                Message = $"Dumping table {tablesProcessed}/{totalTables}: {table}"
+                            });
+                        }
+                    }
+
+                    await writer.FlushAsync(ct);
                 }
 
-                var stderr = await stderrTask;
                 await process.WaitForExitAsync(ct);
 
                 if (process.ExitCode != 0)
-                {
-                    throw new InvalidOperationException($"docker mysqldump exited with code {process.ExitCode}: {stderr}");
-                }
+                    throw new InvalidOperationException($"docker mysqldump exited with code {process.ExitCode}: {processErrors}");
 
-                // Clean up credentials from container
                 _ = Task.Run(() => RunProcessAsync("docker", $"exec {containerName} rm -f /tmp/backup_creds", CancellationToken.None));
             }
             finally
@@ -226,6 +325,25 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             }
         }
 
+        private async Task<int> GetTableCountAsync(
+            string server, string port, string user, string password,
+            string databaseName, CancellationToken ct)
+        {
+            var connStr = $"Server={server};Port={port};Database={databaseName};Uid={user};Pwd={password};";
+            await using var conn = new MySqlConnection(connStr);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+        SELECT COUNT(*) 
+        FROM information_schema.TABLES 
+        WHERE TABLE_SCHEMA = @db 
+          AND TABLE_TYPE = 'BASE TABLE'";
+            cmd.Parameters.AddWithValue("@db", databaseName);
+
+            var result = await cmd.ExecuteScalarAsync(ct);
+            return Convert.ToInt32(result);
+        }
         public async Task RestoreAsync(
             DatabaseEngine engine,
             string backupPath,
@@ -306,7 +424,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     if (totalBytes > 0)
                     {
                         int percent = (int)(10 + (80.0 * bytesRead / totalBytes));
-                        if (percent > lastReportedPercent + 4) // report every ~5%
+                        if (percent > lastReportedPercent + 4)
                         {
                             lastReportedPercent = percent;
                             progress?.Report(new DatabaseProgress { Percentage = percent, Message = $"Restoring... {percent}%" });

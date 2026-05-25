@@ -75,21 +75,20 @@
     </div>
     <div class="recent-backups">
       <h4>Recent Backups</h4>
+      @for (backup of backups(); track backup.fileName) {
       <div class="backup-item">
-        <span class="name">ecommerce-db_2026-04-23.sql.gz</span>
-        <span class="meta">245 MB · 1h ago</span>
-        <span class="actions"><a>Download</a></span>
+        <span class="name">{{ backup.fileName }}</span>
+        <span class="meta">{{ formatBytes(backup.sizeBytes) }} · {{ timeAgo(backup.createdAt) }}</span>
+        <span class="actions"><a (click)="downloadBackup(backup.fileName)">Download</a></span>
       </div>
+      }
+      @if (!backups() || backups().length === 0) {
       <div class="backup-item">
-        <span class="name">ecommerce-db_2026-04-22.sql.gz</span>
-        <span class="meta">240 MB · Yesterday</span>
-        <span class="actions"><a>Download</a></span>
+        <span class="name">No backups yet</span>
+        <span class="meta">—</span>
+        <span class="actions"></span>
       </div>
-      <div class="backup-item">
-        <span class="name">ecommerce-db_2026-04-20.sql.gz</span>
-        <span class="meta">235 MB · 3 days ago</span>
-        <span class="actions"><a>Download</a></span>
-      </div>
+      }
     </div>
   </div>
 

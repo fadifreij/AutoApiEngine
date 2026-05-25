@@ -1,4 +1,4 @@
-﻿import { Component, inject, effect } from '@angular/core';
+import { Component, inject, effect, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
@@ -28,22 +28,22 @@ export class Dashboard {
   private http = inject(HttpClient);
   private workspaceState = inject(WorkspaceStateService);
 
-  stats: WorkspaceStats | null = null;
-  loading = true;
-  error = '';
+  stats = signal<WorkspaceStats | null>(null);
+  loading = signal(true);
+  error = signal('');
 
   get workspaceName(): string {
-    return this.stats?.name ?? (this.workspaceState.selectedWorkspaceName() || '...');
+    return this.stats()?.name ?? (this.workspaceState.selectedWorkspaceName() || '...');
   }
 
   get lastSyncLabel(): string {
-    if (!this.stats?.lastSyncAt) return 'Never';
-    return this.timeAgo(this.stats.lastSyncAt);
+    if (!this.stats()?.lastSyncAt) return 'Never';
+    return this.timeAgo(this.stats()!.lastSyncAt!);
   }
 
   get dbSizeLabel(): string {
-    if (!this.stats?.databaseSizeBytes || this.stats.databaseSizeBytes === 0) return '0 B';
-    const bytes = this.stats.databaseSizeBytes;
+    const bytes = this.stats()?.databaseSizeBytes ?? 0;
+    if (bytes === 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     let i = 0;
     let size = bytes;
@@ -59,11 +59,11 @@ export class Dashboard {
   }
 
   private fetchStats(id: string): void {
-    this.loading = true;
-    this.error = '';
+    this.loading.set(true);
+    this.error.set('');
     this.http.get<WorkspaceStats>(`${environment.apiUrl}/workspaces/${id}/stats`).subscribe({
-      next: (s) => { this.stats = s; this.loading = false; },
-      error: () => { this.loading = false; this.error = 'Failed to load workspace stats.'; }
+      next: (s) => { this.stats.set(s); this.loading.set(false); },
+      error: () => { this.loading.set(false); this.error.set('Failed to load workspace stats.'); }
     });
   }
 
