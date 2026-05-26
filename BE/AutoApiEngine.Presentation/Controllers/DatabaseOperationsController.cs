@@ -10,8 +10,6 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.Security.Claims;
-using System.Collections.Generic;
-using System.Text;
 
 namespace AutoApiEngine.Presentation.Controllers
 {
@@ -26,19 +24,22 @@ namespace AutoApiEngine.Presentation.Controllers
         private readonly IServiceProvider _serviceProvider;
         private readonly IHubContext<ProgressHub> _hub;
         private readonly IConfiguration _configuration;
+        private readonly IZipService _zipService;
 
         public DatabaseOperationsController(
         IDatabaseManagementService databaseManagementService,
         IWorkspaceRepository workspaceRepository,
         IServiceProvider serviceProvider,
         IConfiguration configuration,
-        IHubContext<ProgressHub> hub)
+        IHubContext<ProgressHub> hub,
+        IZipService zipService)
         {
             _workspaceRepository = workspaceRepository;
             _databaseManagementService = databaseManagementService;
             _serviceProvider = serviceProvider;
             _hub = hub;
             _configuration = configuration;
+            _zipService = zipService;
         }
 
         private string BuildConnectionString(DatabaseEngine engine, string database, string? username, string? password)
@@ -105,7 +106,7 @@ namespace AutoApiEngine.Presentation.Controllers
                     }, cancellationToken);
                 }
 
-                return Ok(new { message = "Backup completed.", fileName });
+                return Ok(new { message = "Backup completed.", fileName, workspaceId = request.WorkspaceId });
             }
             catch (Exception ex)
             {
@@ -123,7 +124,7 @@ namespace AutoApiEngine.Presentation.Controllers
 
         [HttpGet("download/{fileName}")]
         [AllowAnonymous]
-        public IActionResult Download(string fileName)
+        public async Task<IActionResult> Download(string fileName, [FromQuery] string? workspaceId = null)
         {
             // Sanitize to prevent path traversal
             var safeName = Path.GetFileName(fileName);
@@ -136,13 +137,42 @@ namespace AutoApiEngine.Presentation.Controllers
                 if (matches == null || matches.Length == 0)
                     return NotFound(new { message = "Backup file not found." });
 
-                var filePath = matches[0];
-                var fileInfo = new FileInfo(filePath);
+                var bakFilePath = matches[0];
+                var fileInfo = new FileInfo(bakFilePath);
                 if (fileInfo.Length == 0)
                     return NotFound(new { message = "Backup file is empty or still in progress." });
 
-                var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-                return File(stream, "application/octet-stream", safeName);
+                // Zip with password using workspace's EncryptionKey from the database
+                if (!string.IsNullOrWhiteSpace(workspaceId))
+                {
+                    var workspace = await _workspaceRepository.GetByIdAsync(workspaceId, CancellationToken.None);
+                    if (workspace != null && !string.IsNullOrWhiteSpace(workspace.EncryptionKey))
+                    {
+                        // Create password-protected zip using workspace's EncryptionKey
+                        var downloadZipPath = Path.Combine(
+                            Path.GetDirectoryName(bakFilePath) ?? ".",
+                            $"{Path.GetFileNameWithoutExtension(safeName)}_download_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+
+                        await _zipService.ZipWithPasswordAsync(bakFilePath, workspace.EncryptionKey, downloadZipPath);
+
+                        var zipName = Path.GetFileNameWithoutExtension(safeName) + ".zip";
+                        // FileOptions.DeleteOnClose ensures the download zip is deleted after transfer
+                        // The original .bak file is preserved for history
+                        var zipStream = new FileStream(downloadZipPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.DeleteOnClose);
+                        return File(zipStream, "application/zip", zipName);
+                    }
+                }
+
+                // No workspace provided - create unprotected zip for download
+                var unprotectedZipPath = Path.Combine(
+                    Path.GetDirectoryName(bakFilePath) ?? ".",
+                    $"{Path.GetFileNameWithoutExtension(safeName)}_download_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+
+                await _zipService.ZipAsync(bakFilePath, unprotectedZipPath);
+
+                var unprotectedStream = new FileStream(unprotectedZipPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.DeleteOnClose);
+                var unprotectedZipName = Path.GetFileNameWithoutExtension(safeName) + ".zip";
+                return File(unprotectedStream, "application/zip", unprotectedZipName);
             }
             catch (Exception ex)
             {
@@ -207,6 +237,11 @@ namespace AutoApiEngine.Presentation.Controllers
             if (file == null || file.Length == 0)
                 return BadRequest("Backup file is required.");
 
+            // Validate file extension - only .bak or .zip allowed
+            var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (fileExtension != ".bak" && fileExtension != ".zip")
+                return BadRequest("Only .bak or .zip files are allowed for restore.");
+
             var userId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var uploadProgress = CreateProgressReporter("upload", userId);
             var restoreProgress = CreateProgressReporter("restore", userId);
@@ -238,7 +273,38 @@ namespace AutoApiEngine.Presentation.Controllers
                 }
             }
 
+            // Get workspace to retrieve encryption key for password-protected zips
             var workspace = await _workspaceRepository.GetByIdAsync(request.WorkspaceId, cancellationToken);
+            if (workspace == null)
+                return NotFound("Workspace not found.");
+
+            // If uploaded file is a zip, extract it (uploaded zips are not password-protected)
+            string restorePath = filePath;
+            if (fileExtension == ".zip")
+            {
+                try
+                {
+                    var extractDir = Path.Combine(tempPath, Path.GetFileNameWithoutExtension(file.FileName));
+                    
+                    // Uploaded zips are not password-protected; use simple extraction
+                    restorePath = await _zipService.UnzipAsync(filePath, extractDir, cancellationToken);
+
+                    // Validate that the extracted file is a .bak file
+                    if (!Path.GetExtension(restorePath).Equals(".bak", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Look for .bak file in extracted directory
+                        var bakFiles = Directory.GetFiles(extractDir, "*.bak", SearchOption.AllDirectories);
+                        if (bakFiles.Length == 0)
+                            return BadRequest("No valid .bak backup file found inside the zip archive.");
+                        
+                        restorePath = bakFiles[0];
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest($"Failed to extract zip file: {ex.Message}");
+                }
+            }
 
             var engine = workspace.DatabaseEngine;
 
@@ -267,7 +333,7 @@ namespace AutoApiEngine.Presentation.Controllers
             {
                 await _databaseManagementService.RestoreAsync(
                     engine,
-                    filePath,
+                    restorePath,
                     databaseOptions,
                     restoreProgress,
                     cancellationToken);
@@ -333,3 +399,4 @@ namespace AutoApiEngine.Presentation.Controllers
         }
     }
 }
+

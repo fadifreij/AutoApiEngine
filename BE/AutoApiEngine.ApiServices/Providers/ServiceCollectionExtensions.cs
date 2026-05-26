@@ -1,7 +1,8 @@
-﻿using AutoApiEngine.ServiceAbstraction;
+using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.ServiceAbstraction.DTO;
 using AutoApiEngine.Services.AuthServices;
 using AutoApiEngine.Services.DatabaseManagementServices;
+using AutoApiEngine.Services.Services;
 using AutoApiEngine.Services.Repositories;
 
 namespace AutoApiEngine.ApiServices.Providers
@@ -25,6 +26,7 @@ namespace AutoApiEngine.ApiServices.Providers
             services.AddScoped<SqlServerConnectionStringBuilder>();
             services.AddScoped<MySqlConnectionStringBuilder>();
             services.AddScoped<IConnectionStringBuilder, SqlServerConnectionStringBuilder>();
+            services.AddScoped<IZipService, ZipService>();
 
             return services;
         }

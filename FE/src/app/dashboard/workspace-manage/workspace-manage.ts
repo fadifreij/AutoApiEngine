@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+﻿import { HttpClient, HttpEventType, HttpParams } from '@angular/common/http';
 import { Component, computed, effect, inject, OnDestroy, signal } from '@angular/core';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../shared/auth/auth.service';
@@ -114,15 +114,40 @@ export class WorkspaceManage implements OnDestroy {
   }
 
   downloadBackup(fileName: string): void {
+    const workspaceId = this.workspaceState.selectedWorkspaceId();
+    const params = new HttpParams().set('workspaceId', workspaceId ?? '');
     this.http.get(
       `${environment.apiUrl}/database/download/${encodeURIComponent(fileName)}`,
-      { responseType: 'blob', withCredentials: true }
+      { params, responseType: 'blob', withCredentials: true, observe: 'response' as const }
     ).subscribe({
-      next: (blob) => {
+      next: (res) => {
+        const blob = res.body as Blob;
+        const headers = res.headers;
+        // Prefer filename from Content-Disposition if provided
+        let suggestedName = fileName;
+        const cd = headers.get('content-disposition');
+        if (cd) {
+          const m = /filename\*?=(?:UTF-8'')?"?([^";]+)/i.exec(cd);
+          if (m && m[1]) suggestedName = decodeURIComponent(m[1]);
+        }
+        // If server didn't include a helpful name but returned a zip content-type, force .zip
+        const ct = headers.get('content-type') || '';
+        if (!suggestedName && ct.includes('zip')) suggestedName = 'backup.zip';
+        // If filename exists but has .bak and content is zip, prefer .zip extension
+        if (suggestedName && suggestedName.toLowerCase().endsWith('.bak') && ct.includes('zip')) {
+          suggestedName = suggestedName.replace(/\.bak$/i, '.zip');
+        }
+
+        console.debug('downloadBackup response headers', {
+          contentDisposition: headers.get('content-disposition'),
+          contentType: headers.get('content-type'),
+          blobType: blob?.type
+        });
+
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = fileName;
+        a.download = suggestedName || fileName;
         document.body.appendChild(a);
         a.click();
         setTimeout(() => {
@@ -228,23 +253,65 @@ export class WorkspaceManage implements OnDestroy {
     if (this.downloadStarted) return;
     this.downloadStarted = true;
 
+    const workspaceId = this.workspaceState.selectedWorkspaceId();
+    const params = new HttpParams().set('workspaceId', workspaceId ?? '');
+
     this.http.get(
       `${environment.apiUrl}/database/download/${encodeURIComponent(this.backupFileName)}`,
-      { responseType: 'blob', withCredentials: true }
+      {
+        params,
+        responseType: 'blob',
+        withCredentials: true,
+        observe: 'events',
+        reportProgress: true
+      }
     ).subscribe({
-      next: (blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = this.backupFileName;
-        document.body.appendChild(a);
-        a.click();
-        // Delay revocation so the browser can start the download
-        setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }, 1000);
-        this.step2Progress.set(100);
+      next: (event) => {
+        // Track download progress
+        if (event.type === HttpEventType.DownloadProgress) {
+          if (event.total) {
+            const percentage = Math.round((event.loaded / event.total) * 100);
+            this.step2Progress.set(percentage);
+          }
+        }
+
+        // Handle completed response
+        if (event.type === HttpEventType.Response) {
+          const blob = event.body as Blob;
+          const headers = event.headers;
+          const disposition = headers.get('content-disposition');
+          let downloadName = this.backupFileName;
+
+          if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;\s]+)/i);
+            if (match) downloadName = match[1].replace(/['"]/g, '');
+          }
+
+          // If content-type is zip but filename is .bak, change extension to .zip
+          const contentType = headers.get('content-type') || '';
+          if (downloadName.toLowerCase().endsWith('.bak') && contentType.includes('zip')) {
+            downloadName = downloadName.replace(/\.bak$/i, '.zip');
+          }
+
+          console.debug('downloadFile response headers', {
+            contentDisposition: headers.get('content-disposition'),
+            contentType: headers.get('content-type'),
+            blobType: blob?.type,
+            finalDownloadName: downloadName
+          });
+
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = downloadName;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 1000);
+          this.step2Progress.set(100);
+        }
       },
       error: () => {
         this.step2Progress.set(0);
@@ -257,6 +324,15 @@ export class WorkspaceManage implements OnDestroy {
     const input = event.target as HTMLInputElement;
     if (!input.files?.length) return;
     const file = input.files[0];
+
+    // Validate file extension - only .bak or .zip allowed
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith('.bak') && !fileName.endsWith('.zip')) {
+      alert('Only .bak or .zip files are allowed for restore.');
+      input.value = ''; // Clear the input
+      return;
+    }
+
     const workspaceId = this.workspaceState.selectedWorkspaceId();
     if (!workspaceId) return;
 
@@ -408,3 +484,5 @@ export class WorkspaceManage implements OnDestroy {
     return String(engine);
   }
 }
+
+
