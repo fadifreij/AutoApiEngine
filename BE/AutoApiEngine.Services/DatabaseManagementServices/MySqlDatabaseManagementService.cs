@@ -369,7 +369,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             {
                 try
                 {
-                    progress?.Report(new DatabaseProgress { Percentage = 10, Message = "Restoring database" });
+                    progress?.Report(new DatabaseProgress { Percentage = 5, Message = "Restoring database" });
                     await RunHostMysqlRestore(server, port, user, password, dbName, backupPath, totalBytes, progress, cancellationToken);
                     progress?.Report(new DatabaseProgress { Percentage = 100, Message = "Restore completed" });
                     return;
@@ -383,7 +383,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
             if (useDocker)
             {
-                progress?.Report(new DatabaseProgress { Percentage = 10, Message = "Restoring database via Docker" });
+                progress?.Report(new DatabaseProgress { Percentage = 5, Message = "Restoring database via Docker" });
                 await RunDockerMysqlRestore(containerName, user, password, dbName, backupPath, totalBytes, progress, cancellationToken);
             }
 
@@ -413,7 +413,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             {
                 var buffer = new byte[65536];
                 long bytesRead = 0;
-                int lastReportedPercent = 10;
+                int lastReportedPercent = 0;
                 int read;
 
                 while ((read = await fs.ReadAsync(buffer, ct)) > 0)
@@ -423,7 +423,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
                     if (totalBytes > 0)
                     {
-                        int percent = (int)(10 + (80.0 * bytesRead / totalBytes));
+                        int percent = (int)(100.0 * bytesRead / totalBytes);
                         if (percent > lastReportedPercent + 4)
                         {
                             lastReportedPercent = percent;
@@ -472,7 +472,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 {
                     var buffer = new byte[65536];
                     long bytesRead = 0;
-                    int lastReportedPercent = 10;
+                    int lastReportedPercent = 0;
                     int read;
 
                     while ((read = await fs.ReadAsync(buffer, ct)) > 0)
@@ -482,7 +482,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
                         if (totalBytes > 0)
                         {
-                            int percent = (int)(10 + (80.0 * bytesRead / totalBytes));
+                            int percent = (int)(100.0 * bytesRead / totalBytes);
                             if (percent > lastReportedPercent + 4)
                             {
                                 lastReportedPercent = percent;

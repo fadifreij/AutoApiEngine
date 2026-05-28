@@ -134,7 +134,16 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             IProgress<DatabaseProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            await using var connection = new SqlConnection(databaseOptions.ConnectionString);
+            // Must connect to master database to perform restore operations, not the target database
+            var csb = new SqlConnectionStringBuilder(databaseOptions.ConnectionString)
+            {
+                InitialCatalog = "master"
+            };
+
+            await using var connection = new SqlConnection(csb.ConnectionString);
+            
+            // Enable FireInfoMessageEventOnUserErrors to receive progress messages during long operations
+            connection.FireInfoMessageEventOnUserErrors = true;
 
             connection.InfoMessage += (_, e) =>
             {
@@ -154,9 +163,13 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
             await connection.OpenAsync(cancellationToken);
 
+            // Kill all existing connections to the database before restore
             await ExecuteAsync(connection, $@"
-                ALTER DATABASE [{databaseOptions.DatabaseName}]
-                SET SINGLE_USER WITH ROLLBACK IMMEDIATE", cancellationToken);
+                IF EXISTS (SELECT name FROM sys.databases WHERE name = '{databaseOptions.DatabaseName}')
+                BEGIN
+                    ALTER DATABASE [{databaseOptions.DatabaseName}]
+                    SET SINGLE_USER WITH ROLLBACK IMMEDIATE
+                END", cancellationToken);
 
             var restoreCommand = new SqlCommand($@"
                 RESTORE DATABASE [{databaseOptions.DatabaseName}]
@@ -164,6 +177,9 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 WITH REPLACE, STATS = 5", connection);
 
             restoreCommand.Parameters.AddWithValue("@BackupPath", backupPath);
+            
+            // Set a longer timeout for restore operations (30 minutes)
+            restoreCommand.CommandTimeout = 1800;
 
             await restoreCommand.ExecuteNonQueryAsync(cancellationToken);
 

@@ -7,8 +7,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 
 namespace AutoApiEngine.Presentation.Controllers
@@ -25,6 +27,7 @@ namespace AutoApiEngine.Presentation.Controllers
         private readonly IHubContext<ProgressHub> _hub;
         private readonly IConfiguration _configuration;
         private readonly IZipService _zipService;
+        private readonly ILogger<DatabaseOperationsController> _logger;
 
         public DatabaseOperationsController(
         IDatabaseManagementService databaseManagementService,
@@ -32,7 +35,8 @@ namespace AutoApiEngine.Presentation.Controllers
         IServiceProvider serviceProvider,
         IConfiguration configuration,
         IHubContext<ProgressHub> hub,
-        IZipService zipService)
+        IZipService zipService,
+        ILogger<DatabaseOperationsController> logger)
         {
             _workspaceRepository = workspaceRepository;
             _databaseManagementService = databaseManagementService;
@@ -40,6 +44,7 @@ namespace AutoApiEngine.Presentation.Controllers
             _hub = hub;
             _configuration = configuration;
             _zipService = zipService;
+            _logger = logger;
         }
 
         private string BuildConnectionString(DatabaseEngine engine, string database, string? username, string? password)
@@ -99,10 +104,10 @@ namespace AutoApiEngine.Presentation.Controllers
                 {
                     await _hub.Clients.Group($"user-{userId}").SendAsync("ReceiveProgress", new
                     {
-                        Operation = "backup",
-                        Percentage = 100,
-                        Message = "Backup completed",
-                        FileName = fileName
+                        operation = "backup",
+                        percentage = 100,
+                        message = "Backup completed",
+                        fileName = fileName
                     }, cancellationToken);
                 }
 
@@ -112,10 +117,10 @@ namespace AutoApiEngine.Presentation.Controllers
             {
                 await _hub.Clients.All.SendAsync("ReceiveProgress", new
                 {
-                    Operation = "backup",
-                    Percentage = -1,
-                    Message = $"Backup failed: {ex.Message}",
-                    FileName = (string?)null
+                    operation = "backup",
+                    percentage = -1,
+                    message = $"Backup failed: {ex.Message}",
+                    fileName = (string?)null
                 }, cancellationToken);
 
                 return StatusCode(500, new { message = $"Backup failed: {ex.Message}" });
@@ -277,17 +282,24 @@ namespace AutoApiEngine.Presentation.Controllers
             var workspace = await _workspaceRepository.GetByIdAsync(request.WorkspaceId, cancellationToken);
             if (workspace == null)
                 return NotFound("Workspace not found.");
-
-            // If uploaded file is a zip, extract it (uploaded zips are not password-protected)
             string restorePath = filePath;
             if (fileExtension == ".zip")
             {
                 try
                 {
                     var extractDir = Path.Combine(tempPath, Path.GetFileNameWithoutExtension(file.FileName));
-                    
-                    // Uploaded zips are not password-protected; use simple extraction
-                    restorePath = await _zipService.UnzipAsync(filePath, extractDir, cancellationToken);
+
+                    if (_zipService.IsPasswordProtected(filePath))
+                    {
+                        if (string.IsNullOrWhiteSpace(workspace.EncryptionKey))
+                            return BadRequest("The uploaded zip is password-protected but no encryption key is configured for this workspace.");
+
+                        restorePath = await _zipService.UnzipWithPasswordAsync(filePath, workspace.EncryptionKey, extractDir, cancellationToken);
+                    }
+                    else
+                    {
+                        restorePath = await _zipService.UnzipAsync(filePath, extractDir, cancellationToken);
+                    }
 
                     // Validate that the extracted file is a .bak file
                     if (!Path.GetExtension(restorePath).Equals(".bak", StringComparison.OrdinalIgnoreCase))
@@ -306,8 +318,8 @@ namespace AutoApiEngine.Presentation.Controllers
                 }
             }
 
-            var engine = workspace.DatabaseEngine;
 
+            var engine = workspace.DatabaseEngine;
             // Use workspace-specific credentials, or fall back to default config credentials
             string connectionString;
             if (!string.IsNullOrWhiteSpace(workspace.DbUserName))
@@ -316,11 +328,25 @@ namespace AutoApiEngine.Presentation.Controllers
             }
             else
             {
-                // No dedicated credentials — use the default connection string from config
-                connectionString = _configuration.GetConnectionString("MySqlConnection")
-                    ?? $"Server=localhost;Port=3307;Uid=root;Pwd=root;Database={workspace.DatabaseName}";
-                if (!connectionString.Contains("Database=", StringComparison.OrdinalIgnoreCase))
-                    connectionString += $";Database={workspace.DatabaseName}";
+                // No dedicated credentials — use the default connection string from config based on engine type
+                if (engine == DatabaseEngine.MySql)
+                {
+                    connectionString = _configuration.GetConnectionString("MySqlConnection")
+                        ?? $"Server=localhost;Port=3307;Uid=root;Pwd=root;Database={workspace.DatabaseName}";
+                    if (!connectionString.Contains("Database=", StringComparison.OrdinalIgnoreCase))
+                        connectionString += $";Database={workspace.DatabaseName}";
+                }
+                else
+                {
+                    connectionString = _configuration.GetConnectionString("SqlServerConnection")
+                        ?? $"Server=localhost;Database={workspace.DatabaseName};Trusted_Connection=True;TrustServerCertificate=True";
+                    // For SQL Server, ensure the database name is in the connection string
+                    var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString)
+                    {
+                        InitialCatalog = workspace.DatabaseName ?? ""
+                    };
+                    connectionString = csb.ConnectionString;
+                }
             }
 
             DatabaseOptions databaseOptions = new DatabaseOptions
@@ -331,6 +357,8 @@ namespace AutoApiEngine.Presentation.Controllers
 
             try
             {
+                _logger.LogInformation("Starting restore for workspace {WorkspaceId}, database {DatabaseName}", request.WorkspaceId, workspace.DatabaseName);
+                
                 await _databaseManagementService.RestoreAsync(
                     engine,
                     restorePath,
@@ -338,35 +366,65 @@ namespace AutoApiEngine.Presentation.Controllers
                     restoreProgress,
                     cancellationToken);
 
-                return Ok(new { message = "Restore completed." });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = $"Restore failed: {ex.Message}" });
-            }
-        }
+                _logger.LogInformation("Restore completed for workspace {WorkspaceId}, sending 100% progress to user {UserId}", request.WorkspaceId, userId);
 
-        private IProgress<DatabaseProgress> CreateProgressReporter(string operation, string? userId = null)
-        {
-            // Use a direct callback instead of Progress<T> which relies on SynchronizationContext
-            return new DirectProgress<DatabaseProgress>(async p =>
-            {
+                // Send final 100% progress via SignalR to ensure UI shows completion
                 if (!string.IsNullOrWhiteSpace(userId))
                 {
                     await _hub.Clients.Group($"user-{userId}").SendAsync("ReceiveProgress", new
                     {
-                        Operation = operation,
-                        p.Percentage,
-                        p.Message
+                        operation = "restore",
+                        percentage = 100,
+                        message = "Restore completed"
+                    }, cancellationToken);
+                    
+                    // Small delay to ensure SignalR message is sent before HTTP response
+                    await Task.Delay(100, cancellationToken);
+                }
+
+                _logger.LogInformation("Restore fully completed for workspace {WorkspaceId}", request.WorkspaceId);
+                return Ok(new { message = "Restore completed." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Restore failed for workspace {WorkspaceId}", request.WorkspaceId);
+                
+                if (!string.IsNullOrWhiteSpace(userId))
+                {
+                    await _hub.Clients.Group($"user-{userId}").SendAsync("ReceiveProgress", new
+                    {
+                        operation = "restore",
+                        percentage = -1,
+                        message = $"Restore failed: {ex.Message}"
+                    }, cancellationToken);
+                }
+
+                return StatusCode(500, new { message = $"Restore failed: {ex.Message}" });
+            }
+        }
+
+        private IProgress<DatabaseProgress> CreateProgressReporter(string operationType, string? userId = null)
+        {
+            // Use a direct callback instead of Progress<T> which relies on SynchronizationContext
+            return new DirectProgress<DatabaseProgress>(async p =>
+            {
+                // Use lowercase property names for SignalR to match frontend expectations
+                if (!string.IsNullOrWhiteSpace(userId))
+                {
+                    await _hub.Clients.Group($"user-{userId}").SendAsync("ReceiveProgress", new
+                    {
+                        operation = operationType,
+                        percentage = p.Percentage,
+                        message = p.Message
                     });
                 }
                 else
                 {
                     await _hub.Clients.All.SendAsync("ReceiveProgress", new
                     {
-                        Operation = operation,
-                        p.Percentage,
-                        p.Message
+                        operation = operationType,
+                        percentage = p.Percentage,
+                        message = p.Message
                     });
                 }
             });

@@ -1,4 +1,4 @@
-﻿import { HttpClient, HttpEventType, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpEventType, HttpParams } from '@angular/common/http';
 import { Component, computed, effect, inject, OnDestroy, signal } from '@angular/core';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../shared/auth/auth.service';
@@ -172,6 +172,7 @@ export class WorkspaceManage implements OnDestroy {
 
   private async openPopupAndRun(type: 'download' | 'backup'): Promise<void> {
     this.operationType.set(type);
+    this.progressService.clear();
     this.step1Progress.set(0);
     this.step2Progress.set(0);
     this.showPopup.set(true);
@@ -185,6 +186,7 @@ export class WorkspaceManage implements OnDestroy {
 
   private async openPopup(type: OperationType): Promise<void> {
     this.operationType.set(type);
+    this.progressService.clear();
     this.step1Progress.set(0);
     this.step2Progress.set(0);
     this.showPopup.set(true);
@@ -320,7 +322,7 @@ export class WorkspaceManage implements OnDestroy {
     });
   }
 
-  onFileSelected(event: Event): void {
+  async onFileSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     if (!input.files?.length) return;
     const file = input.files[0];
@@ -336,7 +338,7 @@ export class WorkspaceManage implements OnDestroy {
     const workspaceId = this.workspaceState.selectedWorkspaceId();
     if (!workspaceId) return;
 
-    this.openPopup('upload');
+    await this.openPopup('upload');
 
     const formData = new FormData();
     formData.append('workspaceId', workspaceId);
@@ -351,6 +353,9 @@ export class WorkspaceManage implements OnDestroy {
         this.step1Progress.set(0);
       }
     });
+
+    // Reset file input so the same file can be selected again
+    input.value = '';
   }
 
   ngOnDestroy(): void {

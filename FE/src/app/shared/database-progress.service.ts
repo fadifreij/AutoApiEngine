@@ -48,6 +48,10 @@ export class DatabaseProgressService {
         }
     }
 
+    clear(): void {
+        this.latestProgress.set(null);
+    }
+
     async stop(): Promise<void> {
         if (this.connection) {
             try { await this.connection.stop(); } catch { }
