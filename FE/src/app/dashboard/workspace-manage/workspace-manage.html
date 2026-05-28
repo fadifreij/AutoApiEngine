@@ -76,10 +76,30 @@
     <div class="recent-backups">
       <h4>Recent Backups</h4>
       @for (backup of backups(); track backup.fileName) {
-      <div class="backup-item">
+      <div class="backup-item" [class.downloading]="historyDownloading() === backup.fileName">
         <span class="name">{{ backup.fileName }}</span>
         <span class="meta">{{ formatBytes(backup.sizeBytes) }} · {{ timeAgo(backup.createdAt) }}</span>
-        <span class="actions"><a (click)="downloadBackup(backup.fileName)">Download</a></span>
+        <span class="actions">
+          @if (historyDownloading() === backup.fileName) {
+          <span class="download-status">
+            @if (historyDownloadStatus() === 'preparing') {
+            Preparing...
+            } @else if (historyDownloadStatus() === 'done') {
+            ✓ Done
+            } @else {
+            {{ historyDownloadProgress() }}%
+            }
+          </span>
+          } @else {
+          <a (click)="downloadBackup(backup.fileName)" [class.disabled]="historyDownloading()">Download</a>
+          }
+        </span>
+        @if (historyDownloading() === backup.fileName) {
+        <div class="mini-progress-track">
+          <div class="mini-progress-fill" [class.preparing]="historyDownloadStatus() === 'preparing'"
+            [class.done]="historyDownloadStatus() === 'done'" [style.width.%]="historyDownloadProgress()"></div>
+        </div>
+        }
       </div>
       }
       @if (!backups() || backups().length === 0) {
@@ -181,7 +201,8 @@
     <!-- Step 2 -->
     @if (hasStep2()) {
     <div class="progress-step" [class.active]="step2Progress() > 0 && step2Progress() < 100"
-      [class.done]="step2Progress() >= 100" [class.waiting]="step1Progress() < 100">
+      [class.done]="step2Progress() >= 100" [class.waiting]="step1Progress() < 100"
+      [class.preparing]="step2Status() === 'preparing'">
       <div class="step-header">
         <span class="step-label">
           @if (step2Progress() >= 100) { <span class="check">✓</span> }

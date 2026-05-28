@@ -161,10 +161,14 @@ namespace AutoApiEngine.Presentation.Controllers
                         await _zipService.ZipWithPasswordAsync(bakFilePath, workspace.EncryptionKey, downloadZipPath);
 
                         var zipName = Path.GetFileNameWithoutExtension(safeName) + ".zip";
+                        var zipFileInfo = new FileInfo(downloadZipPath);
                         // FileOptions.DeleteOnClose ensures the download zip is deleted after transfer
                         // The original .bak file is preserved for history
                         var zipStream = new FileStream(downloadZipPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.DeleteOnClose);
-                        return File(zipStream, "application/zip", zipName);
+                        
+                        // Set Content-Length header for download progress tracking
+                        Response.Headers.ContentLength = zipFileInfo.Length;
+                        return File(zipStream, "application/zip", zipName, enableRangeProcessing: true);
                     }
                 }
 
@@ -175,9 +179,13 @@ namespace AutoApiEngine.Presentation.Controllers
 
                 await _zipService.ZipAsync(bakFilePath, unprotectedZipPath);
 
+                var unprotectedZipInfo = new FileInfo(unprotectedZipPath);
                 var unprotectedStream = new FileStream(unprotectedZipPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.DeleteOnClose);
                 var unprotectedZipName = Path.GetFileNameWithoutExtension(safeName) + ".zip";
-                return File(unprotectedStream, "application/zip", unprotectedZipName);
+                
+                // Set Content-Length header for download progress tracking
+                Response.Headers.ContentLength = unprotectedZipInfo.Length;
+                return File(unprotectedStream, "application/zip", unprotectedZipName, enableRangeProcessing: true);
             }
             catch (Exception ex)
             {

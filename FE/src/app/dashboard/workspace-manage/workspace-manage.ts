@@ -1,4 +1,4 @@
-import { HttpClient, HttpEventType, HttpParams } from '@angular/common/http';
+﻿import { HttpClient, HttpEventType, HttpParams } from '@angular/common/http';
 import { Component, computed, effect, inject, OnDestroy, signal } from '@angular/core';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../shared/auth/auth.service';
@@ -42,6 +42,13 @@ export class WorkspaceManage implements OnDestroy {
   operationType = signal<OperationType>(null);
   step1Progress = signal(0);
   step2Progress = signal(0);
+  step2Status = signal<'idle' | 'preparing' | 'active' | 'done'>('idle');
+
+  // History download progress
+  historyDownloading = signal<string | null>(null);
+  historyDownloadProgress = signal(0);
+  historyDownloadStatus = signal<'idle' | 'preparing' | 'downloading' | 'done'>('idle');
+
   private backupFileName = '';
   private downloadStarted = false;
 
@@ -55,7 +62,15 @@ export class WorkspaceManage implements OnDestroy {
   });
 
   step2Label = computed(() => {
-    switch (this.operationType()) {
+    const status = this.step2Status();
+    const op = this.operationType();
+
+    // Show "Preparing download..." while zipping on server
+    if (op === 'download' && status === 'preparing') {
+      return 'Preparing Download (Zipping)';
+    }
+
+    switch (op) {
       case 'upload': return 'Restoring';
       case 'download': return 'Downloading';
       case 'backup': return 'Verifying';
@@ -114,46 +129,82 @@ export class WorkspaceManage implements OnDestroy {
   }
 
   downloadBackup(fileName: string): void {
+    // Don't start if already downloading
+    if (this.historyDownloading()) return;
+
+    this.historyDownloading.set(fileName);
+    this.historyDownloadProgress.set(0);
+    this.historyDownloadStatus.set('preparing');
+
     const workspaceId = this.workspaceState.selectedWorkspaceId();
     const params = new HttpParams().set('workspaceId', workspaceId ?? '');
+
     this.http.get(
       `${environment.apiUrl}/database/download/${encodeURIComponent(fileName)}`,
-      { params, responseType: 'blob', withCredentials: true, observe: 'response' as const }
+      {
+        params,
+        responseType: 'blob',
+        withCredentials: true,
+        observe: 'events',
+        reportProgress: true
+      }
     ).subscribe({
-      next: (res) => {
-        const blob = res.body as Blob;
-        const headers = res.headers;
-        // Prefer filename from Content-Disposition if provided
-        let suggestedName = fileName;
-        const cd = headers.get('content-disposition');
-        if (cd) {
-          const m = /filename\*?=(?:UTF-8'')?"?([^";]+)/i.exec(cd);
-          if (m && m[1]) suggestedName = decodeURIComponent(m[1]);
-        }
-        // If server didn't include a helpful name but returned a zip content-type, force .zip
-        const ct = headers.get('content-type') || '';
-        if (!suggestedName && ct.includes('zip')) suggestedName = 'backup.zip';
-        // If filename exists but has .bak and content is zip, prefer .zip extension
-        if (suggestedName && suggestedName.toLowerCase().endsWith('.bak') && ct.includes('zip')) {
-          suggestedName = suggestedName.replace(/\.bak$/i, '.zip');
+      next: (event) => {
+        if (event.type === HttpEventType.DownloadProgress) {
+          if (this.historyDownloadStatus() === 'preparing') {
+            this.historyDownloadStatus.set('downloading');
+          }
+          if (event.total && event.total > 0) {
+            const percentage = Math.round((event.loaded / event.total) * 100);
+            this.historyDownloadProgress.set(percentage);
+          } else {
+            const estimatedTotal = 10 * 1024 * 1024;
+            const percentage = Math.min(95, Math.round((event.loaded / estimatedTotal) * 100));
+            this.historyDownloadProgress.set(percentage);
+          }
         }
 
-        console.debug('downloadBackup response headers', {
-          contentDisposition: headers.get('content-disposition'),
-          contentType: headers.get('content-type'),
-          blobType: blob?.type
-        });
+        if (event.type === HttpEventType.Response) {
+          this.historyDownloadProgress.set(100);
+          this.historyDownloadStatus.set('done');
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = suggestedName || fileName;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }, 1000);
+          const blob = event.body as Blob;
+          const headers = event.headers;
+          let suggestedName = fileName;
+          const cd = headers.get('content-disposition');
+          if (cd) {
+            const m = /filename\*?=(?:UTF-8'')?"?([^";]+)/i.exec(cd);
+            if (m && m[1]) suggestedName = decodeURIComponent(m[1]);
+          }
+          const ct = headers.get('content-type') || '';
+          if (!suggestedName && ct.includes('zip')) suggestedName = 'backup.zip';
+          if (suggestedName && suggestedName.toLowerCase().endsWith('.bak') && ct.includes('zip')) {
+            suggestedName = suggestedName.replace(/\.bak$/i, '.zip');
+          }
+
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = suggestedName || fileName;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 1000);
+
+          // Reset after a short delay to show completion
+          setTimeout(() => {
+            this.historyDownloading.set(null);
+            this.historyDownloadProgress.set(0);
+            this.historyDownloadStatus.set('idle');
+          }, 1500);
+        }
+      },
+      error: () => {
+        this.historyDownloading.set(null);
+        this.historyDownloadProgress.set(0);
+        this.historyDownloadStatus.set('idle');
       }
     });
   }
@@ -163,6 +214,7 @@ export class WorkspaceManage implements OnDestroy {
     this.operationType.set(null);
     this.step1Progress.set(0);
     this.step2Progress.set(0);
+    this.step2Status.set('idle');
     this.backupFileName = '';
     this.downloadStarted = false;
     const userId = this.authService.getUserId();
@@ -217,9 +269,9 @@ export class WorkspaceManage implements OnDestroy {
         if (usesFallback) {
           this.stopFallback();
           this.step1Progress.set(100);
-          if (this.operationType() === 'download') {
-            this.downloadFile();
-          }
+        }
+        if (this.operationType() === 'download') {
+          this.downloadFile();
         }
       },
       error: () => {
@@ -255,8 +307,14 @@ export class WorkspaceManage implements OnDestroy {
     if (this.downloadStarted) return;
     this.downloadStarted = true;
 
+    // Show preparing state while server zips the file
+    this.step2Status.set('preparing');
+    this.step2Progress.set(5); // Show small progress to indicate activity
+
     const workspaceId = this.workspaceState.selectedWorkspaceId();
     const params = new HttpParams().set('workspaceId', workspaceId ?? '');
+
+    console.debug('Starting file download (server preparing zip):', this.backupFileName);
 
     this.http.get(
       `${environment.apiUrl}/database/download/${encodeURIComponent(this.backupFileName)}`,
@@ -271,14 +329,28 @@ export class WorkspaceManage implements OnDestroy {
       next: (event) => {
         // Track download progress
         if (event.type === HttpEventType.DownloadProgress) {
-          if (event.total) {
+          // First progress event means server finished zipping, now downloading
+          if (this.step2Status() === 'preparing') {
+            this.step2Status.set('active');
+            console.debug('Download started (zip ready)');
+          }
+
+          console.debug('Download progress event:', { loaded: event.loaded, total: event.total });
+          if (event.total && event.total > 0) {
             const percentage = Math.round((event.loaded / event.total) * 100);
+            this.step2Progress.set(percentage);
+          } else {
+            // No Content-Length available, show indeterminate progress
+            // Estimate based on loaded bytes (assume ~10MB typical backup)
+            const estimatedTotal = 10 * 1024 * 1024;
+            const percentage = Math.min(95, Math.round((event.loaded / estimatedTotal) * 100));
             this.step2Progress.set(percentage);
           }
         }
 
         // Handle completed response
         if (event.type === HttpEventType.Response) {
+          console.debug('Download completed');
           const blob = event.body as Blob;
           const headers = event.headers;
           const disposition = headers.get('content-disposition');
@@ -313,10 +385,13 @@ export class WorkspaceManage implements OnDestroy {
             URL.revokeObjectURL(url);
           }, 1000);
           this.step2Progress.set(100);
+          this.step2Status.set('done');
         }
       },
-      error: () => {
+      error: (err) => {
+        console.error('Download failed:', err);
         this.step2Progress.set(0);
+        this.step2Status.set('idle');
         this.downloadStarted = false;
       }
     });
