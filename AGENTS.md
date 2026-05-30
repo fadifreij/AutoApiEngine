@@ -1,5 +1,7 @@
 ﻿# AutoApiEngine Agent Routing
 
+> ⚠️ **HARD RULE: Always create a new branch before making any code changes. Never modify master or develop directly.** ⚠️
+
 This file is a **quick-reference routing table**. Sub-agents contain detailed instructions.
 The main agent instructions are in `.opencode/instructions.md`.
 
@@ -11,7 +13,7 @@ The main agent instructions are in `.opencode/instructions.md`.
 | **Backend** | `@backend` | .NET 10 controllers, EF Core, services, API, auth | `.opencode/agents/backend.md` |
 | **Docker** | `@docker` | Compose, Keycloak, MySQL, SQL Server | `.opencode/agents/docker.md` |
 | **Review** | `@review` | Code review, security audit, PR review (read-only) | `.opencode/agents/review.md` |
-| **Merge/Push** | `@merge-push` | Branch, commit, push, merge, PR | `.opencode/agents/merge-push.md` |
+| **Merge/Push** | `@merge-push` | Branch, commit, merge, PR | `.opencode/agents/merge-push.md` |
 
 ## Quickstart
 
