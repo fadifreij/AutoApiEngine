@@ -9,6 +9,7 @@ namespace AutoApiEngine.ServiceAbstraction.DTO
         public string? DatabaseName { get; set; }
         public DatabaseEngine DatabaseEngine { get; set; }
         public int TablesCount { get; set; }
+        public int ViewsCount { get; set; }
         public int FunctionsCount { get; set; }
         public int StoredProceduresCount { get; set; }
         public long? DatabaseSizeBytes { get; set; }

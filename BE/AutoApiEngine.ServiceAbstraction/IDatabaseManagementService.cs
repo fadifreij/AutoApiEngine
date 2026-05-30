@@ -13,6 +13,7 @@ namespace AutoApiEngine.ServiceAbstraction
     public class DatabaseStatsResult
     {
         public int TablesCount { get; set; }
+        public int ViewsCount { get; set; }
         public int FunctionsCount { get; set; }
         public int StoredProceduresCount { get; set; }
         public long DatabaseSizeBytes { get; set; }

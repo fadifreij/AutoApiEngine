@@ -10,6 +10,7 @@ interface WorkspaceStats {
   databaseName: string;
   databaseEngine: string;
   tablesCount: number;
+  viewsCount: number;
   functionsCount: number;
   storedProceduresCount: number;
   databaseSizeBytes: number;

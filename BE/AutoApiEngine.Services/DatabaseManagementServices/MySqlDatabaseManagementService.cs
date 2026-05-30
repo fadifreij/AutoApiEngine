@@ -54,6 +54,14 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             }
 
             await using (var cmd = new MySqlCommand(
+                "SELECT COUNT(*) FROM information_schema.views WHERE table_schema = @db",
+                connection))
+            {
+                cmd.Parameters.AddWithValue("@db", databaseName);
+                result.ViewsCount = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
+            }
+
+            await using (var cmd = new MySqlCommand(
                 "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = @db AND routine_type = 'FUNCTION'",
                 connection))
             {
