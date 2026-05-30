@@ -109,3 +109,6 @@ docker-compose.override.yml
 .claude
 BE/AutoApiEngine.ApiServices/Migrations/20260425141731_InitialCreate.Designer.cs
 BE/AutoApiEngine.ApiServices/Migrations/20260425141731_InitialCreate.cs
+
+# OpenCode agent scan cache (auto-generated)
+.opencode/agents/.scan/

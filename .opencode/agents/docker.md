@@ -42,3 +42,15 @@ All `docker compose` commands run from `DockerImages/`.
 - **Backend/.NET** → `@backend`
 - **Code review** → `@review`
 - **Git operations** → `@merge-push`
+
+## Auto-Sync (Live Project State)
+
+After any code change, run this to update live state:
+```powershell
+.\tools\sync-agents.ps1       # quick cache update
+.\tools\sync-agents.ps1 -UpdateRefs   # also regenerate FE_REFERENCE.md/BE_REFERENCE.md
+```
+
+The `.opencode/agents/.scan/` cache files contain current routes, controllers, and endpoints.
+Git hook `.githooks/post-commit` runs the cache update automatically on commits touching FE/, BE/, or DockerImages/.
+Install hooks with: `git config core.hooksPath .githooks`
