@@ -1,18 +1,31 @@
-# AutoApiEngine Dev Infra (DockerImages/)
+﻿# AutoApiEngine Dev Infra (DockerImages/)
 
-Compose file lives at `DockerImages/docker-compose.yml` (not repo root).
+Run `docker compose` commands from `DockerImages/`.
 
-## Commands (run from `DockerImages/`)
-- Start: `docker compose up -d`
-- Rebuild images: `docker compose up -d --build`
-- Stop: `docker compose down`
-- Stop + remove volumes: `docker compose down -v`
+## Commands
 
-## Services / Ports (host -> container)
-- `keycloak`: `8081:8080` (built from `KeyClock/`; runs `start-dev --import-realm -Dkeycloak.theme.default=apiengine`; realm+theme are bind-mounted).
-- `mysql`: `3307:3306` (Keycloak DB; built from `mysql/`; init script is `mysql/init.sql`; volume `mysql_data`).
-- `sqlserver`: `1433:1433` (app DB; built from `sqlserver/`; volume `sqlserver_data`).
+| Command | Purpose |
+|---------|---------|
+| `docker compose up -d` | Start all services |
+| `docker compose up -d --build` | Rebuild and start |
+| `docker compose down` | Stop services |
+| `docker compose down -v` | Stop + remove volumes (data loss!) |
+
+## Services
+
+| Service | Port | Notes |
+|---------|------|-------|
+| keycloak | 8081 | Built from `KeyClock/`; `start-dev --import-realm`; theme `apiengine` |
+| mysql | 3307 | Keycloak DB; init script `mysql/init.sql`; volume `mysql_data` |
+| sqlserver | 1433 | App DB; volume `sqlserver_data` |
 
 ## Gotchas
-- `docker-compose.yml` contains plaintext dev credentials (Keycloak admin, DB passwords, SMTP password); treat as sensitive and don’t paste into tickets/logs.
-- The `dotnet-app` service is commented out; `back-end-app/Dockerfile` is outdated (targets .NET 8 and doesn’t match current BE paths/entrypoint).
+
+- Plaintext dev credentials in `docker-compose.yml` — keep out of logs.
+- `dotnet-app` service commented out; its Dockerfile targets .NET 8 (wrong).
+- MySQL provider in BE is stubbed — MySQL container is for Keycloak only.
+- Realm config is bind-mounted (not baked).
+
+## Detailed Reference
+
+See `.opencode/agents/docker.md` for the full sub-agent instructions.

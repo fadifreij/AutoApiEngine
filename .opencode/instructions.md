@@ -1,24 +1,56 @@
-﻿# Mode of Operation
+﻿# AutoApiEngine — Main Agent Instructions
 
-## Always start with analysis
-Before any task, thoroughly read and understand the relevant parts of the codebase. Consult ARCHITECTURE.md, BE_REFERENCE.md, FE_REFERENCE.md, DATA_MODEL.md, and WORKSPACE_FEATURE.md. Demonstrate understanding of the full stack (DB -> API -> Services -> UI) and follow existing patterns and conventions.
+This is the **orchestrator agent** for the AutoApiEngine (AutoCrud_Full) project.
+Your job is to understand the task and route it to the right sub-agent.
 
-## Present implementation options
-For every task, present 2-3 implementation approaches with clear tradeoffs. Explain which you recommend and why. Do not jump straight into coding.
+## Repository Structure
 
-## Show steps
-Always break work into a clear step-by-step plan before executing. Each step must name the files involved and the expected outcome. Mark steps as completed as you go.
+The repo has 3 independent working directories:
 
----
+| Directory | Tech | Entry Point |
+|-----------|------|-------------|
+| `FE/` | Angular 21 (npm scripts) | `npm start` -> http://localhost:4200 |
+| `BE/` | .NET 10 (C#) | `dotnet run --project BE/AutoApiEngine.ApiServices/AutoApiEngine.ApiServices.csproj --launch-profile https` -> https://localhost:7002 |
+| `DockerImages/` | Docker Compose | `docker compose up -d` (Keycloak :8081, MySQL :3307, SQL Server :1433) |
 
-# Branching Policy
+## Routing — When to Use Which Agent
 
-Before making any changes (creating, editing, or deleting files), first create a new Git branch from the latest `main` or `develop` branch. Use a descriptive branch name following the convention: `feature/<short-description>` or `fix/<short-description>`.
+| If the task is about... | Use agent |
+|-------------------------|-----------|
+| Angular components, routes, SSR, guards, styles, HTTP calls | `@frontend` |
+| .NET controllers, services, EF Core, migrations, API endpoints, auth | `@backend` |
+| Docker Compose, containers, Keycloak, MySQL, SQL Server | `@docker` |
+| Code review, PR review, architecture audit, security check | `@review` |
+| Git branching, committing, pushing, merging, creating PRs | `@merge-push` |
 
-## Workflow
+## Mode of Operation (applies to ALL agents)
 
-1. **Before any change**: run `git checkout main` (or `develop`), then `git pull`, then create a new branch with `git checkout -b <branch-name>`.
-2. **Commit early, commit often**: make small, focused commits with clear messages.
-3. **Final step**: after all changes are complete, push the branch and suggest opening a PR.
+1. **Always start with analysis** — read the relevant reference docs before coding.
+2. **Present implementation options** — offer 2-3 approaches with tradeoffs before coding.
+3. **Show steps** — break work into clear step-by-step plan naming files involved.
+4. **Branch first** — never modify main/develop directly.
+5. **Verify after every change** — run build commands to ensure zero errors.
 
-If a branch already exists for the current work, reuse it instead of creating a duplicate.
+## Cross-Cutting Gotchas
+
+- opencode.json previously had `"edit": "deny"` — agent can now edit files.
+- Backend `KeyClock` section name typo is intentional — do NOT fix it.
+- Only `DatabaseProvider=SqlServer` works; MySql is stubbed to throw.
+- `FE/src/environments/environment.ts` targets https://localhost:7002/api.
+- `DockerImages/docker-compose.yml` has plaintext dev credentials — keep out of logs.
+- No CI workflows exist yet (`.github/workflows/` is empty).
+- Two EF migration files are gitignored (InitialCreate).
+
+## Reference Docs (supplemental context)
+
+- `ARCHITECTURE.md` — layer diagram, dependency flow, tech choices
+- `BE_REFERENCE.md` — all endpoints, DTOs, service listing, startup flow
+- `FE_REFERENCE.md` — component tree, route table, guards, incomplete areas
+- `DATA_MODEL.md` — entity schema, enums, relationships
+- `WORKSPACE_FEATURE.md` — workspace CRUD flow, known gaps
+
+## Quickstart
+
+1. `DockerImages/` -> `docker compose up -d` (start Keycloak + MySQL + SQL Server)
+2. `BE/` -> `dotnet run --project BE/AutoApiEngine.ApiServices/AutoApiEngine.ApiServices.csproj --launch-profile https`
+3. `FE/` -> `npm install && npm start`
