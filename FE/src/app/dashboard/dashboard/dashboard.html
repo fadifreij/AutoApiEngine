@@ -29,7 +29,10 @@
     </div>
     <div>
       <div class="stat-label">Tables</div>
-      <div class="stat-value">{{ stats()?.tablesCount ?? 0 }}</div>
+      <div class="stat-value">
+        @if (loading()) { <span class="stat-spinner"></span> }
+        @else { {{ stats()?.tablesCount ?? 0 }} }
+      </div>
       <div class="stat-change muted">Fresh workspace</div>
     </div>
   </div>
@@ -39,7 +42,10 @@
     </div>
     <div>
       <div class="stat-label">Stored Procedures</div>
-      <div class="stat-value">{{ stats()?.storedProceduresCount ?? 0 }}</div>
+      <div class="stat-value">
+        @if (loading()) { <span class="stat-spinner"></span> }
+        @else { {{ stats()?.storedProceduresCount ?? 0 }} }
+      </div>
       <div class="stat-change muted">Fresh workspace</div>
     </div>
   </div>
@@ -49,7 +55,23 @@
     </div>
     <div>
       <div class="stat-label">Functions</div>
-      <div class="stat-value">{{ stats()?.functionsCount ?? 0 }}</div>
+      <div class="stat-value">
+        @if (loading()) { <span class="stat-spinner"></span> }
+        @else { {{ stats()?.functionsCount ?? 0 }} }
+      </div>
+      <div class="stat-change muted">Fresh workspace</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon rose">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    </div>
+    <div>
+      <div class="stat-label">Views</div>
+      <div class="stat-value">
+        @if (loading()) { <span class="stat-spinner"></span> }
+        @else { {{ stats()?.viewsCount ?? 0 }} }
+      </div>
       <div class="stat-change muted">Fresh workspace</div>
     </div>
   </div>
@@ -79,7 +101,10 @@
     </div>
     <div>
       <div class="stat-label">DB Size</div>
-      <div class="stat-value">{{ dbSizeLabel }}</div>
+      <div class="stat-value">
+        @if (loading()) { <span class="stat-spinner"></span> }
+        @else { {{ dbSizeLabel }} }
+      </div>
       <div class="stat-change muted">of 1 GB limit</div>
     </div>
   </div>
@@ -181,6 +206,10 @@
           <div class="health-chip total">
             <div class="h-num">{{ stats()?.storedProceduresCount ?? 0 }}</div>
             <div class="h-label">Stored Procedures</div>
+          </div>
+          <div class="health-chip views">
+            <div class="h-num">{{ stats()?.viewsCount ?? 0 }}</div>
+            <div class="h-label">Views</div>
           </div>
         </div>
       </div>

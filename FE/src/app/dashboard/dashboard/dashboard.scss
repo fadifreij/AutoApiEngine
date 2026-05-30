@@ -17,6 +17,7 @@
   &.orange { background: #ffedd5; color: #ea580c; }
   &.indigo { background: #e0e7ff; color: #4338ca; }
   &.teal { background: #ccfbf1; color: #0d9488; }
+  &.rose { background: #ffe4e6; color: #e11d48; }
 }
 .stat-label { font-size: 13px; color: var(--gray-400); margin-bottom: 4px; }
 .stat-value { font-size: 26px; font-weight: 800; color: var(--gray-900); }
@@ -65,4 +66,21 @@
   &.ok .h-num { color: var(--success); }
   &.warn .h-num { color: var(--warning); }
   &.total .h-num { color: var(--primary); }
+  &.views .h-num { color: #e11d48; }
+}
+
+/* ── Loading spinner ── */
+.stat-spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--gray-200, #e5e7eb);
+  border-top-color: var(--gray-400, #9ca3af);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }

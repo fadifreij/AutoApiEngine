@@ -149,6 +149,7 @@ namespace AutoApiEngine.Presentation.Controllers
                     DatabaseName = workspace.DatabaseName,
                     DatabaseEngine = workspace.DatabaseEngine,
                     TablesCount = dbStats is not null ? dbStats.TablesCount : workspace.TablesCount,
+                    ViewsCount = dbStats is not null ? dbStats.ViewsCount : 0,
                     FunctionsCount = dbStats is not null ? dbStats.FunctionsCount : workspace.FunctionsCount,
                     StoredProceduresCount = dbStats is not null ? dbStats.StoredProceduresCount : workspace.StoredProceduresCount,
                     DatabaseSizeBytes = dbStats is not null ? dbStats.DatabaseSizeBytes : (workspace.DatabaseSizeBytes ?? 0),

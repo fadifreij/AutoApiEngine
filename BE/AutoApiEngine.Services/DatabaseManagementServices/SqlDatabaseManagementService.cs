@@ -65,6 +65,12 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             }
 
             await using (var cmd = new SqlCommand(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.VIEWS", connection))
+            {
+                result.ViewsCount = (int)await cmd.ExecuteScalarAsync(cancellationToken);
+            }
+
+            await using (var cmd = new SqlCommand(
                 "SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'FUNCTION'", connection))
             {
                 result.FunctionsCount = (int)await cmd.ExecuteScalarAsync(cancellationToken);
