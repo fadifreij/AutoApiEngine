@@ -1,0 +1,19 @@
+#!/bin/sh
+# Auto-sync agent docs after commits touching FE, BE, or DockerImages
+# Installed by: git config core.hooksPath .githooks
+
+CHANGED=$(git diff-tree --no-commit-id -r --name-only HEAD | grep -E "^(FE/|BE/|DockerImages/)" | head -5)
+if [ -n "$CHANGED" ]; then
+    echo "[sync-agents] Code changed:"
+    echo "$CHANGED"
+    echo "[sync-agents] Running tools/sync-agents.ps1..."
+    if command -v pwsh > /dev/null 2>&1; then
+        pwsh -NoProfile -File tools/sync-agents.ps1
+        echo "[sync-agents] Cache updated. Run 'tools/sync-agents.ps1 -UpdateRefs' to regenerate reference docs."
+    elif command -v powershell > /dev/null 2>&1; then
+        powershell -NoProfile -File tools/sync-agents.ps1
+        echo "[sync-agents] Cache updated. Run 'tools/sync-agents.ps1 -UpdateRefs' to regenerate reference docs."
+    else
+        echo "[sync-agents] WARNING: PowerShell not found. Install it or run tools/sync-agents.ps1 manually."
+    fi
+fi

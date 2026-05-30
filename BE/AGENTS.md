@@ -1,33 +1,49 @@
-# AutoApiEngine Backend (BE/)
+﻿# AutoApiEngine Backend (BE/)
 
-There is no repo-wide `.sln`; run `dotnet` commands against the relevant `.csproj`.
+Run `dotnet` commands against individual `.csproj` files (no `.sln`). All projects target `net10.0`.
 
-## Entry Point / Run
-- Web host: `AutoApiEngine.ApiServices` (`BE/AutoApiEngine.ApiServices/AutoApiEngine.ApiServices.csproj`, `net10.0`).
-- All BE projects target `net10.0` (you need a .NET 10 SDK installed).
-- Run (matches FE default env): `dotnet run --project BE/AutoApiEngine.ApiServices/AutoApiEngine.ApiServices.csproj --launch-profile https`.
-- Launch profiles are in `BE/AutoApiEngine.ApiServices/Properties/launchSettings.json`:
-  http: `http://localhost:5145`
-  https: `https://localhost:7002` (also `http://localhost:5145`)
+## Entry Point
 
-## Config / Gotchas
-- Config lives in `BE/AutoApiEngine.ApiServices/appsettings.json`.
-- Keycloak settings section is spelled `KeyClock` and is bound to `KeyclockSettings` (typo is in code).
-- `DatabaseProvider` must be exactly `SqlServer`; `MySql` is present but throws in `Providers/DataBaseProvider.cs`.
-- The checked-in `ConnectionStrings:SqlServerConnection` uses a machine-specific `Trusted_Connection`; override it if you’re using the Docker SQL Server (`localhost:1433`).
+```
+dotnet run --project BE/AutoApiEngine.ApiServices/AutoApiEngine.ApiServices.csproj --launch-profile https
+```
 
-## EF Core (Migrations)
-- Migrations are under `BE/AutoApiEngine.ApiServices/Migrations/` (migrations assembly is `AutoApiEngine.ApiServices`).
-- Run from `BE/AutoApiEngine.ApiServices/`:
-  `dotnet ef migrations add <Name> --startup-project . --project ../AutoApiEngine.Persistence`
-  `dotnet ef database update --startup-project . --project ../AutoApiEngine.Persistence`
+Launch profiles: http://localhost:5145, https://localhost:7002.
 
-## API Conventions In Tree
-- CRUD controllers typically inherit `AutoApiEngine.Presentation.BaseController` and wrap work in `HandleRequestAsync(...)`.
-- Generic repository type is `IGenericRepository<T>`, but the file is misnamed `AutoApiEngine.ServiceAbstraction/Common/IGenricRepository.cs`.
-- Attribute routing: put literal segments before `[HttpGet("{id}")]` (see `WorkspacesController` route ordering).
+## Projects
 
-## Auth Endpoints (Current Behavior)
-- `POST /api/auth/login` expects `{ code, redirectUri }` (OAuth2 code exchange) and sets a `refresh_token` cookie with `Secure=true`.
-- `POST /api/auth/refresh-token` reads the refresh token from the `refresh_token` cookie (request body is `{}` in FE).
-- `BE/AutoApiEngine.ApiServices/http/Authentication.http` is stale (it still shows email/password + body refresh token).
+ApiServices (host) -> Presentation (controllers) -> Services (logic) -> ServiceAbstraction (interfaces) -> Persistence (EF) -> Domain (entities)
+
+## Config Gotchas
+
+| Issue | Detail |
+|-------|--------|
+| KeyClock typo | Section name is `KeyClock`, bound to `KeyclockSettings` (do NOT fix) |
+| SqlServer only | `DatabaseProvider=SqlServer`; `MySql` throws |
+| Connection string | Checked-in uses `Trusted_Connection` — override for Docker SQL Server |
+
+## Key Conventions
+
+- Controllers inherit `BaseController` and use `HandleRequestAsync(...)`.
+- Repository: `IGenericRepository<T>` (file misnamed `IGenricRepository.cs`).
+- Route ordering: literal segments before `[HttpGet("{id}")]`.
+
+## EF Core Migrations
+
+Run from `BE/AutoApiEngine.ApiServices/`:
+```
+dotnet ef migrations add <Name> --startup-project . --project ../AutoApiEngine.Persistence
+dotnet ef database update --startup-project . --project ../AutoApiEngine.Persistence
+```
+
+## Auth
+
+| Method | Route | Behavior |
+|--------|-------|----------|
+| POST | /api/auth/login | OAuth2 code exchange, sets `refresh_token` cookie |
+| POST | /api/auth/refresh-token | Reads `refresh_token` cookie |
+| POST | /api/auth/logout | Clears auth cookies |
+
+## Detailed Reference
+
+See `.opencode/agents/backend.md` for the full sub-agent instructions.

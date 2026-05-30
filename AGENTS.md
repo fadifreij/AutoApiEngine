@@ -1,67 +1,49 @@
-# Mode of Operation
+﻿# AutoApiEngine Agent Routing
 
-## Always start with analysis
-Before any task, thoroughly read and understand the relevant parts of the codebase. Consult ARCHITECTURE.md, BE_REFERENCE.md, FE_REFERENCE.md, DATA_MODEL.md, and WORKSPACE_FEATURE.md. Demonstrate understanding of the full stack (DB -> API -> Services -> UI) and follow existing patterns and conventions.
+This file is a **quick-reference routing table**. Sub-agents contain detailed instructions.
+The main agent instructions are in `.opencode/instructions.md`.
 
-## Present implementation options
-For every task, present 2-3 implementation approaches with clear tradeoffs. Explain which you recommend and why. Do not jump straight into coding.
+## Sub-Agents
 
-## Show steps
-Always break work into a clear step-by-step plan before executing. Each step must name the files involved and the expected outcome. Mark steps as completed as you go.
+| Agent | `@` name | Purpose | Instruction File |
+|-------|----------|---------|-----------------|
+| **Frontend** | `@frontend` | Angular 21 components, SSR, guards, routing, HTTP | `.opencode/agents/frontend.md` |
+| **Backend** | `@backend` | .NET 10 controllers, EF Core, services, API, auth | `.opencode/agents/backend.md` |
+| **Docker** | `@docker` | Compose, Keycloak, MySQL, SQL Server | `.opencode/agents/docker.md` |
+| **Review** | `@review` | Code review, security audit, PR review (read-only) | `.opencode/agents/review.md` |
+| **Merge/Push** | `@merge-push` | Branch, commit, push, merge, PR | `.opencode/agents/merge-push.md` |
 
+## Quickstart
 
-## Branch first (mandatory)
-Before ANY change (create, edit, delete files): git checkout main (or develop), git pull, then git checkout -b feature/<short-description>. Commit early, commit often. Never modify files on main or develop.
+```powershell
+# Infrastructure
+cd DockerImages; docker compose up -d
 
-## Verify after every change
-After ALL changes are complete, run the applicable verification commands:
-- Backend: dotnet build BE/AutoApiEngine.ApiServices/AutoApiEngine.ApiServices.csproj (ensure 0 errors)
-- Frontend: 
-pm run build from FE/ (ensure 0 errors)
-- If tests exist: 
-pm test (FE) or dotnet test (BE)
-- If no test commands are configured, ask the user which verification they want.
+# Backend (HTTPS)
+cd BE; dotnet run --project AutoApiEngine.ApiServices/AutoApiEngine.ApiServices.csproj --launch-profile https
 
----
-# AutoApiEngine (AutoCrud_Full)
+# Frontend
+cd FE; npm install; npm start
+```
 
-This repo is 3 separate working dirs; run commands from the right one:
-- FE/ (Angular 21 app, npm scripts live here)
-- BE/ (.NET backend; entrypoint is BE/AutoApiEngine.ApiServices/)
-- DockerImages/ (dev infra via docker-compose.yml)
+## Ports
 
-Sub-guides (treat as authoritative per area):
-- FE/AGENTS.md
-- BE/AGENTS.md
-- DockerImages/AGENTS.md
-
-Detailed reference docs (supplemental context):
-- ARCHITECTURE.md — layer diagram, dependency flow, tech choices
-- BE_REFERENCE.md — all endpoints, DTOs, service listing, startup flow
-- FE_REFERENCE.md — component tree, route table, guards, incomplete areas
-- DATA_MODEL.md — entity schema, enums, relationships
-- WORKSPACE_FEATURE.md — workspace CRUD flow, known gaps
-
-**Quickstart (local)**
-1. Infra: from DockerImages/ run docker compose up -d (Keycloak + MySQL—SQL Server is commented out in compose; run locally or uncomment).
-2. Backend (HTTPS): dotnet run --project BE/AutoApiEngine.ApiServices/AutoApiEngine.ApiServices.csproj --launch-profile https.
-3. Frontend: from FE/ run npm install then npm start.
-
-**Ports / URLs (defaults in config)**
-- Frontend dev: http://localhost:4200
-- Backend API: https://localhost:7002 (also http://localhost:5145 via launch profile)
+- Frontend: http://localhost:4200
+- Backend API: https://localhost:7002 (http://localhost:5145)
 - Keycloak: http://localhost:8081
-- SQL Server (Docker): localhost:1433
-- MySQL (Docker, Keycloak DB): localhost:3307
+- SQL Server: localhost:1433
+- MySQL: localhost:3307
 
-**Tooling Constraints**
-- opencode.json has "edit": "deny" — OpenCode can read/search/bash but cannot write or edit files.
-- No CI workflows exist yet (.github/workflows/ is empty).
+## Reference Docs
 
-**Cross-Cutting Gotchas**
-- FE src/environments/environment.ts targets https://localhost:7002/api; run the backend with the https launch profile unless you change the FE env.
-- Backend targets net10.0 (requires a .NET 10 SDK).
-- Backend config section name is KeyClock (typo) in BE/AutoApiEngine.ApiServices/appsettings.json.
-- Backend only supports DatabaseProvider=SqlServer; MySql is wired to throw in Providers/DataBaseProvider.cs.
-- DockerImages/docker-compose.yml hardcodes dev credentials (DB + Keycloak + SMTP); avoid pasting them into issues/logs.
-- .gitignore explicitly ignores the two existing EF migration files (InitialCreate).
+- `ARCHITECTURE.md` — layer diagram, dependency flow
+- `BE_REFERENCE.md` — all endpoints, DTOs, service listing
+- `FE_REFERENCE.md` — component tree, route table, guards
+- `DATA_MODEL.md` — entity schema, enums, relationships
+- `WORKSPACE_FEATURE.md` — workspace CRUD flow, known gaps
+
+## Verification Commands
+
+- Backend: `dotnet build BE/AutoApiEngine.ApiServices/AutoApiEngine.ApiServices.csproj`
+- Frontend: `npm run build` from `FE/`
+- Tests: `npm test` (FE) or `dotnet test` (BE)
