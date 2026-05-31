@@ -122,34 +122,102 @@
       Run DDL Script
     </h3>
     <p>Execute Data Definition Language scripts to create, alter, or drop database objects.</p>
+
     <div class="ddl-layout">
-      <div>
+      <div class="ddl-main">
+        <!-- Code editor -->
         <div class="ddl-editor">
-          <span class="cm">-- Paste your DDL script here</span><br>
-          <span class="kw">CREATE TABLE</span> shipping_zones (<br>
-          &nbsp;&nbsp;id <span class="kw">SERIAL PRIMARY KEY</span>,<br>
-          &nbsp;&nbsp;name <span class="kw">VARCHAR</span>(100) <span class="kw">NOT NULL</span>,<br>
-          &nbsp;&nbsp;rate <span class="kw">DECIMAL</span>(10,2),<br>
-          &nbsp;&nbsp;active <span class="kw">BOOLEAN DEFAULT</span> <span class="str">true</span><br>
-          );
+          <div class="ddl-editor-header">
+            <span class="ddl-editor-label">
+              @if (ddlFileName()) {
+              {{ ddlFileName() }}
+              } @else {
+              script.sql
+              }
+            </span>
+            <div class="ddl-editor-actions">
+              <button class="btn btn-ghost btn-xs" (click)="clearDdl()" title="Clear">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="ddl-editor-body">
+            <pre class="ddl-highlight"><code [innerHTML]="highlightedSql()"></code></pre>
+            <textarea
+              class="ddl-textarea"
+              [value]="ddlSql()"
+              (input)="onDdlInput($event)"
+              placeholder="-- Paste or upload your DDL script here&#10;CREATE TABLE example (&#10;  id SERIAL PRIMARY KEY,&#10;  name VARCHAR(100) NOT NULL&#10;);"
+              spellcheck="false"
+              wrap="off"
+            ></textarea>
+          </div>
         </div>
+
+        <!-- Action buttons -->
         <div class="ddl-actions">
-          <button class="btn btn-primary btn-sm">
+          <button class="btn btn-primary btn-sm" (click)="executeDdl()" [disabled]="!ddlSql().trim() || ddlExecuting()">
+            @if (ddlExecuting()) {
+            <span class="spinner-sm"></span>
+            Executing...
+            } @else {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round">
               <polygon points="5 3 19 12 5 21 5 3" />
             </svg>
             Execute DDL
+            }
           </button>
-          <button class="btn btn-outline btn-sm">Upload .sql File</button>
+          <button class="btn btn-outline btn-sm" (click)="ddlFileInput.click()">
+            Upload .sql File
+          </button>
+          <input #ddlFileInput type="file" accept=".sql" hidden (change)="onDdlFileSelected($event)">
         </div>
+
+        <!-- Execution Results -->
+        @if (ddlResults(); as results) {
+        <div class="ddl-results">
+          <div class="ddl-results-summary">
+            <span class="ddl-summary-badge" [class.success]="results.overallSuccess"
+              [class.fail]="!results.overallSuccess">
+              @if (results.overallSuccess) { ✓ All Succeeded }
+              @else { ✗ {{ results.failed }} of {{ results.totalStatements }} Failed }
+            </span>
+            <span class="ddl-summary-detail">{{ results.succeeded }} succeeded · {{ results.failed }} failed · {{ results.totalStatements }} statements</span>
+          </div>
+
+          @for (stmt of results.statements; track trackByIndex($index)) {
+          <div class="ddl-result-card" [class.success]="stmt.success" [class.fail]="!stmt.success">
+            <div class="ddl-result-header">
+              <span class="ddl-result-icon">
+                @if (stmt.success) { ✓ }
+                @else { ✗ }
+              </span>
+              <span class="ddl-result-label">Statement #{{ stmt.index + 1 }}</span>
+              <span class="ddl-result-meta">
+                @if (stmt.success) {
+                {{ stmt.rowsAffected }} rows affected
+                }
+                · {{ stmt.durationMs }}ms
+              </span>
+            </div>
+            @if (!stmt.success && stmt.error) {
+            <div class="ddl-result-error">{{ stmt.error }}</div>
+            }
+            <div class="ddl-result-sql">
+              <code>{{ stmt.sql.length > 200 ? stmt.sql.slice(0, 200) + '...' : stmt.sql }}</code>
+            </div>
+          </div>
+          }
+        </div>
+        }
       </div>
-      <div class="ddl-history">
-        <div class="ddl-history-title">Recent DDL Runs</div>
-        <div class="ddl-entry">CREATE TABLE shipping_zones<br><span class="success">✓ Success</span> · 3h ago</div>
-        <div class="ddl-entry">ALTER TABLE users ADD column<br><span class="success">✓ Success</span> · Yesterday</div>
-        <div class="ddl-entry">CREATE INDEX idx_orders<br><span class="success">✓ Success</span> · 2 days ago</div>
-      </div>
+
+
     </div>
   </div>
 </div>

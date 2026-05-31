@@ -37,7 +37,6 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
         public async Task<DatabaseStatsResult> GetDatabaseStatsAsync(string databaseName, DatabaseEngine engine, string connectionString, CancellationToken cancellationToken = default)
         {
-            var result = new DatabaseStatsResult();
             var connStr = string.IsNullOrWhiteSpace(connectionString)
                 ? $"{_mySqlConnection};Database={databaseName}"
                 : $"{connectionString};Database={databaseName}";
@@ -45,81 +44,16 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             await using var connection = new MySqlConnection(connStr);
             await connection.OpenAsync(cancellationToken);
 
-            await using (var cmd = new MySqlCommand(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = @db AND table_type = 'BASE TABLE'",
-                connection))
-            {
-                cmd.Parameters.AddWithValue("@db", databaseName);
-                result.TablesCount = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
-            }
+            var dbParam = new Dictionary<string, object> { ["@db"] = databaseName };
 
-            await using (var cmd = new MySqlCommand(
-                "SELECT COUNT(*) FROM information_schema.views WHERE table_schema = @db",
-                connection))
-            {
-                cmd.Parameters.AddWithValue("@db", databaseName);
-                result.ViewsCount = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
-            }
-
-            await using (var cmd = new MySqlCommand(
-                "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = @db AND routine_type = 'FUNCTION'",
-                connection))
-            {
-                cmd.Parameters.AddWithValue("@db", databaseName);
-                result.FunctionsCount = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
-            }
-
-            await using (var cmd = new MySqlCommand(
-                "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = @db AND routine_type = 'PROCEDURE'",
-                connection))
-            {
-                cmd.Parameters.AddWithValue("@db", databaseName);
-                result.StoredProceduresCount = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
-            }
-
-            await using (var cmd = new MySqlCommand(
-                "SELECT IFNULL(SUM(data_length + index_length), 0) FROM information_schema.tables WHERE table_schema = @db",
-                connection))
-            {
-                cmd.Parameters.AddWithValue("@db", databaseName);
-                var val = await cmd.ExecuteScalarAsync(cancellationToken);
-                result.DatabaseSizeBytes = val is DBNull or null ? 0L : Convert.ToInt64(val);
-            }
-
-            PopulateBackupHistory(result, databaseName);
-
-            return result;
-        }
-
-        private void PopulateBackupHistory(DatabaseStatsResult result, string databaseName)
-        {
-            try
-            {
-                var backupDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "backups");
-                if (!Directory.Exists(backupDir))
-                    return;
-
-                var matchingFiles = Directory.GetFiles(backupDir, $"{databaseName}_*", SearchOption.AllDirectories);
-
-                foreach (var filePath in matchingFiles)
-                {
-                    var fi = new FileInfo(filePath);
-                    result.BackupHistory.Add(new BackupHistoryItem
-                    {
-                        FileName = fi.Name,
-                        SizeBytes = fi.Length,
-                        CreatedAt = fi.LastWriteTimeUtc
-                    });
-                }
-
-                result.BackupHistory = result.BackupHistory
-                    .OrderByDescending(h => h.CreatedAt)
-                    .Take(5)
-                    .ToList();
-            }
-            catch
-            {
-            }
+            return await IDatabaseManagementService.ExecuteStatsQueriesAsync(
+                connection, databaseName,
+                tableCountSql: "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = @db AND table_type = 'BASE TABLE'", tableCountParams: dbParam,
+                viewCountSql: "SELECT COUNT(*) FROM information_schema.views WHERE table_schema = @db", viewCountParams: dbParam,
+                functionCountSql: "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = @db AND routine_type = 'FUNCTION'", functionCountParams: dbParam,
+                procedureCountSql: "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = @db AND routine_type = 'PROCEDURE'", procedureCountParams: dbParam,
+                sizeBytesSql: "SELECT IFNULL(SUM(data_length + index_length), 0) FROM information_schema.tables WHERE table_schema = @db", sizeBytesParams: dbParam,
+                cancellationToken);
         }
 
         public async Task BackupAsync(

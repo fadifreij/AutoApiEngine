@@ -47,8 +47,6 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
         public async Task<DatabaseStatsResult> GetDatabaseStatsAsync(string databaseName, DatabaseEngine engine, string connectionString, CancellationToken cancellationToken = default)
         {
-            var result = new DatabaseStatsResult();
-
             var targetConn = string.IsNullOrWhiteSpace(connectionString) ? _appConnectionString : connectionString;
             var csb = new SqlConnectionStringBuilder(targetConn)
             {
@@ -58,38 +56,14 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             await using var connection = new SqlConnection(csb.ConnectionString);
             await connection.OpenAsync(cancellationToken);
 
-            await using (var cmd = new SqlCommand(
-                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'", connection))
-            {
-                result.TablesCount = (int)await cmd.ExecuteScalarAsync(cancellationToken);
-            }
-
-            await using (var cmd = new SqlCommand(
-                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.VIEWS", connection))
-            {
-                result.ViewsCount = (int)await cmd.ExecuteScalarAsync(cancellationToken);
-            }
-
-            await using (var cmd = new SqlCommand(
-                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'FUNCTION'", connection))
-            {
-                result.FunctionsCount = (int)await cmd.ExecuteScalarAsync(cancellationToken);
-            }
-
-            await using (var cmd = new SqlCommand(
-                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE'", connection))
-            {
-                result.StoredProceduresCount = (int)await cmd.ExecuteScalarAsync(cancellationToken);
-            }
-
-            await using (var cmd = new SqlCommand(
-                "SELECT ISNULL(SUM(CAST(size AS BIGINT) * 8 * 1024), 0) FROM sys.database_files WHERE type = 0", connection))
-            {
-                result.DatabaseSizeBytes = (long)await cmd.ExecuteScalarAsync(cancellationToken);
-            }
-
-
-            return result;
+            return await IDatabaseManagementService.ExecuteStatsQueriesAsync(
+                connection, databaseName,
+                tableCountSql: "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'", tableCountParams: null,
+                viewCountSql: "SELECT COUNT(*) FROM INFORMATION_SCHEMA.VIEWS", viewCountParams: null,
+                functionCountSql: "SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'FUNCTION'", functionCountParams: null,
+                procedureCountSql: "SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE'", procedureCountParams: null,
+                sizeBytesSql: "SELECT ISNULL(SUM(CAST(size AS BIGINT) * 8 * 1024), 0) FROM sys.database_files WHERE type = 0", sizeBytesParams: null,
+                cancellationToken);
         }
 
 

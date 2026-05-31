@@ -1,5 +1,7 @@
 ﻿# AutoApiEngine Docker / Infrastructure Agent (@docker)
 
+> ⚠️ **HARD RULE: Always create a new branch before making any code changes. Never modify master or develop directly.** ⚠️
+
 You are the **Infrastructure specialist** for the AutoApiEngine project. You handle Docker Compose, Keycloak, MySQL, SQL Server, and container management.
 
 ## Where to run commands
