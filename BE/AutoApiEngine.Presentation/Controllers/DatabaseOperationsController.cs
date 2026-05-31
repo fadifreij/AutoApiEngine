@@ -2,6 +2,7 @@ using AutoApiEngine.Domain.Entities;
 using AutoApiEngine.Domain.Enums;
 using AutoApiEngine.Presentation.HubServices;
 using AutoApiEngine.ServiceAbstraction;
+using AutoApiEngine.ServiceAbstraction.DTO;
 using AutoApiEngine.Services.DatabaseManagementServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -339,10 +340,10 @@ namespace AutoApiEngine.Presentation.Controllers
                 // No dedicated credentials — use the default connection string from config based on engine type
                 if (engine == DatabaseEngine.MySql)
                 {
-                    connectionString = _configuration.GetConnectionString("MySqlConnection")
-                        ?? $"Server=localhost;Port=3307;Uid=root;Pwd=root;Database={workspace.DatabaseName}";
-                    if (!connectionString.Contains("Database=", StringComparison.OrdinalIgnoreCase))
-                        connectionString += $";Database={workspace.DatabaseName}";
+                    var baseMySql = _configuration.GetConnectionString("MySqlConnection")
+                        ?? $"Server=localhost;Port=3307;Uid=root;Pwd=root;";
+                    // Always append; MySQL.Data uses the last Database= parameter
+                    connectionString = $"{baseMySql.TrimEnd(';')};Database={workspace.DatabaseName}";
                 }
                 else
                 {
@@ -408,6 +409,32 @@ namespace AutoApiEngine.Presentation.Controllers
                 }
 
                 return StatusCode(500, new { message = $"Restore failed: {ex.Message}" });
+            }
+        }
+
+        [HttpPost("execute-ddl")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ExecuteDdl([FromBody] DdlExecutionRequest request, [FromServices] IDdlExecutionService ddlService, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(request.WorkspaceId))
+                return BadRequest(new { message = "Workspace ID is required." });
+
+            if (string.IsNullOrWhiteSpace(request.Sql))
+                return BadRequest(new { message = "SQL script is required." });
+
+            try
+            {
+                var result = await ddlService.ExecuteAsync(request, cancellationToken);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "DDL execution failed for workspace {WorkspaceId}", request.WorkspaceId);
+                return StatusCode(500, new { message = $"DDL execution failed: {ex.Message}" });
             }
         }
 

@@ -1,5 +1,7 @@
 ﻿# AutoApiEngine — Main Agent Instructions
 
+> ⚠️ **HARD RULE: Always create a new branch before making any code changes. Never modify master or develop directly.** ⚠️
+
 This is the **orchestrator agent** for the AutoApiEngine (AutoCrud_Full) project.
 Your job is to understand the task and route it to the right sub-agent.
 
@@ -21,7 +23,7 @@ The repo has 3 independent working directories:
 | .NET controllers, services, EF Core, migrations, API endpoints, auth | `@backend` |
 | Docker Compose, containers, Keycloak, MySQL, SQL Server | `@docker` |
 | Code review, PR review, architecture audit, security check | `@review` |
-| Git branching, committing, pushing, merging, creating PRs | `@merge-push` |
+| Git branching, committing, merging, creating PRs | `@merge-push` |
 
 ## Mode of Operation (applies to ALL agents)
 

@@ -27,6 +27,7 @@ namespace AutoApiEngine.ApiServices.Providers
             services.AddScoped<MySqlConnectionStringBuilder>();
             services.AddScoped<IConnectionStringBuilder, SqlServerConnectionStringBuilder>();
             services.AddScoped<IZipService, ZipService>();
+            services.AddScoped<IDdlExecutionService, DdlExecutionService>();
 
             return services;
         }

@@ -4,6 +4,7 @@ import { environment } from '../../../environments/environment';
 import { AuthService } from '../../shared/auth/auth.service';
 import { DatabaseProgressService, ProgressEvent } from '../../shared/database-progress.service';
 import { WorkspaceStateService } from '../../shared/workspace-state.service';
+import { DdlExecutionResponse } from './ddl-types';
 
 interface BackupItem {
   fileName: string;
@@ -48,6 +49,15 @@ export class WorkspaceManage implements OnDestroy {
   historyDownloading = signal<string | null>(null);
   historyDownloadProgress = signal(0);
   historyDownloadStatus = signal<'idle' | 'preparing' | 'downloading' | 'done'>('idle');
+
+  // DDL script
+  ddlSql = signal('');
+  ddlResults = signal<DdlExecutionResponse | null>(null);
+  ddlExecuting = signal(false);
+  ddlFileName = signal('');
+
+  /** Highlighted HTML string for innerHTML binding */
+  highlightedSql = computed(() => this.highlightSql(this.ddlSql()));
 
   private backupFileName = '';
   private downloadStarted = false;
@@ -431,6 +441,147 @@ export class WorkspaceManage implements OnDestroy {
 
     // Reset file input so the same file can be selected again
     input.value = '';
+  }
+
+  onDdlFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files?.length) return;
+    const file = input.files[0];
+
+    if (!file.name.toLowerCase().endsWith('.sql')) {
+      alert('Only .sql files are accepted.');
+      input.value = '';
+      return;
+    }
+
+    this.ddlFileName.set(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      if (text) {
+        this.ddlSql.set(text);
+        this.ddlResults.set(null);
+      }
+    };
+    reader.onerror = () => {
+      console.error('Failed to read .sql file:', reader.error);
+      alert('Failed to read the file. Please try again.');
+    };
+    reader.readAsText(file);
+    input.value = '';
+  }
+
+  executeDdl(): void {
+    const sql = this.ddlSql().trim();
+    if (!sql) return;
+
+    const workspaceId = this.workspaceState.selectedWorkspaceId();
+    if (!workspaceId) return;
+
+    this.ddlExecuting.set(true);
+    this.ddlResults.set(null);
+
+    this.http.post<DdlExecutionResponse>(
+      `${environment.apiUrl}/database/execute-ddl`,
+      { workspaceId, sql },
+      { withCredentials: true }
+    ).subscribe({
+      next: (res) => {
+        this.ddlResults.set(res);
+        this.ddlExecuting.set(false);
+      },
+      error: (err) => {
+        console.error('DDL execution failed:', err);
+        this.ddlResults.set({
+          statements: [{
+            index: 0,
+            sql: sql,
+            success: false,
+            error: err.error?.message || err.message || 'Unknown error',
+            rowsAffected: 0,
+            durationMs: 0
+          }],
+          overallSuccess: false,
+          totalStatements: 1,
+          succeeded: 0,
+          failed: 1
+        });
+        this.ddlExecuting.set(false);
+      }
+    });
+  }
+
+  clearDdl(): void {
+    this.ddlSql.set('');
+    this.ddlResults.set(null);
+    this.ddlFileName.set('');
+  }
+
+  trackByIndex(index: number): number {
+    return index;
+  }
+
+  onDdlInput(event: Event): void {
+    const value = (event.target as HTMLTextAreaElement).value;
+    this.ddlSql.set(value);
+    this.ddlResults.set(null);
+  }
+
+  /** Simple SQL syntax highlighter — escapes HTML then wraps keywords/comments/strings in spans */
+  private highlightSql(sql: string): string {
+    if (!sql) return '';
+
+    // HTML-escape first
+    let html = sql
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Process line-by-line to handle -- line comments
+    const lines = html.split('\n');
+    const resultLines = lines.map(line => {
+      // Check for -- comment (not inside a string)
+      let commentIdx = -1;
+      let inStr = false;
+      let strChar = '';
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (!inStr && (c === '\'' || c === '&quot;' || c === '"')) {
+          inStr = true;
+          strChar = c;
+        } else if (inStr && c === strChar) {
+          inStr = false;
+        } else if (!inStr && c === '-' && i + 1 < line.length && line[i + 1] === '-') {
+          commentIdx = i;
+          break;
+        }
+      }
+
+      let code = '';
+      let comment = '';
+      if (commentIdx >= 0) {
+        code = line.substring(0, commentIdx);
+        comment = line.substring(commentIdx);
+      } else {
+        code = line;
+      }
+
+      // Highlight strings in code portion
+      code = code.replace(/'[^']*'/g, '<span class="str">$&</span>');
+      code = code.replace(/"[^"]*"/g, '<span class="str">$&</span>');
+
+      // Highlight SQL keywords
+      const keywordPattern = /\b(CREATE|TABLE|ALTER|DROP|ADD|COLUMN|INDEX|VIEW|SELECT|INSERT|UPDATE|DELETE|FROM|WHERE|SET|INTO|VALUES|PRIMARY|KEY|FOREIGN|REFERENCES|NOT|NULL|DEFAULT|CHECK|UNIQUE|CONSTRAINT|SERIAL|BIGSERIAL|VARCHAR|INT|INTEGER|BIGINT|SMALLINT|DECIMAL|NUMERIC|BOOLEAN|BOOL|TEXT|DATE|TIMESTAMP|TRIGGER|PROCEDURE|FUNCTION|BEGIN|END|IF|ELSE|THEN|AS|ON|AND|OR|IN|EXISTS|BETWEEN|LIKE|IS|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|JOIN|INNER|LEFT|RIGHT|OUTER|CROSS|USING|UNION|ALL|DISTINCT|ASC|DESC|CASCADE|RESTRICT|TRUNCATE|DATABASE|SCHEMA|TO|WITH|GRANT|REVOKE|COMMIT|ROLLBACK|CASE|WHEN|ELSE|END|TRUE|FALSE|NO|OF|TYPE|ROWS|RANGE|FETCH|NEXT|ONLY|RECURSIVE|RETURNS|LANGUAGE|IMMUTABLE|STABLE|VOLATILE|CALLED|INPUT|SECURITY|DEFINER|INVOKER|EXECUTE|FUNCTION|PROCEDURE|RETURNS)\b/gi;
+      code = code.replace(keywordPattern, '<span class="kw">$1</span>');
+
+      if (comment) {
+        code += `<span class="cm">${comment}</span>`;
+      }
+
+      return code;
+    });
+
+    return resultLines.join('\n');
   }
 
   ngOnDestroy(): void {
