@@ -101,6 +101,20 @@ Example: `feat(workspace): add encryption key management`
 - Always **inspect** before committing — ensure only intended files are staged.
 - Never commit secrets or credentials.
 
+## Handling Widespread Changes (Multiple Areas)
+
+When a feature involves changes across **multiple areas** (e.g., frontend + backend + Docker + config + agents), do NOT create separate branches. Instead:
+
+1. **Work on the existing feature branch** — make all changes in one branch.
+2. **Stage everything**: `git add -A` or `git add <all files>`.
+3. **Commit with a comprehensive message** covering all areas:
+   - Example: `feat(ddl): add full DDL editor with syntax highlighting, file upload, execution results, and backend DDL execution service`
+4. **Push the branch**: `git push -u origin <branch-name>`.
+5. **Verify builds** for ALL affected areas (FE + BE).
+6. **Merge to master** following the **Standard Merge Procedure** above — do NOT create a PR for every area individually.
+
+> **Rationale:** A single feature often touches frontend, backend, Docker, and config files simultaneously. Committing them together keeps the feature atomic and avoids broken intermediate states across repositories.
+
 ## When to delegate
 
 - **Frontend work** -> `@frontend`
