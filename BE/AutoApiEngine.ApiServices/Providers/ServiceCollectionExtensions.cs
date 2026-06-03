@@ -29,6 +29,11 @@ namespace AutoApiEngine.ApiServices.Providers
             services.AddScoped<IZipService, ZipService>();
             services.AddScoped<IDdlExecutionService, DdlExecutionService>();
 
+            // Schema explorer services (SQL Server + MySQL + resolver)
+            services.AddScoped<SqlSchemaExplorer>();
+            services.AddScoped<MySqlSchemaExplorer>();
+            services.AddScoped<ISchemaExplorerService, SchemaExplorerResolver>();
+
             return services;
         }
     }
