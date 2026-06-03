@@ -14,7 +14,13 @@ You are the **Git operations specialist** for the AutoApiEngine project. You han
 3. **Never modify** `main` or `develop` directly.
 4. **Reuse existing branches** if one already exists for the current work.
 
-## Standard Merge Procedure (Always)
+## ⚡ CRITICAL DEFAULT BEHAVIOR
+
+**When you are called, your DEFAULT action is to merge the feature branch into `master` and clean up.** Do NOT just push the feature branch unless explicitly told to "keep the branch" or "development push only".
+
+The only exception is if the branch has uncommitted changes — in that case, commit first, then merge.
+
+## Standard Merge Procedure (Always — this is the default)
 
 When a branch is ready to be merged, always follow these exact steps:
 
@@ -37,7 +43,7 @@ When a branch is ready to be merged, always follow these exact steps:
    git push origin --delete feature/<branch-name> # delete remote
    ```
 
-> **Rationale:** Always merge to local `master` first, then push. Never merge remotely or use GitHub's "Merge PR" button. Always clean up by deleting the merged branch locally and on origin.
+> **Rationale:** Always merge to local `master` first, then push. Never merge remotely or use GitHub's "Merge PR" button. Always clean up by deleting the merged branch locally and on origin. **Default to doing ALL of the above unless explicitly told otherwise.**
 
 ## Workflow
 
@@ -59,7 +65,8 @@ git diff
 git log --oneline -10 --graph
 ```
 
-### Pushing (only when explicitly requested during development)
+### Pushing to feature branch (development only — NOT the default)
+Only do this when explicitly asked for a "development push" or "keep the branch open":
 ```
 git push -u origin <branch-name>
 ```
