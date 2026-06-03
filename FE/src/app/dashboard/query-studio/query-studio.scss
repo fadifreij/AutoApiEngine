@@ -23,27 +23,41 @@
 .studio-layout { display: flex; flex: 1; overflow: hidden; }
 
 /* EXPLORER */
-.explorer { width: 260px; background: #1e1e2e; border-right: 1px solid #2d2d44; display: flex; flex-direction: column; flex-shrink: 0; }
+.explorer { background: #1e1e2e; border-right: 1px solid #2d2d44; display: flex; flex-direction: column; flex-shrink: 0; min-width: 200px; max-width: 600px; }
 .explorer-header { padding: 12px 14px 8px;
   h3 { font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
 }
 .explorer-search { margin: 0 10px 10px; padding: 6px 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #e2e8f0; font-size: 12px; font-family: var(--font); width: calc(100% - 20px);
   &::placeholder { color: #64748b; }
 }
-.db-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 0 10px 12px; }
+.db-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 0 10px 12px; }
 .db-stat { background: #2d2d44; border-radius: 6px; padding: 8px 10px;
   .label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
   .val { font-size: 16px; font-weight: 700; color: #e2e8f0;
     &.purple { color: #a5b4fc; }
     &.green { color: #34d399; }
+    &.orange { color: #fbbf24; }
   }
 }
 .tree-section { padding: 4px 10px; overflow-y: auto; flex: 1; }
-.tree-label { font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 6px 4px 4px; }
+.tree-label { font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 6px 4px 4px; display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none;
+  &:hover { color: #94a3b8; }
+}
+.collapse-icon { width: 10px; height: 10px; flex-shrink: 0; color: #475569; }
 .tree-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 5px; cursor: pointer; color: #cbd5e1; font-size: 12px; font-family: var(--mono);
   &:hover { background: rgba(99,102,241,.12); color: #e2e8f0; }
   svg { width: 14px; height: 14px; flex-shrink: 0; }
   .col-count { margin-left: auto; font-size: 10px; color: #475569; }
+}
+.tree-empty { padding: 16px 8px; text-align: center; color: #475569; font-size: 12px; }
+.explorer-loading { padding: 16px; text-align: center; color: #64748b; font-size: 12px; }
+.explorer-error { padding: 12px 14px; margin: 0 10px 10px; background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); border-radius: 6px; color: #fca5a5; font-size: 11px; text-align: center; }
+
+/* RESIZE HANDLE */
+.explorer-resize-handle {
+  width: 5px; cursor: col-resize; flex-shrink: 0; background: transparent;
+  position: relative; z-index: 2; transition: background 0.15s;
+  &:hover, &:active { background: #6366f1; }
 }
 
 /* EDITOR */
