@@ -129,7 +129,18 @@ export class QueryStudio implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err.error?.message || err.message || 'Failed to load schema.');
+        // Try to extract a meaningful message
+        let msg = 'Failed to load schema.';
+        if (err.status === 404) {
+          msg = err.error?.message
+            ? err.error.message
+            : 'Schema endpoint not found. Please ensure the backend is running the latest code (restart the server).';
+        } else if (err.status === 401 || err.status === 403) {
+          msg = 'Authentication required. Please log in again.';
+        } else {
+          msg = err.error?.message || err.message || msg;
+        }
+        this.error.set(msg);
         this.loading.set(false);
       }
     });
