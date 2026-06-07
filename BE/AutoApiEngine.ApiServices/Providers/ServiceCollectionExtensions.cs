@@ -34,6 +34,12 @@ namespace AutoApiEngine.ApiServices.Providers
             services.AddScoped<MySqlSchemaExplorer>();
             services.AddScoped<ISchemaExplorerService, SchemaExplorerResolver>();
 
+            // Query execution service
+            services.AddScoped<IQueryExecutionService, QueryExecutionService>();
+
+            // DDL file management service
+            services.AddScoped<IDdlFileService, DdlFileService>();
+
             return services;
         }
     }

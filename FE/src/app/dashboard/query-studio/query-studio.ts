@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, computed, inject, PLATFORM_ID, Inject, WritableSignal, viewChild } from '@angular/core';
+import { Component, OnInit, signal, computed, inject, PLATFORM_ID, Inject, WritableSignal, viewChild, HostListener } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -6,6 +6,7 @@ import { Subscription } from 'rxjs';
 import { SchemaService, SchemaExplorerResponse } from './schema.service';
 import { WorkspaceStateService } from '../../shared/workspace-state.service';
 import { QueryService, QueryExecutionResponse } from './query.service';
+import { DdlFileService, DdlFileTreeNode } from './ddl-file.service';
 import { MonacoEditorComponent } from '../../shared/monaco-editor/monaco-editor';
 
 const EXPLORER_WIDTH_KEY = 'queryStudio_explorerWidth';
@@ -32,6 +33,7 @@ export class QueryStudio implements OnInit {
   private schemaService = inject(SchemaService);
   private workspaceState = inject(WorkspaceStateService);
   private queryService = inject(QueryService);
+  private ddlFileService = inject(DdlFileService);
 
   /** Default SQL template shown on first load */
   defaultSql = '-- Type your SQL query here …';
@@ -49,6 +51,12 @@ export class QueryStudio implements OnInit {
 
   /** Tracks which tab is currently being renamed (null = not editing). */
   editingTabId = signal<number | null>(null);
+
+  // ── Saved DDL files tree ──
+  ddlTree = signal<DdlFileTreeNode | null>(null);
+  ddlTreeLoading = signal(false);
+  ddlTreeError = signal<string | null>(null);
+  expandedFolders = signal<Set<string>>(new Set());
 
   // ── Resizable results panel ──
   resultsHeight: WritableSignal<number>;
@@ -191,6 +199,7 @@ export class QueryStudio implements OnInit {
   ngOnInit(): void {
     this.addTab();
     this.loadSchema();
+    this.refreshDdlTree();
   }
 
   // ── Tab Management ──
@@ -296,6 +305,214 @@ export class QueryStudio implements OnInit {
   /** Cancels renaming (Escape) without saving. */
   cancelEditName(): void {
     this.editingTabId.set(null);
+  }
+
+  // ── Saved DDL File Management ──
+
+  /** Refreshes the saved-DDL file tree from the backend. */
+  refreshDdlTree(): void {
+    const workspaceId = this.workspaceState.selectedWorkspaceId();
+    if (!workspaceId) return;
+
+    this.ddlTreeLoading.set(true);
+    this.ddlTreeError.set(null);
+
+    this.ddlFileService.getTree(workspaceId).subscribe({
+      next: (tree) => {
+        this.ddlTree.set(tree);
+        this.ddlTreeLoading.set(false);
+      },
+      error: (err) => {
+        this.ddlTreeError.set(err.error?.message || err.message || 'Failed to load saved files.');
+        this.ddlTreeLoading.set(false);
+      },
+    });
+  }
+
+  /** Prompts the user for folder name and saves the current editor content. */
+  saveCurrentSql(): void {
+    const tab = this.activeTab();
+    if (!tab) return;
+
+    const workspaceId = this.workspaceState.selectedWorkspaceId();
+    if (!workspaceId) {
+      this.queryError.set('No workspace selected.');
+      return;
+    }
+
+    const sql = this.monacoEditor()?.getValue()?.trim();
+    if (!sql || sql === this.defaultSql) {
+      this.queryError.set('Please enter a SQL query before saving.');
+      return;
+    }
+
+    // Prompt for folder name
+    const folderName = window.prompt('Enter folder name to save in:', 'My Queries');
+    if (!folderName || !folderName.trim()) return;
+
+    // Prompt for file name (default: tab name + .sql)
+    const defaultName = tab.name.endsWith('.sql') ? tab.name : `${tab.name}.sql`;
+    const fileName = window.prompt('Enter file name:', defaultName);
+    if (!fileName || !fileName.trim()) return;
+
+    const finalName = fileName.trim().endsWith('.sql') ? fileName.trim() : `${fileName.trim()}.sql`;
+
+    this.ddlFileService
+      .save({
+        workspaceId,
+        folderName: folderName.trim(),
+        fileName: finalName,
+        content: sql,
+      })
+      .subscribe({
+        next: () => {
+          this.queryResult.set(null);
+          this.queryError.set('File saved successfully.');
+          this.refreshDdlTree();
+        },
+        error: (err) => {
+          this.queryError.set(err.error?.message || err.message || 'Failed to save file.');
+        },
+      });
+  }
+
+  /** Loads a saved DDL file's content into the editor. */
+  loadSavedFile(node: DdlFileTreeNode): void {
+    if (node.type !== 'File' || !node.path) return;
+
+    this.ddlFileService.readFile(node.path).subscribe({
+      next: (response) => {
+        this.monacoEditor()?.setValue(response.content);
+      },
+      error: (err) => {
+        this.queryError.set(err.error?.message || err.message || 'Failed to load file.');
+      },
+    });
+  }
+
+  /** Tracks which tree node (by its Path) is currently being renamed. */
+  editingNodePath = signal<string | null>(null);
+
+  /** Starts inline rename on double-click of a tree node (folder or file). */
+  startEditNode(node: DdlFileTreeNode, event: MouseEvent): void {
+    event.stopPropagation();
+    if (!node.path) return;
+    this.editingNodePath.set(node.path);
+    setTimeout(() => {
+      const input = document.querySelector('.tree-rename-input') as HTMLInputElement;
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    });
+  }
+
+  /** Saves the rename when confirmed (Enter / blur). */
+  finishEditNode(node: DdlFileTreeNode, input: HTMLInputElement): void {
+    const raw = input.value.trim();
+    if (raw.length > 0 && node.path && raw !== node.name) {
+      this.ddlFileService.rename({ currentPath: node.path, newName: raw }).subscribe({
+        next: () => this.refreshDdlTree(),
+        error: (err) => {
+          this.ddlTreeError.set(err.error?.message || err.message || 'Failed to rename item.');
+        },
+      });
+    }
+    this.editingNodePath.set(null);
+  }
+
+  /** Cancels rename on Escape. */
+  cancelEditNode(): void {
+    this.editingNodePath.set(null);
+  }
+
+  // ── Context Menu for Saved DDL tree ──
+
+  /** The node (folder or file) the context menu was opened for. */
+  contextMenuNode = signal<DdlFileTreeNode | null>(null);
+
+  /** Pixel position of the context menu (null = hidden). */
+  contextMenuPos = signal<{ x: number; y: number } | null>(null);
+
+  /** Opens the context menu on right-click. */
+  onContextMenu(node: DdlFileTreeNode, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.closeContextMenu();
+    this.contextMenuNode.set(node);
+    this.contextMenuPos.set({ x: event.clientX, y: event.clientY });
+  }
+
+  /** Closes the context menu. */
+  closeContextMenu(): void {
+    this.contextMenuNode.set(null);
+    this.contextMenuPos.set(null);
+  }
+
+  /** Handles "Rename" from the context menu (reuses the inline rename flow). */
+  contextMenuRename(): void {
+    const node = this.contextMenuNode();
+    if (node?.path) {
+      this.editingNodePath.set(node.path);
+      // Need to close context menu first so the input can be found
+      this.closeContextMenu();
+      setTimeout(() => {
+        const input = document.querySelector('.tree-rename-input') as HTMLInputElement;
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      });
+    } else {
+      this.closeContextMenu();
+    }
+  }
+
+  /** Handles "Delete" from the context menu — prompts for confirmation. */
+  contextMenuDelete(): void {
+    const node = this.contextMenuNode();
+    this.closeContextMenu();
+    if (!node?.path) return;
+
+    const type = node.type === 'Folder' ? 'folder' : 'file';
+    const confirmed = window.confirm(
+      `Are you sure you want to delete this ${type} "${node.name}"?`,
+    );
+    if (!confirmed) return;
+
+    this.ddlFileService.delete({ filePath: node.path }).subscribe({
+      next: () => {
+        this.queryError.set(null);
+        this.refreshDdlTree();
+      },
+      error: (err) => {
+        this.ddlTreeError.set(err.error?.message || err.message || 'Failed to delete item.');
+      },
+    });
+  }
+
+  /** Closes context menu on any click outside. */
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.closeContextMenu();
+  }
+
+  /** Toggles expansion of a folder node in the tree. */
+  toggleFolderExpanded(folder: DdlFileTreeNode): void {
+    this.expandedFolders.update(set => {
+      const next = new Set(set);
+      if (next.has(folder.name)) {
+        next.delete(folder.name);
+      } else {
+        next.add(folder.name);
+      }
+      return next;
+    });
+  }
+
+  /** Derives a unique key for a tree node (its full path). */
+  nodeKey(node: DdlFileTreeNode, parentPath?: string): string {
+    return parentPath ? `${parentPath}/${node.name}` : node.name;
   }
 
   onSearchChange(value: string): void {
