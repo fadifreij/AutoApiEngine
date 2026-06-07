@@ -1,24 +1,68 @@
-import { Component, OnInit, signal, computed, inject, PLATFORM_ID, Inject, WritableSignal } from '@angular/core';
+import { Component, OnInit, signal, computed, inject, PLATFORM_ID, Inject, WritableSignal, viewChild } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import { SchemaService, SchemaExplorerResponse } from './schema.service';
 import { WorkspaceStateService } from '../../shared/workspace-state.service';
+import { QueryService, QueryExecutionResponse } from './query.service';
+import { MonacoEditorComponent } from '../../shared/monaco-editor/monaco-editor';
 
 const EXPLORER_WIDTH_KEY = 'queryStudio_explorerWidth';
+const RESULTS_HEIGHT_KEY = 'queryStudio_resultsHeight';
+
+/** Represents a single query tab in the studio. */
+export interface QueryTab {
+  id: number;
+  name: string;
+  sql: string;
+  result: QueryExecutionResponse | null;
+  error: string | null;
+  isRunning: boolean;
+}
 
 @Component({
   selector: 'app-query-studio',
   standalone: true,
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule, MonacoEditorComponent],
   templateUrl: './query-studio.html',
   styleUrl: './query-studio.scss'
 })
 export class QueryStudio implements OnInit {
   private schemaService = inject(SchemaService);
   private workspaceState = inject(WorkspaceStateService);
+  private queryService = inject(QueryService);
 
+  /** Default SQL template shown on first load */
+  defaultSql = '-- Type your SQL query here …';
+
+  // Reference to the Monaco editor component
+  monacoEditor = viewChild<MonacoEditorComponent>('monacoEditor');
+
+  // ── Tab state ──
+  tabs = signal<QueryTab[]>([]);
+  activeTabId = signal<number | null>(null);
+  private tabIdCounter = 0;
+
+  /** Computed reference to the currently active tab. */
+  activeTab = computed(() => this.tabs().find(t => t.id === this.activeTabId()) ?? null);
+
+  /** Tracks which tab is currently being renamed (null = not editing). */
+  editingTabId = signal<number | null>(null);
+
+  // ── Resizable results panel ──
+  resultsHeight: WritableSignal<number>;
+  private resultsResizeStartY = 0;
+  private resultsResizeStartHeight = 0;
+
+  // ── Query execution state ──
   isRunning = signal(false);
+  queryResult = signal<QueryExecutionResponse | null>(null);
+  queryError = signal<string | null>(null);
+  private querySubscription: Subscription | null = null;
+  private runningQueryTabId: number | null = null;
+
+  // ── Schema explorer state ──
   loading = signal(false);
   error = signal<string | null>(null);
   searchQuery = signal('');
@@ -38,6 +82,11 @@ export class QueryStudio implements OnInit {
       ? parseInt(localStorage.getItem(EXPLORER_WIDTH_KEY) ?? '', 10)
       : NaN;
     this.explorerWidth = signal(!isNaN(saved) && saved >= 200 ? saved : 340);
+
+    const savedResultsHeight = this.isBrowser
+      ? parseInt(localStorage.getItem(RESULTS_HEIGHT_KEY) ?? '', 10)
+      : NaN;
+    this.resultsHeight = signal(!isNaN(savedResultsHeight) && savedResultsHeight >= 80 ? savedResultsHeight : 200);
   }
 
   startResize(event: MouseEvent): void {
@@ -63,6 +112,41 @@ export class QueryStudio implements OnInit {
     document.body.style.userSelect = '';
     if (this.isBrowser) {
       localStorage.setItem(EXPLORER_WIDTH_KEY, String(this.explorerWidth()));
+    }
+  };
+
+  // ── Resizable results panel ──
+
+  startResultsResize(event: MouseEvent): void {
+    event.preventDefault();
+    this.resultsResizeStartY = event.clientY;
+    this.resultsResizeStartHeight = this.resultsHeight();
+    document.addEventListener('mousemove', this.onResultsResize);
+    document.addEventListener('mouseup', this.stopResultsResize);
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  private onResultsResize = (event: MouseEvent): void => {
+    // Calculate height relative to the editor-area bottom
+    const editorArea = (event.target as HTMLElement).closest('.editor-area');
+    if (!editorArea) return;
+
+    const editorAreaRect = editorArea.getBoundingClientRect();
+    const editorAreaBottom = editorAreaRect.bottom;
+    const distanceFromBottom = editorAreaBottom - event.clientY;
+    const newHeight = Math.max(80, Math.min(500, distanceFromBottom));
+
+    this.resultsHeight.set(newHeight);
+  };
+
+  private stopResultsResize = (): void => {
+    document.removeEventListener('mousemove', this.onResultsResize);
+    document.removeEventListener('mouseup', this.stopResultsResize);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    if (this.isBrowser) {
+      localStorage.setItem(RESULTS_HEIGHT_KEY, String(this.resultsHeight()));
     }
   };
 
@@ -105,7 +189,113 @@ export class QueryStudio implements OnInit {
   });
 
   ngOnInit(): void {
+    this.addTab();
     this.loadSchema();
+  }
+
+  // ── Tab Management ──
+
+  /** Creates a new query tab and switches to it. */
+  addTab(): void {
+    const id = ++this.tabIdCounter;
+    const tab: QueryTab = {
+      id,
+      name: `Query ${id}`,
+      sql: this.defaultSql,
+      result: null,
+      error: null,
+      isRunning: false,
+    };
+    this.tabs.update(tabs => [...tabs, tab]);
+    this.switchTab(id);
+  }
+
+  /** Switches to the tab with the given id, saving & restoring editor + results. */
+  switchTab(id: number): void {
+    const editor = this.monacoEditor();
+    const currentId = this.activeTabId();
+
+    // ── Save current state to the tab we're leaving ──
+    if (currentId != null) {
+      const currentSql = editor ? editor.getValue() : '';
+      this.tabs.update(tabs =>
+        tabs.map(t =>
+          t.id === currentId
+            ? {
+                ...t,
+                sql: currentSql,
+                result: this.queryResult(),
+                error: this.queryError(),
+                isRunning: this.isRunning(),
+              }
+            : t,
+        ),
+      );
+    }
+
+    this.activeTabId.set(id);
+
+    // ── Restore state from the tab we're switching to ──
+    const tab = this.tabs().find(t => t.id === id);
+    if (tab) {
+      editor?.setValue(tab.sql);
+      this.queryResult.set(tab.result);
+      this.queryError.set(tab.error);
+      this.isRunning.set(tab.isRunning);
+    }
+  }
+
+  /** Closes the given tab. At least one tab is always kept open. */
+  closeTab(id: number): void {
+    const currentTabs = this.tabs();
+    if (currentTabs.length <= 1) return;
+
+    // Clear editing state if closing the tab being renamed
+    if (this.editingTabId() === id) {
+      this.editingTabId.set(null);
+    }
+
+    const idx = currentTabs.findIndex(t => t.id === id);
+    this.tabs.update(tabs => tabs.filter(t => t.id !== id));
+
+    // If we closed the active tab, switch to the nearest remaining tab
+    if (this.activeTabId() === id) {
+      const remaining = this.tabs();
+      const newIdx = Math.min(idx, remaining.length - 1);
+      this.switchTab(remaining[newIdx].id);
+    }
+  }
+
+  // ── Tab Renaming ──
+
+  /** Double-click on a tab name starts inline editing. */
+  startEditName(tabId: number, event: MouseEvent): void {
+    event.stopPropagation();
+    this.editingTabId.set(tabId);
+    // Focus and select the input after Angular renders it
+    setTimeout(() => {
+      const input = document.querySelector('.tab-name-input') as HTMLInputElement;
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    });
+  }
+
+  /** Saves the new name when editing is confirmed (Enter / blur). */
+  finishEditName(tabId: number, input: HTMLInputElement): void {
+    const raw = input.value.trim();
+    if (raw.length > 0) {
+      this.tabs.update(tabs =>
+        tabs.map(t => (t.id === tabId ? { ...t, name: raw } : t)),
+      );
+    }
+    this.editingTabId.set(null);
+  }
+
+  /** Cancels renaming (Escape) without saving. */
+  cancelEditName(): void {
+    this.editingTabId.set(null);
   }
 
   onSearchChange(value: string): void {
@@ -129,7 +319,6 @@ export class QueryStudio implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        // Try to extract a meaningful message
         let msg = 'Failed to load schema.';
         if (err.status === 404) {
           msg = err.error?.message
@@ -146,22 +335,137 @@ export class QueryStudio implements OnInit {
     });
   }
 
-  // ── Timer helpers (unchanged) ──
-  private runTimer: ReturnType<typeof setTimeout> | null = null;
+  // ── Query Execution ──
 
-  run(): void {
-    this.isRunning.set(true);
-    this.runTimer = setTimeout(() => {
-      this.isRunning.set(false);
-      this.runTimer = null;
-    }, 2000);
+  /** Fires when the Monaco editor content changes — saves to the active tab. */
+  onSqlChange(sql: string): void {
+    const id = this.activeTabId();
+    if (id != null) {
+      this.tabs.update(tabs =>
+        tabs.map(t => (t.id === id ? { ...t, sql } : t)),
+      );
+    }
   }
 
-  stop(): void {
-    if (this.runTimer) {
-      clearTimeout(this.runTimer);
-      this.runTimer = null;
+  /** Load a SQL template into the editor */
+  loadTemplate(sql: string): void {
+    this.monacoEditor()?.setValue(sql);
+  }
+
+  /** Executes the current SQL query */
+  run(): void {
+    // Block if another query is already running (in any tab)
+    if (this.runningQueryTabId != null) {
+      this.queryError.set('Another query is already running. Please wait or stop it.');
+      return;
     }
+
+    const workspaceId = this.workspaceState.selectedWorkspaceId();
+    if (!workspaceId) {
+      this.queryError.set('No workspace selected.');
+      return;
+    }
+
+    const sql = this.monacoEditor()?.getValue()?.trim();
+    if (!sql) {
+      this.queryError.set('Please enter a SQL query.');
+      return;
+    }
+
+    const tabId = this.activeTabId();
+    if (tabId == null) return;
+
+    // Mark this tab as running in the tab model
+    this.tabs.update(tabs =>
+      tabs.map(t =>
+        t.id === tabId ? { ...t, result: null, error: null, isRunning: true } : t,
+      ),
+    );
+
+    // Sync display signals
+    this.queryResult.set(null);
+    this.queryError.set(null);
+    this.isRunning.set(true);
+    this.runningQueryTabId = tabId;
+
+    this.querySubscription = this.queryService.execute({ workspaceId, sql }).subscribe({
+      next: (result) => {
+        this.querySubscription = null;
+        const rtId = this.runningQueryTabId;
+        this.runningQueryTabId = null;
+
+        // Store the result in the tab that initiated the query
+        this.tabs.update(tabs =>
+          tabs.map(t =>
+            t.id === rtId ? { ...t, result, error: null, isRunning: false } : t,
+          ),
+        );
+
+        // Only update display signals if this tab is still the active one
+        if (this.activeTabId() === rtId) {
+          this.queryResult.set(result);
+          this.isRunning.set(false);
+        }
+      },
+      error: (err) => {
+        this.querySubscription = null;
+        const rtId = this.runningQueryTabId;
+        this.runningQueryTabId = null;
+
+        const errMsg = err.error?.error || err.error?.message || err.message || 'Query execution failed.';
+
+        // Store the error in the tab that initiated the query
+        this.tabs.update(tabs =>
+          tabs.map(t =>
+            t.id === rtId ? { ...t, result: null, error: errMsg, isRunning: false } : t,
+          ),
+        );
+
+        // Only update display signals if this tab is still the active one
+        if (this.activeTabId() === rtId) {
+          this.queryError.set(errMsg);
+          this.isRunning.set(false);
+        }
+      },
+    });
+  }
+
+  /** Cancels the running query */
+  stop(): void {
+    if (this.querySubscription) {
+      this.querySubscription.unsubscribe();
+      this.querySubscription = null;
+    }
+
+    // Clear the running state on the tab that was executing
+    if (this.runningQueryTabId != null) {
+      this.tabs.update(tabs =>
+        tabs.map(t =>
+          t.id === this.runningQueryTabId ? { ...t, isRunning: false } : t,
+        ),
+      );
+      this.runningQueryTabId = null;
+    }
+
     this.isRunning.set(false);
+    this.queryError.set('Query execution was cancelled.');
+  }
+
+  /** Formats the timestamp of the last execution */
+  formattedTimestamp(): string {
+    return new Date().toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  }
+
+  /** Helper to show duration with unit */
+  formatDuration(ms: number): string {
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(2)}s`;
   }
 }
