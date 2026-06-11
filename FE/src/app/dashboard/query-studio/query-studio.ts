@@ -3,6 +3,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
+import { AuthService } from '../../shared/auth/auth.service';
 import { SchemaService, SchemaExplorerResponse } from './schema.service';
 import { WorkspaceStateService } from '../../shared/workspace-state.service';
 import { QueryService, QueryExecutionResponse } from './query.service';
@@ -20,6 +21,9 @@ export interface QueryTab {
   result: QueryExecutionResponse | null;
   error: string | null;
   isRunning: boolean;
+  /** Set when the tab's content was loaded from a saved file — used for prompt-less re-save. */
+  sourceFolder?: string;
+  sourceFileName?: string;
 }
 
 @Component({
@@ -30,13 +34,14 @@ export interface QueryTab {
   styleUrl: './query-studio.scss'
 })
 export class QueryStudio implements OnInit {
+  authService = inject(AuthService);
   private schemaService = inject(SchemaService);
   private workspaceState = inject(WorkspaceStateService);
   private queryService = inject(QueryService);
   private ddlFileService = inject(DdlFileService);
 
   /** Default SQL template shown on first load */
-  defaultSql = '-- Type your SQL query here …';
+  defaultSql = '';
 
   // Reference to the Monaco editor component
   monacoEditor = viewChild<MonacoEditorComponent>('monacoEditor');
@@ -67,8 +72,93 @@ export class QueryStudio implements OnInit {
   isRunning = signal(false);
   queryResult = signal<QueryExecutionResponse | null>(null);
   queryError = signal<string | null>(null);
+  querySuccess = signal<string | null>(null);
   private querySubscription: Subscription | null = null;
   private runningQueryTabId: number | null = null;
+
+  /** True when there's a successful SELECT result with at least one row — enables Export CSV. */
+  canExportCsv = computed(() => {
+    const r = this.queryResult();
+    return !!r && r.success && r.isSelectQuery && r.columns.length > 0 && r.rows.length > 0;
+  });
+
+  // ── Save Dialog state ──
+  showSaveDialog = signal(false);
+  saveDialogFolders = signal<string[]>([]);
+  saveDialogFolderFilter = signal('');
+  saveDialogSelectedFolder = signal<string>('');
+  saveDialogCustomFolder = signal<string>('');
+  saveDialogFileName = signal<string>('');
+  saveDialogIsNewFolder = signal(false);
+  private saveDialogResolve: ((result: { folderName: string; fileName: string } | null) => void) | null = null;
+
+  /** Folders filtered by the search term (case-insensitive). */
+  filteredFolders = computed(() => {
+    const filter = this.saveDialogFolderFilter().toLowerCase().trim();
+    if (!filter) return this.saveDialogFolders();
+    return this.saveDialogFolders().filter(f => f.toLowerCase().includes(filter));
+  });
+
+  /** Returns whether the save-dialog inputs are valid. */
+  isSaveValid(): boolean {
+    if (this.saveDialogIsNewFolder()) {
+      return !!this.saveDialogCustomFolder().trim() && !!this.saveDialogFileName().trim();
+    }
+    return !!this.saveDialogSelectedFolder() && !!this.saveDialogFileName().trim();
+  }
+
+  private openSaveDialog(): Promise<{ folderName: string; fileName: string } | null> {
+    const tab = this.activeTab();
+    if (!tab) return Promise.resolve(null);
+
+    // Gather existing folders from the DDL tree
+    const folders: string[] = [];
+    const tree = this.ddlTree();
+    if (tree?.children) {
+      for (const org of tree.children) {
+        for (const folder of org.children ?? []) {
+          if (folder.type === 'Folder') {
+            folders.push(folder.name);
+          }
+        }
+      }
+    }
+
+    const defaultName = tab.name.endsWith('.sql') ? tab.name : `${tab.name}.sql`;
+
+    this.saveDialogFolders.set(folders);
+    this.saveDialogFolderFilter.set('');
+    this.saveDialogSelectedFolder.set(folders[0] || '');
+    this.saveDialogCustomFolder.set('');
+    this.saveDialogFileName.set(defaultName);
+    this.saveDialogIsNewFolder.set(false);
+    this.showSaveDialog.set(true);
+
+    return new Promise(resolve => {
+      this.saveDialogResolve = resolve;
+    });
+  }
+
+  confirmSaveDialog(): void {
+    const folderName = this.saveDialogIsNewFolder()
+      ? this.saveDialogCustomFolder().trim()
+      : this.saveDialogSelectedFolder();
+
+    const fileName = this.saveDialogFileName().trim();
+    if (!folderName || !fileName) return;
+
+    const finalFileName = fileName.endsWith('.sql') ? fileName : `${fileName}.sql`;
+
+    this.showSaveDialog.set(false);
+    this.saveDialogResolve?.({ folderName, fileName: finalFileName });
+    this.saveDialogResolve = null;
+  }
+
+  cancelSaveDialog(): void {
+    this.showSaveDialog.set(false);
+    this.saveDialogResolve?.(null);
+    this.saveDialogResolve = null;
+  }
 
   // ── Schema explorer state ──
   loading = signal(false);
@@ -329,8 +419,8 @@ export class QueryStudio implements OnInit {
     });
   }
 
-  /** Prompts the user for folder name and saves the current editor content. */
-  saveCurrentSql(): void {
+  /** Saves the current editor content. Shows a modern dialog on first save, re-saves silently. */
+  async saveCurrentSql(): Promise<void> {
     const tab = this.activeTab();
     if (!tab) return;
 
@@ -346,43 +436,69 @@ export class QueryStudio implements OnInit {
       return;
     }
 
-    // Prompt for folder name
-    const folderName = window.prompt('Enter folder name to save in:', 'My Queries');
-    if (!folderName || !folderName.trim()) return;
+    // ── Determine folder + file name ──
+    let folderName: string;
+    let fileName: string;
 
-    // Prompt for file name (default: tab name + .sql)
-    const defaultName = tab.name.endsWith('.sql') ? tab.name : `${tab.name}.sql`;
-    const fileName = window.prompt('Enter file name:', defaultName);
-    if (!fileName || !fileName.trim()) return;
-
-    const finalName = fileName.trim().endsWith('.sql') ? fileName.trim() : `${fileName.trim()}.sql`;
+    if (tab.sourceFolder && tab.sourceFileName) {
+      // Tab was loaded from a saved file → re-save silently (no dialog)
+      folderName = tab.sourceFolder;
+      fileName = tab.sourceFileName;
+    } else {
+      // First-time save → show modern dialog to pick folder and file name
+      const result = await this.openSaveDialog();
+      if (!result) return;
+      folderName = result.folderName;
+      fileName = result.fileName;
+    }
 
     this.ddlFileService
       .save({
         workspaceId,
         folderName: folderName.trim(),
-        fileName: finalName,
+        fileName: fileName,
         content: sql,
       })
       .subscribe({
         next: () => {
+          // Mark the tab with its source so subsequent saves skip prompts
+          this.tabs.update(tabs =>
+            tabs.map(t =>
+              t.id === tab.id
+                ? { ...t, name: fileName, sourceFolder: folderName.trim(), sourceFileName: fileName }
+                : t,
+            ),
+          );
           this.queryResult.set(null);
-          this.queryError.set('File saved successfully.');
+          this.queryError.set(null);
+          this.querySuccess.set('File saved successfully.');
           this.refreshDdlTree();
         },
         error: (err) => {
+          this.querySuccess.set(null);
           this.queryError.set(err.error?.message || err.message || 'Failed to save file.');
         },
       });
   }
 
   /** Loads a saved DDL file's content into the editor. */
-  loadSavedFile(node: DdlFileTreeNode): void {
-    if (node.type !== 'File' || !node.path) return;
+  loadSavedFile(folder: DdlFileTreeNode, file: DdlFileTreeNode): void {
+    if (file.type !== 'File' || !file.path) return;
 
-    this.ddlFileService.readFile(node.path).subscribe({
+    this.ddlFileService.readFile(file.path).subscribe({
       next: (response) => {
         this.monacoEditor()?.setValue(response.content);
+        // Update the active tab's name and store source info for prompt-less re-save
+        const currentTabId = this.activeTabId();
+        if (currentTabId != null) {
+          this.tabs.update(tabs =>
+            tabs.map(t =>
+              t.id === currentTabId
+                ? { ...t, name: file.name, sourceFolder: folder.name, sourceFileName: file.name }
+                : t,
+            ),
+          );
+        }
       },
       error: (err) => {
         this.queryError.set(err.error?.message || err.message || 'Failed to load file.');
@@ -602,6 +718,7 @@ export class QueryStudio implements OnInit {
     // Sync display signals
     this.queryResult.set(null);
     this.queryError.set(null);
+    this.querySuccess.set(null);
     this.isRunning.set(true);
     this.runningQueryTabId = tabId;
 
@@ -685,4 +802,41 @@ export class QueryStudio implements OnInit {
     if (ms < 1000) return `${ms}ms`;
     return `${(ms / 1000).toFixed(2)}s`;
   }
+
+  /** Exports the current SELECT query result as a CSV file. */
+  exportCsv(): void {
+    const result = this.queryResult();
+    if (!result || !result.success || !result.isSelectQuery || result.columns.length === 0) return;
+
+    const escapeCsv = (val: string | null): string => {
+      if (val === null) return '';
+      const str = String(val);
+      // If the value contains commas, quotes, or newlines, wrap in quotes and escape inner quotes
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    // Header row
+    const header = result.columns.map(c => escapeCsv(c.name)).join(',');
+
+    // Data rows
+    const rows = result.rows.map(row =>
+      row.values.map(v => escapeCsv(v)).join(',')
+    );
+
+    const csvContent = [header, ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `query-result-${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
 }
