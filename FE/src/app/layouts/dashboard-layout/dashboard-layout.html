@@ -67,18 +67,18 @@
     <div class="user-menu">
       <div class="user-trigger" (click)="toggleProfile($event)">
         <div class="user-info">
-          <span class="user-name">{{ userName() || 'User' }}</span>
+          <span class="user-name">{{ authService.getUserDisplayName() || 'User' }}</span>
           <span class="user-role">Admin</span>
         </div>
-        <div class="avatar">{{ getInitials() }}</div>
+        <div class="avatar">{{ authService.getInitials() }}</div>
       </div>
       @if (profileOpen()) {
       <div class="profile-dropdown" (click)="$event.stopPropagation()">
         <div class="profile-header">
-          <div class="avatar avatar-lg">{{ getInitials() }}</div>
+          <div class="avatar avatar-lg">{{ authService.getInitials() }}</div>
           <div>
-            <div class="profile-name">{{ userName() || 'User' }}</div>
-            <div class="profile-email">{{ userEmail() }}</div>
+            <div class="profile-name">{{ authService.getUserDisplayName() || 'User' }}</div>
+            <div class="profile-email">{{ authService.getUserEmail() }}</div>
           </div>
         </div>
         <div class="dropdown-divider"></div>

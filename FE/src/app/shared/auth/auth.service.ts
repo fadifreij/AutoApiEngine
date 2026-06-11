@@ -226,6 +226,43 @@ export class AuthService {
     return this.organizationId();
   }
 
+  /** Parses the user's display name from the JWT access token. */
+  getUserDisplayName(): string {
+    const token = this.accessToken();
+    if (!token) return 'User';
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const givenName = payload.given_name || '';
+      const familyName = payload.family_name || '';
+      return givenName || familyName || payload.preferred_username || payload.email?.split('@')[0] || 'User';
+    } catch {
+      return 'User';
+    }
+  }
+
+  /** Parses the user's email from the JWT access token. */
+  getUserEmail(): string {
+    const token = this.accessToken();
+    if (!token) return '';
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.email || '';
+    } catch {
+      return '';
+    }
+  }
+
+  /** Returns initials from the user's display name. */
+  getInitials(): string {
+    const name = this.getUserDisplayName();
+    if (!name || name === 'User') return 'U';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  }
+
   refreshToken(): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(
       `${this.API_URL}/refresh-token`,

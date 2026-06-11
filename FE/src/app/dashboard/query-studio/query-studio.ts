@@ -3,6 +3,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
+import { AuthService } from '../../shared/auth/auth.service';
 import { SchemaService, SchemaExplorerResponse } from './schema.service';
 import { WorkspaceStateService } from '../../shared/workspace-state.service';
 import { QueryService, QueryExecutionResponse } from './query.service';
@@ -20,6 +21,9 @@ export interface QueryTab {
   result: QueryExecutionResponse | null;
   error: string | null;
   isRunning: boolean;
+  /** Set when the tab's content was loaded from a saved file — used for prompt-less re-save. */
+  sourceFolder?: string;
+  sourceFileName?: string;
 }
 
 @Component({
@@ -30,6 +34,7 @@ export interface QueryTab {
   styleUrl: './query-studio.scss'
 })
 export class QueryStudio implements OnInit {
+  authService = inject(AuthService);
   private schemaService = inject(SchemaService);
   private workspaceState = inject(WorkspaceStateService);
   private queryService = inject(QueryService);
@@ -329,7 +334,7 @@ export class QueryStudio implements OnInit {
     });
   }
 
-  /** Prompts the user for folder name and saves the current editor content. */
+  /** Saves the current editor content. Prompts for folder/file on first save, re-saves silently. */
   saveCurrentSql(): void {
     const tab = this.activeTab();
     if (!tab) return;
@@ -346,29 +351,43 @@ export class QueryStudio implements OnInit {
       return;
     }
 
-    // Prompt for folder name
-    const folderName = window.prompt('Enter folder name to save in:', 'My Queries');
-    if (!folderName || !folderName.trim()) return;
+    // ── Determine folder + file name ──
+    let folderName: string;
+    let fileName: string;
 
-    // Prompt for file name (default: tab name + .sql)
-    const defaultName = tab.name.endsWith('.sql') ? tab.name : `${tab.name}.sql`;
-    const fileName = window.prompt('Enter file name:', defaultName);
-    if (!fileName || !fileName.trim()) return;
+    if (tab.sourceFolder && tab.sourceFileName) {
+      // Tab was loaded from a saved file → re-save silently (no prompts)
+      folderName = tab.sourceFolder;
+      fileName = tab.sourceFileName;
+    } else {
+      // First-time save → prompt user for folder and file name
+      const promptFolder = window.prompt('Enter folder name to save in:', 'My Queries');
+      if (!promptFolder || !promptFolder.trim()) return;
+      folderName = promptFolder.trim();
 
-    const finalName = fileName.trim().endsWith('.sql') ? fileName.trim() : `${fileName.trim()}.sql`;
+      const defaultName = tab.name.endsWith('.sql') ? tab.name : `${tab.name}.sql`;
+      const userFileName = window.prompt('Enter file name:', defaultName);
+      if (!userFileName || !userFileName.trim()) return;
+
+      fileName = userFileName.trim().endsWith('.sql') ? userFileName.trim() : `${userFileName.trim()}.sql`;
+    }
 
     this.ddlFileService
       .save({
         workspaceId,
         folderName: folderName.trim(),
-        fileName: finalName,
+        fileName: fileName,
         content: sql,
       })
       .subscribe({
         next: () => {
-          // Update the active tab's name to the saved file name (include .sql extension)
+          // Mark the tab with its source so subsequent saves skip prompts
           this.tabs.update(tabs =>
-            tabs.map(t => (t.id === tab.id ? { ...t, name: finalName } : t)),
+            tabs.map(t =>
+              t.id === tab.id
+                ? { ...t, name: fileName, sourceFolder: folderName.trim(), sourceFileName: fileName }
+                : t,
+            ),
           );
           this.queryResult.set(null);
           this.queryError.set('File saved successfully.');
@@ -381,17 +400,21 @@ export class QueryStudio implements OnInit {
   }
 
   /** Loads a saved DDL file's content into the editor. */
-  loadSavedFile(node: DdlFileTreeNode): void {
-    if (node.type !== 'File' || !node.path) return;
+  loadSavedFile(folder: DdlFileTreeNode, file: DdlFileTreeNode): void {
+    if (file.type !== 'File' || !file.path) return;
 
-    this.ddlFileService.readFile(node.path).subscribe({
+    this.ddlFileService.readFile(file.path).subscribe({
       next: (response) => {
         this.monacoEditor()?.setValue(response.content);
-        // Update the active tab's name to match the loaded file name (include .sql extension)
+        // Update the active tab's name and store source info for prompt-less re-save
         const currentTabId = this.activeTabId();
         if (currentTabId != null) {
           this.tabs.update(tabs =>
-            tabs.map(t => (t.id === currentTabId ? { ...t, name: node.name } : t)),
+            tabs.map(t =>
+              t.id === currentTabId
+                ? { ...t, name: file.name, sourceFolder: folder.name, sourceFileName: file.name }
+                : t,
+            ),
           );
         }
       },
@@ -696,4 +719,5 @@ export class QueryStudio implements OnInit {
     if (ms < 1000) return `${ms}ms`;
     return `${(ms / 1000).toFixed(2)}s`;
   }
+
 }
