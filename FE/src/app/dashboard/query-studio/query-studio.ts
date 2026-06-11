@@ -366,6 +366,11 @@ export class QueryStudio implements OnInit {
       })
       .subscribe({
         next: () => {
+          // Update the active tab's name to the saved file name (strip .sql extension)
+          const tabName = finalName.endsWith('.sql') ? finalName.slice(0, -4) : finalName;
+          this.tabs.update(tabs =>
+            tabs.map(t => (t.id === tab.id ? { ...t, name: tabName } : t)),
+          );
           this.queryResult.set(null);
           this.queryError.set('File saved successfully.');
           this.refreshDdlTree();
@@ -383,6 +388,14 @@ export class QueryStudio implements OnInit {
     this.ddlFileService.readFile(node.path).subscribe({
       next: (response) => {
         this.monacoEditor()?.setValue(response.content);
+        // Update the active tab's name to match the loaded file name (strip .sql extension)
+        const tabName = node.name.endsWith('.sql') ? node.name.slice(0, -4) : node.name;
+        const currentTabId = this.activeTabId();
+        if (currentTabId != null) {
+          this.tabs.update(tabs =>
+            tabs.map(t => (t.id === currentTabId ? { ...t, name: tabName } : t)),
+          );
+        }
       },
       error: (err) => {
         this.queryError.set(err.error?.message || err.message || 'Failed to load file.');
