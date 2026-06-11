@@ -76,6 +76,90 @@ export class QueryStudio implements OnInit {
   private querySubscription: Subscription | null = null;
   private runningQueryTabId: number | null = null;
 
+  /** True when there's a successful SELECT result with at least one row — enables Export CSV. */
+  canExportCsv = computed(() => {
+    const r = this.queryResult();
+    return !!r && r.success && r.isSelectQuery && r.columns.length > 0 && r.rows.length > 0;
+  });
+
+  // ── Save Dialog state ──
+  showSaveDialog = signal(false);
+  saveDialogFolders = signal<string[]>([]);
+  saveDialogFolderFilter = signal('');
+  saveDialogSelectedFolder = signal<string>('');
+  saveDialogCustomFolder = signal<string>('');
+  saveDialogFileName = signal<string>('');
+  saveDialogIsNewFolder = signal(false);
+  private saveDialogResolve: ((result: { folderName: string; fileName: string } | null) => void) | null = null;
+
+  /** Folders filtered by the search term (case-insensitive). */
+  filteredFolders = computed(() => {
+    const filter = this.saveDialogFolderFilter().toLowerCase().trim();
+    if (!filter) return this.saveDialogFolders();
+    return this.saveDialogFolders().filter(f => f.toLowerCase().includes(filter));
+  });
+
+  /** Returns whether the save-dialog inputs are valid. */
+  isSaveValid(): boolean {
+    if (this.saveDialogIsNewFolder()) {
+      return !!this.saveDialogCustomFolder().trim() && !!this.saveDialogFileName().trim();
+    }
+    return !!this.saveDialogSelectedFolder() && !!this.saveDialogFileName().trim();
+  }
+
+  private openSaveDialog(): Promise<{ folderName: string; fileName: string } | null> {
+    const tab = this.activeTab();
+    if (!tab) return Promise.resolve(null);
+
+    // Gather existing folders from the DDL tree
+    const folders: string[] = [];
+    const tree = this.ddlTree();
+    if (tree?.children) {
+      for (const org of tree.children) {
+        for (const folder of org.children ?? []) {
+          if (folder.type === 'Folder') {
+            folders.push(folder.name);
+          }
+        }
+      }
+    }
+
+    const defaultName = tab.name.endsWith('.sql') ? tab.name : `${tab.name}.sql`;
+
+    this.saveDialogFolders.set(folders);
+    this.saveDialogFolderFilter.set('');
+    this.saveDialogSelectedFolder.set(folders[0] || '');
+    this.saveDialogCustomFolder.set('');
+    this.saveDialogFileName.set(defaultName);
+    this.saveDialogIsNewFolder.set(false);
+    this.showSaveDialog.set(true);
+
+    return new Promise(resolve => {
+      this.saveDialogResolve = resolve;
+    });
+  }
+
+  confirmSaveDialog(): void {
+    const folderName = this.saveDialogIsNewFolder()
+      ? this.saveDialogCustomFolder().trim()
+      : this.saveDialogSelectedFolder();
+
+    const fileName = this.saveDialogFileName().trim();
+    if (!folderName || !fileName) return;
+
+    const finalFileName = fileName.endsWith('.sql') ? fileName : `${fileName}.sql`;
+
+    this.showSaveDialog.set(false);
+    this.saveDialogResolve?.({ folderName, fileName: finalFileName });
+    this.saveDialogResolve = null;
+  }
+
+  cancelSaveDialog(): void {
+    this.showSaveDialog.set(false);
+    this.saveDialogResolve?.(null);
+    this.saveDialogResolve = null;
+  }
+
   // ── Schema explorer state ──
   loading = signal(false);
   error = signal<string | null>(null);
@@ -335,8 +419,8 @@ export class QueryStudio implements OnInit {
     });
   }
 
-  /** Saves the current editor content. Prompts for folder/file on first save, re-saves silently. */
-  saveCurrentSql(): void {
+  /** Saves the current editor content. Shows a modern dialog on first save, re-saves silently. */
+  async saveCurrentSql(): Promise<void> {
     const tab = this.activeTab();
     if (!tab) return;
 
@@ -357,20 +441,15 @@ export class QueryStudio implements OnInit {
     let fileName: string;
 
     if (tab.sourceFolder && tab.sourceFileName) {
-      // Tab was loaded from a saved file → re-save silently (no prompts)
+      // Tab was loaded from a saved file → re-save silently (no dialog)
       folderName = tab.sourceFolder;
       fileName = tab.sourceFileName;
     } else {
-      // First-time save → prompt user for folder and file name
-      const promptFolder = window.prompt('Enter folder name to save in:', 'My Queries');
-      if (!promptFolder || !promptFolder.trim()) return;
-      folderName = promptFolder.trim();
-
-      const defaultName = tab.name.endsWith('.sql') ? tab.name : `${tab.name}.sql`;
-      const userFileName = window.prompt('Enter file name:', defaultName);
-      if (!userFileName || !userFileName.trim()) return;
-
-      fileName = userFileName.trim().endsWith('.sql') ? userFileName.trim() : `${userFileName.trim()}.sql`;
+      // First-time save → show modern dialog to pick folder and file name
+      const result = await this.openSaveDialog();
+      if (!result) return;
+      folderName = result.folderName;
+      fileName = result.fileName;
     }
 
     this.ddlFileService
@@ -722,6 +801,42 @@ export class QueryStudio implements OnInit {
   formatDuration(ms: number): string {
     if (ms < 1000) return `${ms}ms`;
     return `${(ms / 1000).toFixed(2)}s`;
+  }
+
+  /** Exports the current SELECT query result as a CSV file. */
+  exportCsv(): void {
+    const result = this.queryResult();
+    if (!result || !result.success || !result.isSelectQuery || result.columns.length === 0) return;
+
+    const escapeCsv = (val: string | null): string => {
+      if (val === null) return '';
+      const str = String(val);
+      // If the value contains commas, quotes, or newlines, wrap in quotes and escape inner quotes
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    // Header row
+    const header = result.columns.map(c => escapeCsv(c.name)).join(',');
+
+    // Data rows
+    const rows = result.rows.map(row =>
+      row.values.map(v => escapeCsv(v)).join(',')
+    );
+
+    const csvContent = [header, ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `query-result-${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
 }

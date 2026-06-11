@@ -235,7 +235,6 @@
           <button class="toolbar-btn">Explain</button>
         </div>
         <div class="toolbar-right">
-          <button class="toolbar-btn">Export CSV</button>
           <button class="toolbar-btn" (click)="saveCurrentSql()">Save</button>
         </div>
       </div>
@@ -282,7 +281,18 @@
         <span class="label">
           Results <span class="count">{{ result.totalRows }} rows</span>
         </span>
-        <span class="meta">Executed in {{ formatDuration(result.durationMs) }} · {{ formattedTimestamp() }}</span>
+        <span class="meta">
+          <button class="export-csv-btn" (click)="exportCsv()" [disabled]="!canExportCsv()"
+                  title="Export results as CSV">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Export CSV
+          </button>
+          Executed in {{ formatDuration(result.durationMs) }} · {{ formattedTimestamp() }}
+        </span>
       </div>
       <div class="results-body">
         <table class="results-table">
@@ -470,6 +480,82 @@
         <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
       </svg>
       Delete
+    </div>
+  </div>
+  }
+
+  <!-- Save Dialog -->
+  @if (showSaveDialog()) {
+  <div class="save-dialog-overlay" (click)="cancelSaveDialog()">
+    <div class="save-dialog" (click)="$event.stopPropagation()">
+      <div class="save-dialog-header">
+        <h3>Save Query</h3>
+        <button class="save-dialog-close" (click)="cancelSaveDialog()">&times;</button>
+      </div>
+
+      <div class="save-dialog-body">
+        <!-- Folder selection -->
+        <div class="save-dialog-section">
+          <label>Folder</label>
+
+          @if (!saveDialogIsNewFolder() && saveDialogFolders().length > 0) {
+          @if (saveDialogFolders().length > 5) {
+          <div class="folder-search">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input class="save-input" type="text" placeholder="Filter folders…"
+                   [(ngModel)]="saveDialogFolderFilter" (click)="$event.stopPropagation()" />
+          </div>
+          }
+          <div class="folder-list">
+            @for (folder of filteredFolders(); track folder) {
+            <div class="folder-item" [class.selected]="saveDialogSelectedFolder() === folder"
+                 (click)="saveDialogSelectedFolder.set(folder)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+              </svg>
+              {{ folder }}
+              @if (saveDialogSelectedFolder() === folder) {
+              <svg class="folder-check" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              }
+            </div>
+            }
+          </div>
+          } @else if (!saveDialogIsNewFolder()) {
+          @if (saveDialogFolderFilter().trim() && filteredFolders().length === 0) {
+          <div class="no-folders">No folders match your filter.</div>
+          } @else {
+          <div class="no-folders">No folders yet. Create one below.</div>
+          }
+          }
+
+          <label class="new-folder-check">
+            <input type="checkbox" [checked]="saveDialogIsNewFolder()"
+                   (change)="saveDialogIsNewFolder.set(!saveDialogIsNewFolder())" />
+            <span>Create new folder</span>
+          </label>
+          @if (saveDialogIsNewFolder()) {
+          <input class="save-input" type="text" placeholder="Folder name" autofocus
+                 [(ngModel)]="saveDialogCustomFolder" />
+          }
+        </div>
+
+        <!-- File name -->
+        <div class="save-dialog-section">
+          <label>File name</label>
+          <input class="save-input" type="text" placeholder="my-query.sql"
+                 [(ngModel)]="saveDialogFileName" />
+        </div>
+      </div>
+
+      <div class="save-dialog-footer">
+        <button class="btn-cancel" (click)="cancelSaveDialog()">Cancel</button>
+        <button class="btn-save" (click)="confirmSaveDialog()" [disabled]="!isSaveValid()">Save</button>
+      </div>
     </div>
   </div>
   }
