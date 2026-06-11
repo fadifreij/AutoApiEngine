@@ -255,6 +255,10 @@
       <div class="results-error">{{ err }}</div>
       }
 
+      @if (querySuccess(); as msg) {
+      <div class="results-success">{{ msg }}</div>
+      }
+
       @if (queryResult(); as result) {
       @if (!result.success) {
       <!-- Error result -->

@@ -72,6 +72,7 @@ export class QueryStudio implements OnInit {
   isRunning = signal(false);
   queryResult = signal<QueryExecutionResponse | null>(null);
   queryError = signal<string | null>(null);
+  querySuccess = signal<string | null>(null);
   private querySubscription: Subscription | null = null;
   private runningQueryTabId: number | null = null;
 
@@ -390,10 +391,12 @@ export class QueryStudio implements OnInit {
             ),
           );
           this.queryResult.set(null);
-          this.queryError.set('File saved successfully.');
+          this.queryError.set(null);
+          this.querySuccess.set('File saved successfully.');
           this.refreshDdlTree();
         },
         error: (err) => {
+          this.querySuccess.set(null);
           this.queryError.set(err.error?.message || err.message || 'Failed to save file.');
         },
       });
@@ -636,6 +639,7 @@ export class QueryStudio implements OnInit {
     // Sync display signals
     this.queryResult.set(null);
     this.queryError.set(null);
+    this.querySuccess.set(null);
     this.isRunning.set(true);
     this.runningQueryTabId = tabId;
 
