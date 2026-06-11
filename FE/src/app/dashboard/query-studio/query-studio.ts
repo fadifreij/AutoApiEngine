@@ -36,7 +36,7 @@ export class QueryStudio implements OnInit {
   private ddlFileService = inject(DdlFileService);
 
   /** Default SQL template shown on first load */
-  defaultSql = '-- Type your SQL query here …';
+  defaultSql = '';
 
   // Reference to the Monaco editor component
   monacoEditor = viewChild<MonacoEditorComponent>('monacoEditor');
@@ -366,10 +366,9 @@ export class QueryStudio implements OnInit {
       })
       .subscribe({
         next: () => {
-          // Update the active tab's name to the saved file name (strip .sql extension)
-          const tabName = finalName.endsWith('.sql') ? finalName.slice(0, -4) : finalName;
+          // Update the active tab's name to the saved file name (include .sql extension)
           this.tabs.update(tabs =>
-            tabs.map(t => (t.id === tab.id ? { ...t, name: tabName } : t)),
+            tabs.map(t => (t.id === tab.id ? { ...t, name: finalName } : t)),
           );
           this.queryResult.set(null);
           this.queryError.set('File saved successfully.');
@@ -388,12 +387,11 @@ export class QueryStudio implements OnInit {
     this.ddlFileService.readFile(node.path).subscribe({
       next: (response) => {
         this.monacoEditor()?.setValue(response.content);
-        // Update the active tab's name to match the loaded file name (strip .sql extension)
-        const tabName = node.name.endsWith('.sql') ? node.name.slice(0, -4) : node.name;
+        // Update the active tab's name to match the loaded file name (include .sql extension)
         const currentTabId = this.activeTabId();
         if (currentTabId != null) {
           this.tabs.update(tabs =>
-            tabs.map(t => (t.id === currentTabId ? { ...t, name: tabName } : t)),
+            tabs.map(t => (t.id === currentTabId ? { ...t, name: node.name } : t)),
           );
         }
       },

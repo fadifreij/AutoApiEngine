@@ -31,11 +31,33 @@ import { isPlatformBrowser } from '@angular/common';
 @Component({
   selector: 'app-monaco-editor',
   standalone: true,
-  template: '<div #editorContainer class="monaco-container"></div>',
+  template: `
+    <div #editorContainer class="monaco-container">
+      <div class="monaco-placeholder"
+           [style.display]="placeholderVisible && placeholder() ? 'block' : 'none'"
+           (click)="focusEditor()">{{ placeholder() }}</div>
+    </div>
+  `,
   styles: [
     `
       :host { display: flex; flex: 1; min-height: 0; }
-      .monaco-container { flex: 1; min-height: 150px; }
+      .monaco-container { flex: 1; min-height: 150px; position: relative; }
+      .monaco-placeholder {
+        position: absolute;
+        top: 16px;
+        left: 56px;
+        z-index: 10;
+        color: #6b7280;
+        font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+        font-size: 13px;
+        cursor: text;
+        user-select: none;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: calc(100% - 72px);
+        pointer-events: none;
+      }
     `,
   ],
 })
@@ -46,6 +68,9 @@ export class MonacoEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Initial SQL value to load into the editor */
   initialValue = input<string>('');
 
+  /** Placeholder text shown when the editor is empty */
+  placeholder = input<string>('');
+
   /** Emits the current editor content whenever it changes */
   valueChange = output<string>();
 
@@ -53,6 +78,9 @@ export class MonacoEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private isBrowser: boolean;
   private initStarted = false;
   private containerEl!: HTMLDivElement;
+
+  /** Controls visibility of the placeholder overlay */
+  placeholderVisible = true;
 
   constructor(
     private el: ElementRef,
@@ -227,10 +255,28 @@ export class MonacoEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       },
     });
 
-    // ── Emit content changes ──
+    // ── Placeholder: update visibility based on editor state ──
+    const updatePlaceholder = (): void => {
+      const value = this.editor?.getValue() ?? '';
+      this.placeholderVisible = !value || value.trim() === '';
+    };
+
+    // Set initial placeholder state
+    updatePlaceholder();
+
+    this.editor.onDidFocusEditorText(() => {
+      this.ngZone.run(() => { this.placeholderVisible = false; });
+    });
+
+    this.editor.onDidBlurEditorText(() => {
+      this.ngZone.run(() => { updatePlaceholder(); });
+    });
+
+    // ── Emit content changes + update placeholder ──
     this.editor.onDidChangeModelContent(() => {
       const value = this.editor.getValue();
       this.ngZone.run(() => {
+        updatePlaceholder();
         this.valueChange.emit(value);
       });
     });
@@ -246,6 +292,13 @@ export class MonacoEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Get the current editor content */
   getValue(): string {
     return this.editor?.getValue() ?? '';
+  }
+
+  /** Programmatically focus the editor */
+  focusEditor(): void {
+    if (this.editor) {
+      this.editor.focus();
+    }
   }
 
   ngOnDestroy(): void {

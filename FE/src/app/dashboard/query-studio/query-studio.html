@@ -242,7 +242,7 @@
 
       <!-- MONACO EDITOR (replaces the static code-area) -->
       <div class="monaco-wrapper">
-        <app-monaco-editor #monacoEditor [initialValue]="defaultSql" (valueChange)="onSqlChange($event)" />
+        <app-monaco-editor #monacoEditor [initialValue]="defaultSql" [placeholder]="'-- Type your SQL query here …'" (valueChange)="onSqlChange($event)" />
       </div>
     </div>
 
