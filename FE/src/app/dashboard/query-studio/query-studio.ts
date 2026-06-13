@@ -142,6 +142,10 @@ export class QueryStudio implements OnInit {
   queryResult = signal<QueryExecutionResponse | null>(null);
   queryError = signal<string | null>(null);
   querySuccess = signal<string | null>(null);
+  /** Holds multiple result cards when the SQL contains multiple statements. */
+  queryResults = signal<{ index: number; sql: string; result: QueryExecutionResponse }[] | null>(null);
+  /** Active tab index when showing multiple results. */
+  selectedResultIndex = signal(0);
   private querySubscription: Subscription | null = null;
   private runningQueryTabId: number | null = null;
 
@@ -843,7 +847,6 @@ export class QueryStudio implements OnInit {
           return;
         }
         this.monacoEditor()?.setValue(ddl);
-        this.querySuccess.set(`DDL for "${obj.name}" loaded into editor.`);
       },
       error: (err) => {
         this.schemaContextMenuLoading.set(false);
@@ -945,7 +948,10 @@ export class QueryStudio implements OnInit {
       return;
     }
 
-    const sql = this.monacoEditor()?.getValue()?.trim();
+    // Use selected text if available, otherwise the full editor content
+    const editor = this.monacoEditor();
+    const selectedSql = editor?.getSelectedValue()?.trim();
+    const sql = selectedSql || editor?.getValue()?.trim() || '';
     if (!sql) {
       this.queryError.set('Please enter a SQL query.');
       return;
@@ -953,6 +959,9 @@ export class QueryStudio implements OnInit {
 
     const tabId = this.activeTabId();
     if (tabId == null) return;
+
+    // Split into individual statements by ';'
+    const statements = this.splitStatements(sql);
 
     // Mark this tab as running in the tab model
     this.tabs.update(tabs =>
@@ -963,57 +972,120 @@ export class QueryStudio implements OnInit {
 
     // Sync display signals
     this.queryResult.set(null);
+    this.queryResults.set(null);
+    this.selectedResultIndex.set(0);
     this.queryError.set(null);
     this.querySuccess.set(null);
     this.isRunning.set(true);
     this.runningQueryTabId = tabId;
 
-    this.querySubscription = this.queryService.execute({ workspaceId, sql }).subscribe({
-      next: (result) => {
-        this.querySubscription = null;
-        const rtId = this.runningQueryTabId;
-        this.runningQueryTabId = null;
+    if (statements.length === 1) {
+      // ── Single statement — use existing flow ──────────────────────
+      const singleSql = statements[0];
+      this.querySubscription = this.queryService.execute({ workspaceId, sql: singleSql }).subscribe({
+        next: (result) => {
+          this.querySubscription = null;
+          const rtId = this.runningQueryTabId;
+          this.runningQueryTabId = null;
 
-        // Store the result in the tab that initiated the query
-        this.tabs.update(tabs =>
-          tabs.map(t =>
-            t.id === rtId ? { ...t, result, error: null, isRunning: false } : t,
-          ),
-        );
+          this.tabs.update(tabs =>
+            tabs.map(t =>
+              t.id === rtId ? { ...t, result, error: null, isRunning: false } : t,
+            ),
+          );
 
-        // Only update display signals if this tab is still the active one
-        if (this.activeTabId() === rtId) {
-          this.queryResult.set(result);
+          if (this.activeTabId() === rtId) {
+            this.queryResult.set(result);
+            this.isRunning.set(false);
+          }
+
+          if (result.success && this.isDdlStatement(singleSql)) {
+            this.loadSchema(this.searchQuery() || undefined);
+          }
+        },
+        error: (err) => {
+          this.querySubscription = null;
+          const rtId = this.runningQueryTabId;
+          this.runningQueryTabId = null;
+
+          const errMsg = err.error?.error || err.error?.message || err.message || 'Query execution failed.';
+
+          this.tabs.update(tabs =>
+            tabs.map(t =>
+              t.id === rtId ? { ...t, result: null, error: errMsg, isRunning: false } : t,
+            ),
+          );
+
+          if (this.activeTabId() === rtId) {
+            this.queryError.set(errMsg);
+            this.isRunning.set(false);
+          }
+        },
+      });
+    } else {
+      // ── Multiple statements — execute sequentially, collect results ──
+      const collected: { index: number; sql: string; result: QueryExecutionResponse }[] = [];
+      let hasDdl = false;
+
+      const executeNext = (idx: number) => {
+        if (idx >= statements.length || this.runningQueryTabId == null) {
+          // All done or cancelled
+          this.querySubscription = null;
+          this.runningQueryTabId = null;
           this.isRunning.set(false);
+
+          this.tabs.update(tabs =>
+            tabs.map(t =>
+              t.id === tabId ? { ...t, result: collected.length > 0 ? collected[collected.length - 1].result : null, error: null, isRunning: false } : t,
+            ),
+          );
+
+          // Display all collected results
+          if (this.activeTabId() === tabId && collected.length > 0) {
+            this.queryResults.set(collected);
+            this.queryResult.set(collected[collected.length - 1].result);
+          }
+
+          if (hasDdl) {
+            this.loadSchema(this.searchQuery() || undefined);
+          }
+          return;
         }
 
-        // Auto-refresh schema explorer after DDL operations (CREATE, ALTER, DROP, TRUNCATE, RENAME).
-        // This ensures the left pane tree shows newly created objects without manual refresh.
-        if (result.success && this.isDdlStatement(sql)) {
-          this.loadSchema(this.searchQuery() || undefined);
-        }
-      },
-      error: (err) => {
-        this.querySubscription = null;
-        const rtId = this.runningQueryTabId;
-        this.runningQueryTabId = null;
+        const stmt = statements[idx];
+        this.querySubscription = this.queryService.execute({ workspaceId, sql: stmt }).subscribe({
+          next: (result) => {
+            collected.push({ index: idx, sql: stmt, result });
+            if (result.success && this.isDdlStatement(stmt)) {
+              hasDdl = true;
+            }
+            // Move to next statement
+            executeNext(idx + 1);
+          },
+          error: (err) => {
+            const errMsg = err.error?.error || err.error?.message || err.message || 'Query execution failed.';
+            collected.push({
+              index: idx,
+              sql: stmt,
+              result: {
+                success: false,
+                isSelectQuery: false,
+                columns: [],
+                rows: [],
+                totalRows: 0,
+                rowsAffected: 0,
+                error: errMsg,
+                durationMs: 0,
+              },
+            });
+            // Continue with next statement on error
+            executeNext(idx + 1);
+          },
+        });
+      };
 
-        const errMsg = err.error?.error || err.error?.message || err.message || 'Query execution failed.';
-
-        // Store the error in the tab that initiated the query
-        this.tabs.update(tabs =>
-          tabs.map(t =>
-            t.id === rtId ? { ...t, result: null, error: errMsg, isRunning: false } : t,
-          ),
-        );
-
-        // Only update display signals if this tab is still the active one
-        if (this.activeTabId() === rtId) {
-          this.queryError.set(errMsg);
-          this.isRunning.set(false);
-        }
-      },
-    });
+      executeNext(0);
+    }
   }
 
   /** Cancels the running query */
@@ -1037,6 +1109,20 @@ export class QueryStudio implements OnInit {
     this.queryError.set('Query execution was cancelled.');
   }
 
+  /** Clears the SQL query editor. */
+  clearResults(): void {
+    this.monacoEditor()?.setValue('');
+  }
+
+  /** Clears the query results pane (table, errors, success messages). */
+  clearResultPane(): void {
+    this.queryResult.set(null);
+    this.queryResults.set(null);
+    this.queryError.set(null);
+    this.querySuccess.set(null);
+    this.selectedResultIndex.set(0);
+  }
+
   /**
    * Detects whether the SQL contains a DDL statement (CREATE, ALTER, DROP, TRUNCATE, RENAME).
    * Strips comments and DELIMITER directives first so they don't mask real DDL keywords.
@@ -1054,6 +1140,14 @@ export class QueryStudio implements OnInit {
     return firstWord === 'CREATE' || firstWord === 'ALTER' ||
            firstWord === 'DROP'   || firstWord === 'TRUNCATE' ||
            firstWord === 'RENAME';
+  }
+
+  /** Splits SQL text into individual statements separated by ';', filtering empty ones. */
+  private splitStatements(sql: string): string[] {
+    return sql
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
   }
 
   /** Formats the timestamp of the last execution */

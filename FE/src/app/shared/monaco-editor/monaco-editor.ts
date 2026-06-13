@@ -294,6 +294,14 @@ export class MonacoEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.editor?.getValue() ?? '';
   }
 
+  /** Get the selected text, or empty string if nothing is selected */
+  getSelectedValue(): string {
+    if (!this.editor) return '';
+    const selection = this.editor.getSelection();
+    if (!selection || selection.isEmpty()) return '';
+    return this.editor.getModel()?.getValueInRange(selection) ?? '';
+  }
+
   /** Programmatically focus the editor */
   focusEditor(): void {
     if (this.editor) {
