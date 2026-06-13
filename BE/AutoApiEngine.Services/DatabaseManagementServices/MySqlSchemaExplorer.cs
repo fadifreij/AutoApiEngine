@@ -147,6 +147,147 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             return response;
         }
 
+        public async Task<List<TableSchemaDto>> GetTableColumnsAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            CancellationToken cancellationToken = default)
+        {
+            var connStr = string.IsNullOrWhiteSpace(connectionString)
+                ? $"{_mySqlConnection};Database={databaseName}"
+                : $"{connectionString};Database={databaseName}";
+
+            await using var connection = new MySqlConnection(connStr);
+            await connection.OpenAsync(cancellationToken);
+
+            const string sql = @"
+                SELECT c.TABLE_NAME, c.COLUMN_NAME, c.COLUMN_TYPE, c.IS_NULLABLE, c.COLUMN_KEY
+                FROM information_schema.COLUMNS c
+                JOIN information_schema.TABLES t
+                    ON t.TABLE_NAME = c.TABLE_NAME AND t.TABLE_SCHEMA = c.TABLE_SCHEMA
+                WHERE c.TABLE_SCHEMA = @db AND t.TABLE_TYPE = 'BASE TABLE'
+                ORDER BY c.TABLE_NAME, c.ORDINAL_POSITION";
+
+            var tables = new Dictionary<string, TableSchemaDto>(StringComparer.OrdinalIgnoreCase);
+
+            await using var cmd = new MySqlCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@db", databaseName);
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var tableName = reader.GetString(0);
+                if (!tables.TryGetValue(tableName, out var table))
+                {
+                    table = new TableSchemaDto { TableName = tableName };
+                    tables[tableName] = table;
+                }
+
+                table.Columns.Add(new TableColumnDto
+                {
+                    Name = reader.GetString(1),
+                    DataType = reader.GetString(2),
+                    IsNullable = string.Equals(reader.GetString(3), "YES", StringComparison.OrdinalIgnoreCase),
+                    IsPrimaryKey = string.Equals(reader.GetString(4), "PRI", StringComparison.OrdinalIgnoreCase)
+                });
+            }
+
+            return tables.Values.ToList();
+        }
+
+        public async Task<List<RoutineDefinitionDto>> GetRoutineDefinitionsAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            CancellationToken cancellationToken = default)
+        {
+            var connStr = string.IsNullOrWhiteSpace(connectionString)
+                ? $"{_mySqlConnection};Database={databaseName}"
+                : $"{connectionString};Database={databaseName}";
+
+            await using var connection = new MySqlConnection(connStr);
+            await connection.OpenAsync(cancellationToken);
+
+            var result = new List<RoutineDefinitionDto>();
+
+            // Views
+            await using (var cmd = new MySqlCommand(
+                "SELECT TABLE_NAME, VIEW_DEFINITION FROM information_schema.VIEWS WHERE TABLE_SCHEMA = @db", connection))
+            {
+                cmd.Parameters.AddWithValue("@db", databaseName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    result.Add(new RoutineDefinitionDto
+                    {
+                        Name = reader.GetString(0),
+                        Type = "View",
+                        Definition = reader.IsDBNull(1) ? string.Empty : reader.GetString(1)
+                    });
+                }
+            }
+
+            // Stored procedures + functions
+            await using (var cmd = new MySqlCommand(
+                "SELECT ROUTINE_NAME, ROUTINE_TYPE, ROUTINE_DEFINITION FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = @db", connection))
+            {
+                cmd.Parameters.AddWithValue("@db", databaseName);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    var routineType = reader.GetString(1);
+                    result.Add(new RoutineDefinitionDto
+                    {
+                        Name = reader.GetString(0),
+                        Type = routineType == "FUNCTION" ? "Function" : "StoredProcedure",
+                        Definition = reader.IsDBNull(2) ? string.Empty : reader.GetString(2)
+                    });
+                }
+            }
+
+            return result;
+        }
+
+        public async Task<string> GetObjectDdlAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            string objectName,
+            string objectType,
+            CancellationToken cancellationToken = default)
+        {
+            var connStr = string.IsNullOrWhiteSpace(connectionString)
+                ? $"{_mySqlConnection};Database={databaseName}"
+                : $"{connectionString};Database={databaseName}";
+
+            var (showSql, ddlColumn) = objectType switch
+            {
+                "Table" => ($"SHOW CREATE TABLE `{objectName.Replace("`", "``")}`", "Create Table"),
+                "View" => ($"SHOW CREATE VIEW `{objectName.Replace("`", "``")}`", "Create View"),
+                "StoredProcedure" => ($"SHOW CREATE PROCEDURE `{objectName.Replace("`", "``")}`", "Create Procedure"),
+                "Function" => ($"SHOW CREATE FUNCTION `{objectName.Replace("`", "``")}`", "Create Function"),
+                _ => throw new ArgumentException($"Unsupported object type: {objectType}")
+            };
+
+            await using var connection = new MySqlConnection(connStr);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var cmd = new MySqlCommand(showSql, connection);
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                // Read the DDL by column name rather than a positional index. The column
+                // order differs by object type (e.g. SHOW CREATE PROCEDURE/FUNCTION return
+                // an extra `sql_mode` column before the DDL), so an index-based lookup can
+                // accidentally return `sql_mode` instead of the actual CREATE statement.
+                var ddlOrdinal = reader.GetOrdinal(ddlColumn);
+                return reader.IsDBNull(ddlOrdinal) ? string.Empty : reader.GetString(ddlOrdinal);
+            }
+
+            return string.Empty;
+        }
+
         private static MySqlCommand BuildCommand(MySqlConnection connection, string sql, Dictionary<string, object>? parameters)
         {
             var cmd = connection.CreateCommand();

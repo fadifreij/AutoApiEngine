@@ -4,6 +4,7 @@ using AutoApiEngine.ServiceAbstraction.DTO;
 using AutoApiEngine.Services.DatabaseManagementServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 namespace AutoApiEngine.Presentation.Controllers
 {
@@ -93,6 +94,43 @@ namespace AutoApiEngine.Presentation.Controllers
                     result.StoredProceduresCount,
                     result.DatabaseSizeBytes
                 };
+            });
+        }
+
+        /// <summary>
+        /// Returns the full CREATE DDL for a single database object (table, view,
+        /// stored procedure, or function). Used by Query Studio's schema context menu
+        /// for "Copy to clipboard" / "Copy to editor" actions.
+        /// </summary>
+        [HttpGet("{workspaceId:guid}/object-ddl")]
+        public async Task<IActionResult> GetObjectDdl(
+            string workspaceId,
+            [FromQuery, Required] string name,
+            [FromQuery, Required] string type,
+            CancellationToken cancellationToken = default)
+        {
+            return await HandleRequestAsync(async () =>
+            {
+                var workspace = await _workspaceRepository.GetByIdAsync(workspaceId, cancellationToken);
+
+                if (string.IsNullOrWhiteSpace(workspace.DatabaseName))
+                    throw new ArgumentException("Workspace has no database associated with it.");
+
+                var connectionString = workspace.DatabaseEngine switch
+                {
+                    DatabaseEngine.MySql => "Server=localhost;Port=3307;Uid=root;Pwd=root;",
+                    _ => "Server=LAPTOP-II43H7KF;Trusted_Connection=True;TrustServerCertificate=True;"
+                };
+
+                var ddl = await _schemaExplorerService.GetObjectDdlAsync(
+                    workspace.DatabaseName,
+                    workspace.DatabaseEngine,
+                    connectionString,
+                    name,
+                    type,
+                    cancellationToken);
+
+                return new { ddl };
             });
         }
     }

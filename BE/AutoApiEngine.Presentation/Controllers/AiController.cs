@@ -1,0 +1,76 @@
+using AutoApiEngine.ServiceAbstraction;
+using AutoApiEngine.ServiceAbstraction.DTO;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
+
+namespace AutoApiEngine.Presentation.Controllers
+{
+    /// <summary>
+    /// AI database assistant endpoint. Provides advisory help for writing DDL,
+    /// optimizing queries/procedures, and database performance for the current
+    /// workspace. It is advisory only and never executes SQL.
+    /// </summary>
+    [ApiController]
+    [Route("api/ai")]
+    [Authorize]
+    public class AiController : BaseController
+    {
+        private readonly IAiAssistantService _aiAssistantService;
+
+        public AiController(IAiAssistantService aiAssistantService)
+        {
+            _aiAssistantService = aiAssistantService;
+        }
+
+        /// <summary>
+        /// Sends a prompt (plus optional history and the editor's current SQL) to the
+        /// AI assistant and returns its advisory reply.
+        /// </summary>
+        [HttpPost("assist")]
+        public async Task<IActionResult> Assist([FromBody] AiAssistRequest request, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(request.WorkspaceId))
+                return BadRequest(new { message = "Workspace ID is required." });
+
+            if (string.IsNullOrWhiteSpace(request.Prompt))
+                return BadRequest(new { message = "Prompt cannot be empty." });
+
+            var result = await _aiAssistantService.AssistAsync(request, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Same as <see cref="Assist"/> but streams the reply token-by-token using
+        /// Server-Sent Events so the UI can render text as it is generated.
+        /// </summary>
+        [HttpPost("assist/stream")]
+        public async Task AssistStream([FromBody] AiAssistRequest request, CancellationToken cancellationToken)
+        {
+            Response.Headers["Content-Type"] = "text/event-stream";
+            Response.Headers["Cache-Control"] = "no-cache";
+            Response.Headers["X-Accel-Buffering"] = "no";
+
+            if (string.IsNullOrWhiteSpace(request.WorkspaceId) || string.IsNullOrWhiteSpace(request.Prompt))
+            {
+                await WriteSseAsync(new AiStreamChunk { Error = "Workspace ID and prompt are required." }, cancellationToken);
+                return;
+            }
+
+            await foreach (var chunk in _aiAssistantService.StreamAsync(request, cancellationToken))
+            {
+                await WriteSseAsync(chunk, cancellationToken);
+            }
+        }
+
+        private static readonly JsonSerializerOptions SseJsonOptions = new(JsonSerializerDefaults.Web);
+
+        private async Task WriteSseAsync(AiStreamChunk chunk, CancellationToken cancellationToken)
+        {
+            var json = JsonSerializer.Serialize(chunk, SseJsonOptions);
+            await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
+        }
+    }
+}

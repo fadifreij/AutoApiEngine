@@ -40,6 +40,38 @@ namespace AutoApiEngine.ApiServices.Providers
             // DDL file management service
             services.AddScoped<IDdlFileService, DdlFileService>();
 
+            // AI database assistant (advisory only — never executes SQL)
+            services.Configure<AiSettings>(config.GetSection("Ai"));
+            services.AddHttpClient<IAiAssistantService, AiAssistantService>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(120);
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                // Force IPv4 + a short connect timeout. Some networks return IPv6/NAT64
+                // (64:ff9b::) addresses that silently hang on connect; this avoids the
+                // long stall and connects directly over IPv4 like curl/PowerShell do.
+                ConnectTimeout = TimeSpan.FromSeconds(10),
+                ConnectCallback = async (context, cancellationToken) =>
+                {
+                    var socket = new System.Net.Sockets.Socket(
+                        System.Net.Sockets.AddressFamily.InterNetwork,
+                        System.Net.Sockets.SocketType.Stream,
+                        System.Net.Sockets.ProtocolType.Tcp)
+                    { NoDelay = true };
+                    try
+                    {
+                        await socket.ConnectAsync(context.DnsEndPoint, cancellationToken);
+                        return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+                    }
+                    catch
+                    {
+                        socket.Dispose();
+                        throw;
+                    }
+                }
+            });
+
             return services;
         }
     }

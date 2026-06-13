@@ -11,6 +11,9 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Local, git-ignored overrides (e.g. Ai:ApiKey). Loaded last so it wins over appsettings.json.
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 builder.Services.AddControllers()
       .AddJsonOptions(options =>
       {
