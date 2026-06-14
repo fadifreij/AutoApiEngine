@@ -33,5 +33,46 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 _ => _sqlExplorer.ExploreAsync(databaseName, engine, connectionString, searchFilter, cancellationToken)
             };
         }
+
+        public Task<List<TableSchemaDto>> GetTableColumnsAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            CancellationToken cancellationToken = default)
+        {
+            return engine switch
+            {
+                DatabaseEngine.MySql => _mySqlExplorer.GetTableColumnsAsync(databaseName, engine, connectionString, cancellationToken),
+                _ => _sqlExplorer.GetTableColumnsAsync(databaseName, engine, connectionString, cancellationToken)
+            };
+        }
+
+        public Task<List<RoutineDefinitionDto>> GetRoutineDefinitionsAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            CancellationToken cancellationToken = default)
+        {
+            return engine switch
+            {
+                DatabaseEngine.MySql => _mySqlExplorer.GetRoutineDefinitionsAsync(databaseName, engine, connectionString, cancellationToken),
+                _ => _sqlExplorer.GetRoutineDefinitionsAsync(databaseName, engine, connectionString, cancellationToken)
+            };
+        }
+
+        public Task<string> GetObjectDdlAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            string objectName,
+            string objectType,
+            CancellationToken cancellationToken = default)
+        {
+            return engine switch
+            {
+                DatabaseEngine.MySql => _mySqlExplorer.GetObjectDdlAsync(databaseName, engine, connectionString, objectName, objectType, cancellationToken),
+                _ => _sqlExplorer.GetObjectDdlAsync(databaseName, engine, connectionString, objectName, objectType, cancellationToken)
+            };
+        }
     }
 }

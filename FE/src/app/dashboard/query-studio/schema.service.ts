@@ -38,6 +38,20 @@ export class SchemaService {
   }
 
   /**
+   * Returns the full CREATE DDL for a single database object.
+   * Used by the schema context menu (right-click → Copy / Copy to editor).
+   */
+  getObjectDdl(workspaceId: string, name: string, type: string): Observable<{ ddl: string }> {
+    return this.http.get<{ ddl: string }>(
+      `${this.apiUrl}/${workspaceId}/object-ddl`,
+      {
+        params: { name, type },
+        withCredentials: true
+      }
+    );
+  }
+
+  /**
    * Fetches only summary statistics for the workspace's database.
    */
   getStats(workspaceId: string): Observable<{

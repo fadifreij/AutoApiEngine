@@ -1,17 +1,42 @@
-import { Component, OnInit, signal, computed, inject, PLATFORM_ID, Inject, WritableSignal, viewChild, HostListener } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
+import { Component, computed, HostListener, inject, Inject, OnInit, PLATFORM_ID, signal, viewChild, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
+import { environment } from '../../../environments/environment';
 import { AuthService } from '../../shared/auth/auth.service';
-import { SchemaService, SchemaExplorerResponse } from './schema.service';
-import { WorkspaceStateService } from '../../shared/workspace-state.service';
-import { QueryService, QueryExecutionResponse } from './query.service';
-import { DdlFileService, DdlFileTreeNode } from './ddl-file.service';
 import { MonacoEditorComponent } from '../../shared/monaco-editor/monaco-editor';
+import { WorkspaceStateService } from '../../shared/workspace-state.service';
+import { AiChatMessage, AiService } from './ai.service';
+import { DdlFileService, DdlFileTreeNode } from './ddl-file.service';
+import { QueryExecutionResponse, QueryService } from './query.service';
+import { SchemaExplorerResponse, SchemaObject, SchemaService } from './schema.service';
+
+/** A part of an assistant message — either plain text or a fenced code block. */
+export interface AiMessagePart {
+  type: 'text' | 'code';
+  content: string;
+}
+
+/** A chat message shown in the AI panel. */
+export interface AiPanelMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 const EXPLORER_WIDTH_KEY = 'queryStudio_explorerWidth';
 const RESULTS_HEIGHT_KEY = 'queryStudio_resultsHeight';
+interface WorkspaceListItem {
+  id: string;
+  name: string;
+  databaseEngine: string;
+  isActive: boolean;
+}
+
+const RIGHT_PANEL_WIDTH_KEY = 'queryStudio_rightPanelWidth';
+const RIGHT_PANEL_COLLAPSED_KEY = 'queryStudio_rightPanelCollapsed';
+const RIGHT_PANE_TAB_KEY = 'queryStudio_rightPaneTab';
 
 /** Represents a single query tab in the studio. */
 export interface QueryTab {
@@ -35,10 +60,33 @@ export interface QueryTab {
 })
 export class QueryStudio implements OnInit {
   authService = inject(AuthService);
+  private router = inject(Router);
   private schemaService = inject(SchemaService);
+
+  /** Profile dropdown open state (modern header). */
+  profileOpen = signal(false);
+
+  private http = inject(HttpClient);
+
+  /** Organization name derived reactively from the auth JWT. */
+  organizationName = computed(() => {
+    const token = this.authService.accessToken();
+    if (!token) return null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload['organization'] || null;
+    } catch {
+      return null;
+    }
+  });
+
+  /** Display name of the current workspace, loaded from API on init. */
+  workspaceDisplayName = signal('');
+
   private workspaceState = inject(WorkspaceStateService);
   private queryService = inject(QueryService);
   private ddlFileService = inject(DdlFileService);
+  private aiService = inject(AiService);
 
   /** Default SQL template shown on first load */
   defaultSql = '';
@@ -63,6 +111,63 @@ export class QueryStudio implements OnInit {
   ddlTreeError = signal<string | null>(null);
   expandedFolders = signal<Set<string>>(new Set());
 
+  // ── Right pane tab ('ddl' = Saved DDL, 'ai' = AI Assistant) ──
+  rightPaneTab = signal<'ddl' | 'ai'>('ddl');
+
+  /** Whether the right panel is collapsed to a thin icon rail. */
+  rightPanelCollapsed = signal(false);
+
+  /**
+   * Selects a right-pane panel. If the panel is collapsed, it expands and shows
+   * the chosen tab. If the chosen tab is already active and expanded, it collapses.
+   */
+  setRightPaneTab(tab: 'ddl' | 'ai'): void {
+    if (this.rightPanelCollapsed()) {
+      this.rightPanelCollapsed.set(false);
+      this.rightPaneTab.set(tab);
+      this.persistRightPanelState();
+      return;
+    }
+    if (this.rightPaneTab() === tab) {
+      this.rightPanelCollapsed.set(true);
+    } else {
+      this.rightPaneTab.set(tab);
+    }
+    this.persistRightPanelState();
+  }
+
+  /** Collapses the right panel to the icon rail. */
+  collapseRightPanel(): void {
+    this.rightPanelCollapsed.set(true);
+    this.persistRightPanelState();
+  }
+
+  /** Expands the right panel, optionally selecting a specific tab. */
+  expandRightPanel(tab?: 'ddl' | 'ai'): void {
+    if (tab) this.rightPaneTab.set(tab);
+    this.rightPanelCollapsed.set(false);
+    this.persistRightPanelState();
+  }
+
+  private persistRightPanelState(): void {
+    if (this.isBrowser) {
+      localStorage.setItem(RIGHT_PANEL_COLLAPSED_KEY, this.rightPanelCollapsed() ? '1' : '0');
+      localStorage.setItem(RIGHT_PANE_TAB_KEY, this.rightPaneTab());
+    }
+  }
+
+  // ── AI Assistant state ──
+  aiMessages = signal<AiPanelMessage[]>([]);
+  aiInput = signal('');
+  aiLoading = signal(false);
+  aiError = signal<string | null>(null);
+  private aiStreamController: AbortController | null = null;
+
+  // ── AI panel internal resize (messages vs input) ──
+  aiMessagesHeight = signal<number | null>(null);
+  private aiResizeStartY = 0;
+  private aiResizeStartHeight = 0;
+
   // ── Resizable results panel ──
   resultsHeight: WritableSignal<number>;
   private resultsResizeStartY = 0;
@@ -73,6 +178,10 @@ export class QueryStudio implements OnInit {
   queryResult = signal<QueryExecutionResponse | null>(null);
   queryError = signal<string | null>(null);
   querySuccess = signal<string | null>(null);
+  /** Holds multiple result cards when the SQL contains multiple statements. */
+  queryResults = signal<{ index: number; sql: string; result: QueryExecutionResponse }[] | null>(null);
+  /** Active tab index when showing multiple results. */
+  selectedResultIndex = signal(0);
   private querySubscription: Subscription | null = null;
   private runningQueryTabId: number | null = null;
 
@@ -174,6 +283,12 @@ export class QueryStudio implements OnInit {
   private resizeStartWidth = 0;
   private isBrowser: boolean;
 
+  // ── Resizable right panel ──
+  rightPanelWidth: WritableSignal<number>;
+  private rightResizeStartX = 0;
+  private rightResizeStartWidth = 0;
+  private layoutEl: HTMLElement | null = null;
+
   constructor(@Inject(PLATFORM_ID) platformId: Object) {
     this.isBrowser = isPlatformBrowser(platformId);
     const saved = this.isBrowser
@@ -185,6 +300,22 @@ export class QueryStudio implements OnInit {
       ? parseInt(localStorage.getItem(RESULTS_HEIGHT_KEY) ?? '', 10)
       : NaN;
     this.resultsHeight = signal(!isNaN(savedResultsHeight) && savedResultsHeight >= 80 ? savedResultsHeight : 200);
+
+    const savedRightWidth = this.isBrowser
+      ? parseInt(localStorage.getItem(RIGHT_PANEL_WIDTH_KEY) ?? '', 10)
+      : NaN;
+    const clampedRightWidth = !isNaN(savedRightWidth)
+      ? Math.max(240, Math.min(640, savedRightWidth))
+      : 320;
+    this.rightPanelWidth = signal(clampedRightWidth);
+
+    if (this.isBrowser) {
+      this.rightPanelCollapsed.set(localStorage.getItem(RIGHT_PANEL_COLLAPSED_KEY) === '1');
+      const savedTab = localStorage.getItem(RIGHT_PANE_TAB_KEY);
+      if (savedTab === 'ddl' || savedTab === 'ai') {
+        this.rightPaneTab.set(savedTab);
+      }
+    }
   }
 
   startResize(event: MouseEvent): void {
@@ -210,6 +341,47 @@ export class QueryStudio implements OnInit {
     document.body.style.userSelect = '';
     if (this.isBrowser) {
       localStorage.setItem(EXPLORER_WIDTH_KEY, String(this.explorerWidth()));
+    }
+  };
+
+  // ── Resizable right panel ──
+
+  startRightResize(event: MouseEvent): void {
+    event.preventDefault();
+    this.rightResizeStartX = event.clientX;
+    this.rightResizeStartWidth = this.rightPanelWidth();
+    // Cache the layout container so we can clamp against the available width.
+    this.layoutEl = (event.target as HTMLElement).closest('.studio-layout') as HTMLElement | null;
+    document.addEventListener('mousemove', this.onRightResize);
+    document.addEventListener('mouseup', this.stopRightResize);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  private onRightResize = (event: MouseEvent): void => {
+    // Dragging left (negative delta) widens the right panel.
+    const delta = event.clientX - this.rightResizeStartX;
+
+    // Upper bound: never let the right panel push the editor below its minimum.
+    // Available = total layout width − explorer − resize handles − minimum editor width.
+    const RESIZE_HANDLES = 10; // two 5px handles
+    const MIN_EDITOR = 320;
+    const layoutWidth = this.layoutEl?.clientWidth ?? window.innerWidth;
+    const maxByLayout = layoutWidth - this.explorerWidth() - RESIZE_HANDLES - MIN_EDITOR;
+    const upperBound = Math.min(640, Math.max(240, maxByLayout));
+
+    const newWidth = Math.max(240, Math.min(upperBound, this.rightResizeStartWidth - delta));
+    this.rightPanelWidth.set(newWidth);
+  };
+
+  private stopRightResize = (): void => {
+    document.removeEventListener('mousemove', this.onRightResize);
+    document.removeEventListener('mouseup', this.stopRightResize);
+    this.layoutEl = null;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    if (this.isBrowser) {
+      localStorage.setItem(RIGHT_PANEL_WIDTH_KEY, String(this.rightPanelWidth()));
     }
   };
 
@@ -270,9 +442,9 @@ export class QueryStudio implements OnInit {
 
   toggleSection(section: 'tables' | 'views' | 'sp' | 'functions'): void {
     switch (section) {
-      case 'tables':    this.tablesExpanded.update(v => !v); break;
-      case 'views':     this.viewsExpanded.update(v => !v); break;
-      case 'sp':        this.storedProceduresExpanded.update(v => !v); break;
+      case 'tables': this.tablesExpanded.update(v => !v); break;
+      case 'views': this.viewsExpanded.update(v => !v); break;
+      case 'sp': this.storedProceduresExpanded.update(v => !v); break;
       case 'functions': this.functionsExpanded.update(v => !v); break;
     }
   }
@@ -287,9 +459,41 @@ export class QueryStudio implements OnInit {
   });
 
   ngOnInit(): void {
+    this.loadWorkspaceForDisplay();
     this.addTab();
     this.loadSchema();
     this.refreshDdlTree();
+  }
+
+  /** Loads workspace list from the API (no UI switcher — just for display). */
+  private loadWorkspaceForDisplay(): void {
+    if (!this.isBrowser) return;
+
+    // Use localStorage value as immediate fallback
+    const storedName = this.workspaceState.selectedWorkspaceName();
+    if (storedName) {
+      this.workspaceDisplayName.set(storedName);
+    }
+
+    this.http.get<WorkspaceListItem[]>(`${environment.apiUrl}/workspaces/current-organization`).subscribe({
+      next: (workspaces) => {
+        const stateId = this.workspaceState.selectedWorkspaceId();
+        const match = stateId
+          ? workspaces.find(w => w.id === stateId)
+          : workspaces[0];
+        if (match) {
+          this.workspaceDisplayName.set(match.name);
+          // Sync to shared state so other parts of the app benefit
+          this.workspaceState.setSelectedWorkspace(match.id, match.name);
+        } else if (workspaces.length > 0) {
+          this.workspaceDisplayName.set(workspaces[0].name);
+          this.workspaceState.setSelectedWorkspace(workspaces[0].id, workspaces[0].name);
+        }
+      },
+      error: () => {
+        // Keep whatever we had from localStorage (or empty)
+      }
+    });
   }
 
   // ── Tab Management ──
@@ -321,12 +525,12 @@ export class QueryStudio implements OnInit {
         tabs.map(t =>
           t.id === currentId
             ? {
-                ...t,
-                sql: currentSql,
-                result: this.queryResult(),
-                error: this.queryError(),
-                isRunning: this.isRunning(),
-              }
+              ...t,
+              sql: currentSql,
+              result: this.queryResult(),
+              error: this.queryError(),
+              isRunning: this.isRunning(),
+            }
             : t,
         ),
       );
@@ -607,10 +811,137 @@ export class QueryStudio implements OnInit {
     });
   }
 
-  /** Closes context menu on any click outside. */
+  // ── Context Menu for Schema Explorer (left pane) ──
+
+  /** The schema object the context menu was opened for. */
+  schemaContextMenuObj = signal<SchemaObject | null>(null);
+
+  /** Pixel position of the schema context menu (null = hidden). */
+  schemaContextMenuPos = signal<{ x: number; y: number } | null>(null);
+
+  /** True while fetching DDL from the server (for Copy actions). */
+  schemaContextMenuLoading = signal(false);
+
+  /** Opens the schema context menu on right-click. */
+  onSchemaContextMenu(obj: SchemaObject, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.closeSchemaContextMenu();
+    this.schemaContextMenuObj.set(obj);
+    this.schemaContextMenuPos.set({ x: event.clientX, y: event.clientY });
+  }
+
+  /** Closes the schema context menu. */
+  closeSchemaContextMenu(): void {
+    this.schemaContextMenuObj.set(null);
+    this.schemaContextMenuPos.set(null);
+  }
+
+  /** Deletes the object via DROP and refreshes the schema tree. */
+  deleteSchemaObject(): void {
+    const obj = this.schemaContextMenuObj();
+    this.closeSchemaContextMenu();
+    if (!obj) return;
+
+    const objectType = obj.type === 'StoredProcedure' ? 'PROCEDURE' : obj.type.toUpperCase();
+    const dropSql = `DROP ${objectType} IF EXISTS \`${obj.name.replace(/`/g, '``')}\``;
+
+    const workspaceId = this.workspaceState.selectedWorkspaceId();
+    if (!workspaceId) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${obj.type.toLowerCase()} "${obj.name}"?\n\n${dropSql};`
+    );
+    if (!confirmed) return;
+
+    this.queryService.execute({ workspaceId, sql: dropSql }).subscribe({
+      next: () => {
+        this.loadSchema(this.searchQuery() || undefined);
+        this.querySuccess.set(`"${obj.name}" deleted successfully.`);
+      },
+      error: (err) => {
+        this.queryError.set(err.error?.error || err.error?.message || err.message || 'Failed to delete object.');
+      },
+    });
+  }
+
+  /** Fetches the object's CREATE DDL and copies it to the system clipboard. */
+  copyObjectToClipboard(): void {
+    const obj = this.schemaContextMenuObj();
+    this.closeSchemaContextMenu();
+    if (!obj) return;
+
+    const workspaceId = this.workspaceState.selectedWorkspaceId();
+    if (!workspaceId) return;
+
+    this.schemaContextMenuLoading.set(true);
+    this.schemaService.getObjectDdl(workspaceId, obj.name, obj.type).subscribe({
+      next: (response) => {
+        this.schemaContextMenuLoading.set(false);
+        const ddl = response.ddl;
+        if (!ddl) {
+          this.queryError.set(`Could not retrieve DDL for "${obj.name}".`);
+          return;
+        }
+        navigator.clipboard.writeText(ddl).then(() => {
+          this.querySuccess.set(`DDL for "${obj.name}" copied to clipboard.`);
+        }).catch(() => {
+          this.queryError.set('Failed to copy to clipboard. Check permissions.');
+        });
+      },
+      error: (err) => {
+        this.schemaContextMenuLoading.set(false);
+        this.queryError.set(err.error?.message || err.message || 'Failed to retrieve object DDL.');
+      },
+    });
+  }
+
+  /** Fetches the object's CREATE DDL and inserts it into the editor. */
+  copyObjectToEditor(): void {
+    const obj = this.schemaContextMenuObj();
+    this.closeSchemaContextMenu();
+    if (!obj) return;
+
+    const workspaceId = this.workspaceState.selectedWorkspaceId();
+    if (!workspaceId) return;
+
+    this.schemaContextMenuLoading.set(true);
+    this.schemaService.getObjectDdl(workspaceId, obj.name, obj.type).subscribe({
+      next: (response) => {
+        this.schemaContextMenuLoading.set(false);
+        const ddl = response.ddl;
+        if (!ddl) {
+          this.queryError.set(`Could not retrieve DDL for "${obj.name}".`);
+          return;
+        }
+        this.monacoEditor()?.setValue(ddl);
+      },
+      error: (err) => {
+        this.schemaContextMenuLoading.set(false);
+        this.queryError.set(err.error?.message || err.message || 'Failed to retrieve object DDL.');
+      },
+    });
+  }
+
+  /** Closes context menu and profile dropdown on any click outside. */
   @HostListener('document:click')
   onDocumentClick(): void {
     this.closeContextMenu();
+    this.closeSchemaContextMenu();
+    this.profileOpen.set(false);
+  }
+
+  // ── Modern header user menu ──
+
+  toggleProfile(event: MouseEvent): void {
+    event.stopPropagation();
+    this.profileOpen.update(v => !v);
+  }
+
+  signOut(event: MouseEvent): void {
+    event.stopPropagation();
+    this.authService.logout();
+    this.router.navigate(['/login']);
   }
 
   /** Toggles expansion of a folder node in the tree. */
@@ -699,7 +1030,10 @@ export class QueryStudio implements OnInit {
       return;
     }
 
-    const sql = this.monacoEditor()?.getValue()?.trim();
+    // Use selected text if available, otherwise the full editor content
+    const editor = this.monacoEditor();
+    const selectedSql = editor?.getSelectedValue()?.trim();
+    const sql = selectedSql || editor?.getValue()?.trim() || '';
     if (!sql) {
       this.queryError.set('Please enter a SQL query.');
       return;
@@ -707,6 +1041,9 @@ export class QueryStudio implements OnInit {
 
     const tabId = this.activeTabId();
     if (tabId == null) return;
+
+    // Split into individual statements by ';'
+    const statements = this.splitStatements(sql);
 
     // Mark this tab as running in the tab model
     this.tabs.update(tabs =>
@@ -717,51 +1054,120 @@ export class QueryStudio implements OnInit {
 
     // Sync display signals
     this.queryResult.set(null);
+    this.queryResults.set(null);
+    this.selectedResultIndex.set(0);
     this.queryError.set(null);
     this.querySuccess.set(null);
     this.isRunning.set(true);
     this.runningQueryTabId = tabId;
 
-    this.querySubscription = this.queryService.execute({ workspaceId, sql }).subscribe({
-      next: (result) => {
-        this.querySubscription = null;
-        const rtId = this.runningQueryTabId;
-        this.runningQueryTabId = null;
+    if (statements.length === 1) {
+      // ── Single statement — use existing flow ──────────────────────
+      const singleSql = statements[0];
+      this.querySubscription = this.queryService.execute({ workspaceId, sql: singleSql }).subscribe({
+        next: (result) => {
+          this.querySubscription = null;
+          const rtId = this.runningQueryTabId;
+          this.runningQueryTabId = null;
 
-        // Store the result in the tab that initiated the query
-        this.tabs.update(tabs =>
-          tabs.map(t =>
-            t.id === rtId ? { ...t, result, error: null, isRunning: false } : t,
-          ),
-        );
+          this.tabs.update(tabs =>
+            tabs.map(t =>
+              t.id === rtId ? { ...t, result, error: null, isRunning: false } : t,
+            ),
+          );
 
-        // Only update display signals if this tab is still the active one
-        if (this.activeTabId() === rtId) {
-          this.queryResult.set(result);
+          if (this.activeTabId() === rtId) {
+            this.queryResult.set(result);
+            this.isRunning.set(false);
+          }
+
+          if (result.success && this.isDdlStatement(singleSql)) {
+            this.loadSchema(this.searchQuery() || undefined);
+          }
+        },
+        error: (err) => {
+          this.querySubscription = null;
+          const rtId = this.runningQueryTabId;
+          this.runningQueryTabId = null;
+
+          const errMsg = err.error?.error || err.error?.message || err.message || 'Query execution failed.';
+
+          this.tabs.update(tabs =>
+            tabs.map(t =>
+              t.id === rtId ? { ...t, result: null, error: errMsg, isRunning: false } : t,
+            ),
+          );
+
+          if (this.activeTabId() === rtId) {
+            this.queryError.set(errMsg);
+            this.isRunning.set(false);
+          }
+        },
+      });
+    } else {
+      // ── Multiple statements — execute sequentially, collect results ──
+      const collected: { index: number; sql: string; result: QueryExecutionResponse }[] = [];
+      let hasDdl = false;
+
+      const executeNext = (idx: number) => {
+        if (idx >= statements.length || this.runningQueryTabId == null) {
+          // All done or cancelled
+          this.querySubscription = null;
+          this.runningQueryTabId = null;
           this.isRunning.set(false);
+
+          this.tabs.update(tabs =>
+            tabs.map(t =>
+              t.id === tabId ? { ...t, result: collected.length > 0 ? collected[collected.length - 1].result : null, error: null, isRunning: false } : t,
+            ),
+          );
+
+          // Display all collected results
+          if (this.activeTabId() === tabId && collected.length > 0) {
+            this.queryResults.set(collected);
+            this.queryResult.set(collected[collected.length - 1].result);
+          }
+
+          if (hasDdl) {
+            this.loadSchema(this.searchQuery() || undefined);
+          }
+          return;
         }
-      },
-      error: (err) => {
-        this.querySubscription = null;
-        const rtId = this.runningQueryTabId;
-        this.runningQueryTabId = null;
 
-        const errMsg = err.error?.error || err.error?.message || err.message || 'Query execution failed.';
+        const stmt = statements[idx];
+        this.querySubscription = this.queryService.execute({ workspaceId, sql: stmt }).subscribe({
+          next: (result) => {
+            collected.push({ index: idx, sql: stmt, result });
+            if (result.success && this.isDdlStatement(stmt)) {
+              hasDdl = true;
+            }
+            // Move to next statement
+            executeNext(idx + 1);
+          },
+          error: (err) => {
+            const errMsg = err.error?.error || err.error?.message || err.message || 'Query execution failed.';
+            collected.push({
+              index: idx,
+              sql: stmt,
+              result: {
+                success: false,
+                isSelectQuery: false,
+                columns: [],
+                rows: [],
+                totalRows: 0,
+                rowsAffected: 0,
+                error: errMsg,
+                durationMs: 0,
+              },
+            });
+            // Continue with next statement on error
+            executeNext(idx + 1);
+          },
+        });
+      };
 
-        // Store the error in the tab that initiated the query
-        this.tabs.update(tabs =>
-          tabs.map(t =>
-            t.id === rtId ? { ...t, result: null, error: errMsg, isRunning: false } : t,
-          ),
-        );
-
-        // Only update display signals if this tab is still the active one
-        if (this.activeTabId() === rtId) {
-          this.queryError.set(errMsg);
-          this.isRunning.set(false);
-        }
-      },
-    });
+      executeNext(0);
+    }
   }
 
   /** Cancels the running query */
@@ -783,6 +1189,47 @@ export class QueryStudio implements OnInit {
 
     this.isRunning.set(false);
     this.queryError.set('Query execution was cancelled.');
+  }
+
+  /** Clears the SQL query editor. */
+  clearResults(): void {
+    this.monacoEditor()?.setValue('');
+  }
+
+  /** Clears the query results pane (table, errors, success messages). */
+  clearResultPane(): void {
+    this.queryResult.set(null);
+    this.queryResults.set(null);
+    this.queryError.set(null);
+    this.querySuccess.set(null);
+    this.selectedResultIndex.set(0);
+  }
+
+  /**
+   * Detects whether the SQL contains a DDL statement (CREATE, ALTER, DROP, TRUNCATE, RENAME).
+   * Strips comments and DELIMITER directives first so they don't mask real DDL keywords.
+   * Used to auto-refresh the schema explorer after structural changes.
+   */
+  private isDdlStatement(sql: string): boolean {
+    // Strip single-line comments
+    const noSingleLine = sql.replace(/--[^\n]*/g, '');
+    // Strip block comments
+    const noComments = noSingleLine.replace(/\/\*[\s\S]*?\*\//g, '');
+    // Strip DELIMITER directives (mysql CLI commands, not SQL — the server never sees them)
+    const noDelimiter = noComments.replace(/^\s*DELIMITER\s+\S+\s*$/gim, '');
+    // Extract the first non-whitespace keyword
+    const firstWord = noDelimiter.trim().split(/\s+/)[0]?.toUpperCase() ?? '';
+    return firstWord === 'CREATE' || firstWord === 'ALTER' ||
+           firstWord === 'DROP'   || firstWord === 'TRUNCATE' ||
+           firstWord === 'RENAME';
+  }
+
+  /** Splits SQL text into individual statements separated by ';', filtering empty ones. */
+  private splitStatements(sql: string): string[] {
+    return sql
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
   }
 
   /** Formats the timestamp of the last execution */
@@ -837,6 +1284,172 @@ export class QueryStudio implements OnInit {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  }
+
+  // ── AI Assistant ──
+
+  /** Sends the current AI input to the assistant along with the editor's SQL + history. */
+  sendAiMessage(): void {
+    const prompt = this.aiInput().trim();
+    if (!prompt || this.aiLoading()) return;
+
+    const workspaceId = this.workspaceState.selectedWorkspaceId();
+    if (!workspaceId) {
+      this.aiError.set('No workspace selected.');
+      return;
+    }
+
+    // Append the user's message and clear the input.
+    this.aiMessages.update(msgs => [...msgs, { role: 'user', content: prompt }]);
+    this.aiInput.set('');
+    this.aiError.set(null);
+    this.aiLoading.set(true);
+
+    // Build history from the prior turns (exclude the message we just added).
+    const history: AiChatMessage[] = this.aiMessages()
+      .slice(0, -1)
+      .map(m => ({ role: m.role, content: m.content }));
+
+    const currentSql = this.monacoEditor()?.getValue()?.trim() || undefined;
+
+    // Append an empty assistant message that we progressively fill as tokens arrive.
+    this.aiMessages.update(msgs => [...msgs, { role: 'assistant', content: '' }]);
+
+    const appendDelta = (text: string) => {
+      this.aiMessages.update(msgs => {
+        if (msgs.length === 0) return msgs;
+        const updated = [...msgs];
+        const last = updated[updated.length - 1];
+        updated[updated.length - 1] = { ...last, content: last.content + text };
+        return updated;
+      });
+    };
+
+    const removeEmptyAssistant = () => {
+      this.aiMessages.update(msgs => {
+        if (msgs.length === 0) return msgs;
+        const last = msgs[msgs.length - 1];
+        if (last.role === 'assistant' && last.content.length === 0) {
+          return msgs.slice(0, -1);
+        }
+        return msgs;
+      });
+    };
+
+    this.aiStreamController = this.aiService.assistStream(
+      { workspaceId, prompt, history, currentSql },
+      {
+        onDelta: (text) => appendDelta(text),
+        onDone: () => {
+          this.aiStreamController = null;
+          this.aiLoading.set(false);
+        },
+        onError: (message) => {
+          this.aiStreamController = null;
+          this.aiLoading.set(false);
+          removeEmptyAssistant();
+          this.aiError.set(message || 'Failed to reach the AI assistant.');
+        },
+      },
+    );
+  }
+
+  /** Clears the AI conversation. */
+  clearAiChat(): void {
+    this.aiStreamController?.abort();
+    this.aiStreamController = null;
+    this.aiMessages.set([]);
+    this.aiError.set(null);
+    this.aiLoading.set(false);
+  }
+
+  // ── AI panel internal resize ──
+
+  /** Starts dragging the resize handle between AI messages and input. */
+  startAiResize(event: MouseEvent): void {
+    event.preventDefault();
+    this.aiResizeStartY = event.clientY;
+    const msgsEl = (event.target as HTMLElement)
+      .closest('.ai-panel')
+      ?.querySelector('.ai-messages') as HTMLElement | null;
+    this.aiResizeStartHeight = msgsEl?.offsetHeight ?? 300;
+    document.addEventListener('mousemove', this.onAiResize);
+    document.addEventListener('mouseup', this.stopAiResize);
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  private onAiResize = (event: MouseEvent): void => {
+    const delta = event.clientY - this.aiResizeStartY;
+    const aiPanel = document.querySelector('.ai-panel') as HTMLElement | null;
+    if (!aiPanel) return;
+    const panelHeight = aiPanel.clientHeight;
+    // Keep at least 60px for header, 80px for input + spacing, 10px for handle
+    const minMessages = 80;
+    const maxMessages = panelHeight - 60 - 80 - 10;
+    const newHeight = Math.max(minMessages, Math.min(maxMessages, this.aiResizeStartHeight + delta));
+    this.aiMessagesHeight.set(newHeight);
+  };
+
+  private stopAiResize = (): void => {
+    document.removeEventListener('mousemove', this.onAiResize);
+    document.removeEventListener('mouseup', this.stopAiResize);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  };
+
+  /** Handles Enter (send) / Shift+Enter (newline) in the AI input box. */
+  onAiInputKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.sendAiMessage();
+    }
+  }
+
+  /**
+   * Splits an assistant message into plain-text and fenced code-block parts
+   * so the template can render code blocks with an "Insert" action.
+   */
+  parseAiMessage(content: string): AiMessagePart[] {
+    const parts: AiMessagePart[] = [];
+    const fence = /```(?:[a-zA-Z]+)?\n?([\s\S]*?)```/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = fence.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        const text = content.slice(lastIndex, match.index).trim();
+        if (text) parts.push({ type: 'text', content: text });
+      }
+      parts.push({ type: 'code', content: match[1].trim() });
+      lastIndex = fence.lastIndex;
+    }
+
+    if (lastIndex < content.length) {
+      const text = content.slice(lastIndex).trim();
+      if (text) parts.push({ type: 'text', content: text });
+    }
+
+    if (parts.length === 0) {
+      parts.push({ type: 'text', content: content.trim() });
+    }
+    return parts;
+  }
+
+  /** Inserts an AI-suggested SQL snippet into the active editor (replacing content). */
+  insertAiSql(sql: string): void {
+    this.monacoEditor()?.setValue(sql);
+    const id = this.activeTabId();
+    if (id != null) {
+      this.tabs.update(tabs => tabs.map(t => (t.id === id ? { ...t, sql } : t)));
+    }
+  }
+
+  /** Copies an AI-suggested SQL snippet to the clipboard. */
+  copyAiSql(sql: string): void {
+    if (this.isBrowser && navigator.clipboard) {
+      navigator.clipboard.writeText(sql).catch(() => { /* ignore */ });
+    }
   }
 
 }

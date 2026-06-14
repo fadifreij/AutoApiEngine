@@ -34,6 +34,10 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Local secret/config overrides (e.g. Ai:ApiKey) — never commit
+appsettings.Local.json
+**/appsettings.Local.json
+
 ############################################
 # .NET Core
 ############################################
