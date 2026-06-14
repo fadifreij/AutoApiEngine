@@ -1,8 +1,10 @@
 import { isPlatformBrowser } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { Component, computed, HostListener, inject, Inject, OnInit, PLATFORM_ID, signal, viewChild, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
+import { environment } from '../../../environments/environment';
 import { AuthService } from '../../shared/auth/auth.service';
 import { MonacoEditorComponent } from '../../shared/monaco-editor/monaco-editor';
 import { WorkspaceStateService } from '../../shared/workspace-state.service';
@@ -25,6 +27,13 @@ export interface AiPanelMessage {
 
 const EXPLORER_WIDTH_KEY = 'queryStudio_explorerWidth';
 const RESULTS_HEIGHT_KEY = 'queryStudio_resultsHeight';
+interface WorkspaceListItem {
+  id: string;
+  name: string;
+  databaseEngine: string;
+  isActive: boolean;
+}
+
 const RIGHT_PANEL_WIDTH_KEY = 'queryStudio_rightPanelWidth';
 const RIGHT_PANEL_COLLAPSED_KEY = 'queryStudio_rightPanelCollapsed';
 const RIGHT_PANE_TAB_KEY = 'queryStudio_rightPaneTab';
@@ -51,7 +60,29 @@ export interface QueryTab {
 })
 export class QueryStudio implements OnInit {
   authService = inject(AuthService);
+  private router = inject(Router);
   private schemaService = inject(SchemaService);
+
+  /** Profile dropdown open state (modern header). */
+  profileOpen = signal(false);
+
+  private http = inject(HttpClient);
+
+  /** Organization name derived reactively from the auth JWT. */
+  organizationName = computed(() => {
+    const token = this.authService.accessToken();
+    if (!token) return null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload['organization'] || null;
+    } catch {
+      return null;
+    }
+  });
+
+  /** Display name of the current workspace, loaded from API on init. */
+  workspaceDisplayName = signal('');
+
   private workspaceState = inject(WorkspaceStateService);
   private queryService = inject(QueryService);
   private ddlFileService = inject(DdlFileService);
@@ -131,6 +162,11 @@ export class QueryStudio implements OnInit {
   aiLoading = signal(false);
   aiError = signal<string | null>(null);
   private aiStreamController: AbortController | null = null;
+
+  // ── AI panel internal resize (messages vs input) ──
+  aiMessagesHeight = signal<number | null>(null);
+  private aiResizeStartY = 0;
+  private aiResizeStartHeight = 0;
 
   // ── Resizable results panel ──
   resultsHeight: WritableSignal<number>;
@@ -423,9 +459,41 @@ export class QueryStudio implements OnInit {
   });
 
   ngOnInit(): void {
+    this.loadWorkspaceForDisplay();
     this.addTab();
     this.loadSchema();
     this.refreshDdlTree();
+  }
+
+  /** Loads workspace list from the API (no UI switcher — just for display). */
+  private loadWorkspaceForDisplay(): void {
+    if (!this.isBrowser) return;
+
+    // Use localStorage value as immediate fallback
+    const storedName = this.workspaceState.selectedWorkspaceName();
+    if (storedName) {
+      this.workspaceDisplayName.set(storedName);
+    }
+
+    this.http.get<WorkspaceListItem[]>(`${environment.apiUrl}/workspaces/current-organization`).subscribe({
+      next: (workspaces) => {
+        const stateId = this.workspaceState.selectedWorkspaceId();
+        const match = stateId
+          ? workspaces.find(w => w.id === stateId)
+          : workspaces[0];
+        if (match) {
+          this.workspaceDisplayName.set(match.name);
+          // Sync to shared state so other parts of the app benefit
+          this.workspaceState.setSelectedWorkspace(match.id, match.name);
+        } else if (workspaces.length > 0) {
+          this.workspaceDisplayName.set(workspaces[0].name);
+          this.workspaceState.setSelectedWorkspace(workspaces[0].id, workspaces[0].name);
+        }
+      },
+      error: () => {
+        // Keep whatever we had from localStorage (or empty)
+      }
+    });
   }
 
   // ── Tab Management ──
@@ -855,11 +923,25 @@ export class QueryStudio implements OnInit {
     });
   }
 
-  /** Closes context menu on any click outside. */
+  /** Closes context menu and profile dropdown on any click outside. */
   @HostListener('document:click')
   onDocumentClick(): void {
     this.closeContextMenu();
     this.closeSchemaContextMenu();
+    this.profileOpen.set(false);
+  }
+
+  // ── Modern header user menu ──
+
+  toggleProfile(event: MouseEvent): void {
+    event.stopPropagation();
+    this.profileOpen.update(v => !v);
+  }
+
+  signOut(event: MouseEvent): void {
+    event.stopPropagation();
+    this.authService.logout();
+    this.router.navigate(['/login']);
   }
 
   /** Toggles expansion of a folder node in the tree. */
@@ -1280,6 +1362,41 @@ export class QueryStudio implements OnInit {
     this.aiError.set(null);
     this.aiLoading.set(false);
   }
+
+  // ── AI panel internal resize ──
+
+  /** Starts dragging the resize handle between AI messages and input. */
+  startAiResize(event: MouseEvent): void {
+    event.preventDefault();
+    this.aiResizeStartY = event.clientY;
+    const msgsEl = (event.target as HTMLElement)
+      .closest('.ai-panel')
+      ?.querySelector('.ai-messages') as HTMLElement | null;
+    this.aiResizeStartHeight = msgsEl?.offsetHeight ?? 300;
+    document.addEventListener('mousemove', this.onAiResize);
+    document.addEventListener('mouseup', this.stopAiResize);
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  private onAiResize = (event: MouseEvent): void => {
+    const delta = event.clientY - this.aiResizeStartY;
+    const aiPanel = document.querySelector('.ai-panel') as HTMLElement | null;
+    if (!aiPanel) return;
+    const panelHeight = aiPanel.clientHeight;
+    // Keep at least 60px for header, 80px for input + spacing, 10px for handle
+    const minMessages = 80;
+    const maxMessages = panelHeight - 60 - 80 - 10;
+    const newHeight = Math.max(minMessages, Math.min(maxMessages, this.aiResizeStartHeight + delta));
+    this.aiMessagesHeight.set(newHeight);
+  };
+
+  private stopAiResize = (): void => {
+    document.removeEventListener('mousemove', this.onAiResize);
+    document.removeEventListener('mouseup', this.stopAiResize);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  };
 
   /** Handles Enter (send) / Shift+Enter (newline) in the AI input box. */
   onAiInputKeydown(event: KeyboardEvent): void {
