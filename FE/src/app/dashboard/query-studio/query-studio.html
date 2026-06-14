@@ -131,7 +131,6 @@
     <!-- Tree: collapsible sections -->
     <div class="tree-section">
       <!-- Tables -->
-      @if (tables().length > 0) {
       <div class="tree-label" (click)="toggleSection('tables')">
         <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round">
@@ -157,10 +156,8 @@
       </div>
       }
       }
-      }
 
       <!-- Views -->
-      @if (views().length > 0) {
       <div class="tree-label" (click)="toggleSection('views')">
         <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round">
@@ -183,10 +180,8 @@
       </div>
       }
       }
-      }
 
       <!-- Stored Procedures -->
-      @if (storedProcedures().length > 0) {
       <div class="tree-label" (click)="toggleSection('sp')">
         <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round">
@@ -208,10 +203,8 @@
       </div>
       }
       }
-      }
 
       <!-- Functions -->
-      @if (functions().length > 0) {
       <div class="tree-label" (click)="toggleSection('functions')">
         <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round">
@@ -230,7 +223,6 @@
             stroke="none">ƒ</text></svg>
         {{ fn.name }}
       </div>
-      }
       }
       }
 
@@ -263,7 +255,9 @@
         <span class="tab-label" (dblclick)="startEditName(tab.id, $event)">{{ tab.name }}</span>
         }
 
+        @if (tabs().length > 1) {
         <span class="close-tab" (click)="$event.stopPropagation(); closeTab(tab.id)">×</span>
+        }
       </div>
       }
       <div class="new-tab" (click)="addTab()">+</div>
