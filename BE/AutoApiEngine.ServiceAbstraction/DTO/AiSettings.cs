@@ -21,5 +21,13 @@ namespace AutoApiEngine.ServiceAbstraction.DTO
 
         /// <summary>Maximum tokens to generate in the reply.</summary>
         public int MaxTokens { get; set; } = 1024;
+
+        /// <summary>
+        /// Maximum number of characters of database schema context to embed in the system
+        /// prompt. Prevents the request from exceeding the model's context window (which
+        /// causes a 400 from the provider) for databases with many tables/routines.
+        /// Roughly 4 characters per token, so the default ~60k chars ≈ 15k tokens.
+        /// </summary>
+        public int MaxSchemaContextChars { get; set; } = 60000;
     }
 }

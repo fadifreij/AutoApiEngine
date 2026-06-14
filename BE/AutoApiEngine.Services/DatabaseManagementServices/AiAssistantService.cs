@@ -90,7 +90,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     return new AiAssistResponse
                     {
                         Success = false,
-                        Error = $"AI provider error ({(int)httpResponse.StatusCode}). Please try again."
+                        Error = FormatProviderError((int)httpResponse.StatusCode, body)
                     };
                 }
 
@@ -197,7 +197,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 {
                     var body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
                     _logger.LogError("AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
-                    yield return new AiStreamChunk { Error = $"AI provider error ({(int)httpResponse.StatusCode}). Please try again." };
+                    yield return new AiStreamChunk { Error = FormatProviderError((int)httpResponse.StatusCode, body) };
                     yield break;
                 }
 
@@ -286,7 +286,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                         connectionString,
                         cancellationToken);
 
-                    schemaContext = BuildSchemaContext(workspace.DatabaseName!, schema, tableColumns, routineDefinitions);
+                    schemaContext = BuildSchemaContext(workspace.DatabaseName!, schema, tableColumns, routineDefinitions, _settings.MaxSchemaContextChars);
                 }
                 else
                 {
@@ -325,7 +325,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             return messages;
         }
 
-        private static string BuildSchemaContext(string databaseName, SchemaExplorerResponse schema, List<TableSchemaDto> tableColumns, List<RoutineDefinitionDto> routineDefinitions)
+        private static string BuildSchemaContext(string databaseName, SchemaExplorerResponse schema, List<TableSchemaDto> tableColumns, List<RoutineDefinitionDto> routineDefinitions, int maxChars)
         {
             var sb = new StringBuilder();
             sb.AppendLine($"Database name: {databaseName}");
@@ -382,6 +382,17 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             AppendDefinitions("Stored Procedures (definitions)", "StoredProcedure");
             AppendDefinitions("Functions (definitions)", "Function");
 
+            // Guard against exceeding the model's context window: a database with many
+            // tables/routines can otherwise produce a prompt larger than the provider
+            // accepts, which returns a 400. Keep the highest-value content (table/column
+            // structure comes first) and truncate the rest.
+            if (maxChars > 0 && sb.Length > maxChars)
+            {
+                const string notice = "\n\n-- NOTE: schema context truncated to fit the model context window; some routine/view definitions were omitted. --";
+                var keep = Math.Max(0, maxChars - notice.Length);
+                return sb.ToString(0, keep) + notice;
+            }
+
             return sb.ToString();
         }
 
@@ -404,6 +415,45 @@ STRICT RULES:
 
 Use the following schema as context (do not invent tables/columns that are not listed):
 {schemaContext}";
+        }
+
+        /// <summary>
+        /// Builds a user-facing error message from a failed provider response, surfacing
+        /// the provider's own error text (e.g. context-length-exceeded) when available so
+        /// the problem is actionable instead of an opaque "please try again".
+        /// </summary>
+        private static string FormatProviderError(int status, string? body)
+        {
+            var detail = ExtractProviderMessage(body);
+            return string.IsNullOrWhiteSpace(detail)
+                ? $"AI provider error ({status}). Please try again."
+                : $"AI provider error ({status}): {detail}";
+        }
+
+        private static string? ExtractProviderMessage(string? body)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("error", out var error))
+                {
+                    if (error.ValueKind == JsonValueKind.String) return error.GetString();
+                    if (error.ValueKind == JsonValueKind.Object &&
+                        error.TryGetProperty("message", out var message) &&
+                        message.ValueKind == JsonValueKind.String)
+                    {
+                        return message.GetString();
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // Body was not JSON; fall through.
+            }
+
+            var trimmed = body.Trim();
+            return trimmed.Length > 300 ? trimmed[..300] + "…" : trimmed;
         }
 
         // ── Internal serialization types for the OpenAI-compatible API ──

@@ -240,7 +240,7 @@ export class QueryStudio implements OnInit {
     this.saveDialogSelectedFolder.set(folders[0] || '');
     this.saveDialogCustomFolder.set('');
     this.saveDialogFileName.set(defaultName);
-    this.saveDialogIsNewFolder.set(false);
+    this.saveDialogIsNewFolder.set(folders.length === 0);
     this.showSaveDialog.set(true);
 
     return new Promise(resolve => {
