@@ -1,33 +1,22 @@
 namespace AutoApiEngine.ServiceAbstraction.DTO
 {
     /// <summary>
-    /// Configuration for the AI assistant provider. Works with any OpenAI-compatible
-    /// Chat Completions endpoint (OpenAI, Azure OpenAI, OpenRouter, Groq, Together, etc.).
+    /// Top-level AI configuration. Only the provider selector lives here;
+    /// each provider's specific settings (endpoint, model, API key, etc.)
+    /// are in their own section (<c>"OpenRouterAi"</c> or <c>"OpencodeAi"</c>).
     /// Bound from the "Ai" configuration section.
     /// </summary>
     public class AiSettings
     {
-        /// <summary>Base URL of the OpenAI-compatible endpoint (e.g. https://openrouter.ai/api/v1).</summary>
-        public string BaseUrl { get; set; } = "https://openrouter.ai/api/v1";
-
-        /// <summary>Provider API key. Prefer user-secrets / environment variables over appsettings.json.</summary>
-        public string ApiKey { get; set; } = string.Empty;
-
-        /// <summary>Model identifier to use for completions (e.g. openai/gpt-oss-120b:free).</summary>
-        public string Model { get; set; } = "openai/gpt-oss-120b:free";
-
-        /// <summary>Sampling temperature.</summary>
-        public double Temperature { get; set; } = 0.2;
-
-        /// <summary>Maximum tokens to generate in the reply.</summary>
-        public int MaxTokens { get; set; } = 1024;
-
         /// <summary>
-        /// Maximum number of characters of database schema context to embed in the system
-        /// prompt. Prevents the request from exceeding the model's context window (which
-        /// causes a 400 from the provider) for databases with many tables/routines.
-        /// Roughly 4 characters per token, so the default ~60k chars ≈ 15k tokens.
+        /// Selects which AI provider implementation to use at runtime.
+        /// Supported values:
+        ///   <c>"Opencode"</c> (default) — local model via <c>OpencodeAiSettings</c>
+        ///   <c>"OpenRouter"</c> — external OpenAI-compatible API via <c>OpenRouterAiSettings</c>
+        ///
+        /// The strategy-pattern factory (<see cref="AiAssistantFactory"/>)
+        /// reads this on every call so the provider can be switched via config hot-reload.
         /// </summary>
-        public int MaxSchemaContextChars { get; set; } = 60000;
+        public string Provider { get; set; } = "Opencode";
     }
 }

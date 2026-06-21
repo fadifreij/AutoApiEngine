@@ -1,7 +1,7 @@
 :host {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100vh;
   min-width: 0;
   overflow: hidden;
   background: var(--gray-100);
@@ -1471,11 +1471,111 @@
 
   .ai-text {
     margin: 0 0 8px;
-    white-space: pre-wrap;
     word-break: break-word;
 
     &:last-child {
       margin-bottom: 0;
+    }
+
+    // ── Markdown-rendered content ──
+
+    /* Tables — the main request: row counts, schema listings, etc. */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 8px 0;
+      font-size: 11px;
+      background: #1e1e2e;
+      border-radius: 6px;
+      overflow: hidden;
+
+      th, td {
+        border: 1px solid #2d2d44;
+        padding: 5px 10px;
+        text-align: left;
+      }
+
+      th {
+        background: #181825;
+        font-weight: 600;
+        color: #cdd6f4;
+      }
+
+      td {
+        color: #cbd5e1;
+      }
+
+      tr:nth-child(even) td {
+        background: rgba(255, 255, 255, 0.03);
+      }
+    }
+
+    /* Bold / strong */
+    strong {
+      color: #e2e8f0;
+      font-weight: 600;
+    }
+
+    /* Italic */
+    em {
+      font-style: italic;
+      color: #a5adce;
+    }
+
+    /* Inline code — distinct from fenced code blocks */
+    code:not(.ai-code-block code) {
+      font-family: var(--mono);
+      font-size: 11px;
+      background: #181825;
+      color: #a6e3a1;
+      padding: 1px 5px;
+      border-radius: 3px;
+      border: 1px solid #2d2d44;
+    }
+
+    /* Lists */
+    ul, ol {
+      padding-left: 20px;
+      margin: 6px 0;
+    }
+
+    li {
+      margin: 2px 0;
+    }
+
+    /* Blockquotes */
+    blockquote {
+      border-left: 3px solid #c084fc;
+      padding: 4px 12px;
+      margin: 8px 0;
+      color: #a5adce;
+      background: rgba(192, 132, 252, 0.06);
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* Headings */
+    h1, h2, h3, h4 {
+      color: #e2e8f0;
+      font-weight: 600;
+      margin: 12px 0 6px;
+    }
+
+    h1 { font-size: 15px; }
+    h2 { font-size: 14px; }
+    h3 { font-size: 13px; }
+    h4 { font-size: 12px; }
+
+    /* Horizontal rule */
+    hr {
+      border: none;
+      border-top: 1px solid #2d2d44;
+      margin: 12px 0;
+    }
+
+    /* Paragraphs */
+    p {
+      margin: 0 0 6px;
+      &:last-child { margin-bottom: 0; }
     }
   }
 }

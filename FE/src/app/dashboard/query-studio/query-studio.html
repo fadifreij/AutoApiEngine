@@ -722,12 +722,12 @@
               <pre><code>{{ part.content }}</code></pre>
             </div>
             } @else {
-            <p class="ai-text">{{ part.content }}</p>
+            <div class="ai-text" [innerHTML]="renderMarkdown(part.content)"></div>
             }
             }
             }
             } @else {
-            <p class="ai-text">{{ msg.content }}</p>
+            <div class="ai-text" [innerHTML]="renderMarkdown(msg.content)"></div>
             }
           </div>
         </div>

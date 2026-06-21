@@ -18,5 +18,11 @@ namespace AutoApiEngine.ServiceAbstraction.DTO
 
         /// <summary>Model identifier (sent on the final chunk).</summary>
         public string? Model { get; set; }
+
+        /// <summary>
+        /// True when the AI executed a write operation (execute_write tool) during this turn.
+        /// The frontend uses this to automatically refresh the query results panel.
+        /// </summary>
+        public bool DbChanged { get; set; }
     }
 }

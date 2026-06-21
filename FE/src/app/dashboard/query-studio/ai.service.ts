@@ -30,12 +30,14 @@ export interface AiStreamChunk {
     done?: boolean;
     error?: string | null;
     model?: string | null;
+    /** True when the AI executed a write operation on the database during this turn. */
+    dbChanged?: boolean;
 }
 
 /** Callbacks invoked as a streamed reply is received. */
 export interface AiStreamHandlers {
     onDelta: (text: string) => void;
-    onDone?: (model: string | null) => void;
+    onDone?: (model: string | null, dbChanged: boolean) => void;
     onError?: (message: string) => void;
 }
 
@@ -126,14 +128,14 @@ export class AiService {
                             handlers.onDelta(chunk.delta);
                         }
                         if (chunk.done) {
-                            handlers.onDone?.(chunk.model ?? null);
+                            handlers.onDone?.(chunk.model ?? null, chunk.dbChanged ?? false);
                             return;
                         }
                     }
                 }
 
                 // Stream closed without an explicit done signal.
-                handlers.onDone?.(null);
+                handlers.onDone?.(null, false);
             } catch (err: unknown) {
                 if (controller.signal.aborted) {
                     return; // Cancelled by the caller; not an error.
