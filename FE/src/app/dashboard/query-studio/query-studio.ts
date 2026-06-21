@@ -2,7 +2,9 @@ import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Component, computed, HostListener, inject, Inject, OnInit, PLATFORM_ID, signal, viewChild, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
+import { marked } from 'marked';
 import { Subscription } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../shared/auth/auth.service';
@@ -87,6 +89,7 @@ export class QueryStudio implements OnInit {
   private queryService = inject(QueryService);
   private ddlFileService = inject(DdlFileService);
   private aiService = inject(AiService);
+  private sanitizer = inject(DomSanitizer);
 
   /** Default SQL template shown on first load */
   defaultSql = '';
@@ -1220,8 +1223,8 @@ export class QueryStudio implements OnInit {
     // Extract the first non-whitespace keyword
     const firstWord = noDelimiter.trim().split(/\s+/)[0]?.toUpperCase() ?? '';
     return firstWord === 'CREATE' || firstWord === 'ALTER' ||
-           firstWord === 'DROP'   || firstWord === 'TRUNCATE' ||
-           firstWord === 'RENAME';
+      firstWord === 'DROP' || firstWord === 'TRUNCATE' ||
+      firstWord === 'RENAME';
   }
 
   /** Splits SQL text into individual statements separated by ';', filtering empty ones. */
@@ -1323,6 +1326,7 @@ export class QueryStudio implements OnInit {
         updated[updated.length - 1] = { ...last, content: last.content + text };
         return updated;
       });
+      this.scrollAiToBottom();
     };
 
     const removeEmptyAssistant = () => {
@@ -1340,18 +1344,41 @@ export class QueryStudio implements OnInit {
       { workspaceId, prompt, history, currentSql },
       {
         onDelta: (text) => appendDelta(text),
-        onDone: () => {
+        onDone: (_model, dbChanged) => {
           this.aiStreamController = null;
           this.aiLoading.set(false);
+          this.scrollAiToBottom();
+          if (dbChanged) {
+            // The AI wrote to the database — refresh the schema explorer immediately
+            // so the new objects appear in the Object Explorer without a manual page refresh.
+            this.loadSchema(this.searchQuery() || undefined);
+
+            // Also refresh the active query results after a short delay
+            setTimeout(() => {
+              const sql = this.monacoEditor()?.getValue()?.trim();
+              if (sql && this.runningQueryTabId == null) {
+                this.run();
+              }
+            }, 600);
+          }
         },
         onError: (message) => {
           this.aiStreamController = null;
           this.aiLoading.set(false);
           removeEmptyAssistant();
           this.aiError.set(message || 'Failed to reach the AI assistant.');
+          this.scrollAiToBottom();
         },
       },
     );
+  }
+
+  /** Scrolls the AI messages container to the bottom so the latest message is always visible. */
+  private scrollAiToBottom(): void {
+    setTimeout(() => {
+      const el = document.querySelector('.ai-messages') as HTMLElement | null;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 0);
   }
 
   /** Clears the AI conversation. */
@@ -1434,6 +1461,17 @@ export class QueryStudio implements OnInit {
       parts.push({ type: 'text', content: content.trim() });
     }
     return parts;
+  }
+
+  /**
+   * Converts plain markdown text into safe HTML using the `marked` library.
+   * Supports tables, bold, italic, lists, inline code, headings, and more.
+   * Called from the template via [innerHTML].
+   */
+  renderMarkdown(text: string): SafeHtml {
+    if (!text) return '';
+    const html = marked.parser(marked.lexer(text));
+    return this.sanitizer.bypassSecurityTrustHtml(html);
   }
 
   /** Inserts an AI-suggested SQL snippet into the active editor (replacing content). */

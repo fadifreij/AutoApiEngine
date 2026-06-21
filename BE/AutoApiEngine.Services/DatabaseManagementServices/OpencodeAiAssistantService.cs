@@ -10,34 +10,34 @@ using Microsoft.Extensions.Options;
 namespace AutoApiEngine.Services.DatabaseManagementServices
 {
     /// <summary>
-    /// AI assistant for the Query Studio. Uses MCP-style tool calling (OpenAI
-    /// function-calling) to let the AI dynamically discover database schema and
-    /// inspect data instead of pre-loading all schema context into the prompt.
+    /// AI assistant implementation that calls a local OpenAI-compatible Chat Completions
+    /// endpoint (e.g. Ollama, LocalAI, or the Opencode inference server).
     ///
-    /// SAFETY: The AI is advisory-only and never executes SQL directly. The
-    /// <see cref="DatabaseToolService"/> enforces read-only SELECT queries.
+    /// Uses MCP-style tool calling (OpenAI function-calling) to let the AI dynamically
+    /// discover database schema and inspect data instead of pre-loading all schema context.
+    /// The <see cref="DatabaseToolService"/> enforces read-only SELECT queries.
     ///
-    /// This implementation uses the <see cref="OpenRouterAiSettings"/> config section.
+    /// This is an alternative to <see cref="AiAssistantService"/> and uses its own
+    /// configuration section ("OpencodeAi"). The default model is "gemma4:latest".
     /// </summary>
-    public class AiAssistantService : IAiAssistantService
+    public class OpencodeAiAssistantService : IAiAssistantService
     {
         private readonly HttpClient _httpClient;
         private readonly IWorkspaceRepository _workspaceRepository;
         private readonly IDatabaseToolService _databaseTools;
-        private readonly OpenRouterAiSettings _settings;
-        private readonly ILogger<AiAssistantService> _logger;
+        private readonly OpencodeAiSettings _settings;
+        private readonly ILogger<OpencodeAiAssistantService> _logger;
         private readonly IConfiguration _configuration;
 
-        // Max rounds of tool calls to prevent infinite loops
         private const int MaxToolRounds = 5;
 
-        public AiAssistantService(
+        public OpencodeAiAssistantService(
             HttpClient httpClient,
             IWorkspaceRepository workspaceRepository,
             IDatabaseToolService databaseTools,
-            IOptions<OpenRouterAiSettings> settings,
+            IOptions<OpencodeAiSettings> settings,
             IConfiguration configuration,
-            ILogger<AiAssistantService> logger)
+            ILogger<OpencodeAiAssistantService> logger)
         {
             _httpClient = httpClient;
             _workspaceRepository = workspaceRepository;
@@ -49,15 +49,6 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
         public async Task<AiAssistResponse> AssistAsync(AiAssistRequest request, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(_settings.ApiKey))
-            {
-                return new AiAssistResponse
-                {
-                    Success = false,
-                    Error = "AI assistant is not configured. Set the OpenRouterAi:ApiKey configuration value."
-                };
-            }
-
             // ── Resolve workspace database info ──
             var (engine, databaseName, connectionString) = await ResolveDatabaseInfoAsync(request.WorkspaceId, cancellationToken);
             if (engine == null)
@@ -89,14 +80,18 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     {
                         Content = JsonContent.Create(payload, options: AiJsonOptions.Default)
                     };
-                    httpRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _settings.ApiKey);
+
+                    if (!string.IsNullOrWhiteSpace(_settings.ApiKey))
+                    {
+                        httpRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _settings.ApiKey);
+                    }
 
                     using var httpResponse = await _httpClient.SendAsync(httpRequest, cancellationToken);
 
                     if (!httpResponse.IsSuccessStatusCode)
                     {
                         var body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
-                        _logger.LogError("OpenRouter AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
+                        _logger.LogError("Opencode AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
                         return new AiAssistResponse
                         {
                             Success = false,
@@ -112,26 +107,26 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 }
                 catch (TaskCanceledException ex)
                 {
-                    _logger.LogError(ex, "OpenRouter AI request timed out after {Timeout}s contacting {BaseUrl}.", _httpClient.Timeout.TotalSeconds, _settings.BaseUrl);
+                    _logger.LogError(ex, "Opencode AI request timed out after {Timeout}s contacting {BaseUrl}.", _httpClient.Timeout.TotalSeconds, _settings.BaseUrl);
                     return new AiAssistResponse
                     {
                         Success = false,
-                        Error = $"The AI provider did not respond in time ({_httpClient.Timeout.TotalSeconds:N0}s). The endpoint '{_settings.BaseUrl}' may be unreachable from this server. Verify network access and the OpenRouterAi:BaseUrl setting."
+                        Error = $"The local AI provider did not respond in time ({_httpClient.Timeout.TotalSeconds:N0}s). The endpoint '{_settings.BaseUrl}' may not be running. Verify OpencodeAi:BaseUrl."
                     };
                 }
                 catch (HttpRequestException ex)
                 {
-                    _logger.LogError(ex, "Network error reaching OpenRouter AI provider at {BaseUrl}.", _settings.BaseUrl);
+                    _logger.LogError(ex, "Network error reaching Opencode AI provider at {BaseUrl}.", _settings.BaseUrl);
                     return new AiAssistResponse
                     {
                         Success = false,
-                        Error = $"Could not connect to the AI provider at '{_settings.BaseUrl}'. Check that the server has network access to this endpoint and that OpenRouterAi:BaseUrl is correct."
+                        Error = $"Could not connect to the local AI provider at '{_settings.BaseUrl}'. Make sure the server is running (e.g. `ollama serve`) and that OpencodeAi:BaseUrl is correct."
                     };
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "OpenRouter AI assistant request failed.");
-                    return new AiAssistResponse { Success = false, Error = "The AI service failed unexpectedly. Please try again." };
+                    _logger.LogError(ex, "Opencode AI assistant request failed.");
+                    return new AiAssistResponse { Success = false, Error = "The local AI service failed unexpectedly. Please try again." };
                 }
 
                 var choice = completion?.Choices?.FirstOrDefault();
@@ -140,10 +135,8 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     return new AiAssistResponse { Success = false, Error = "The AI returned an empty response." };
                 }
 
-                // Add assistant message to conversation
                 messages.Add(choice.Message);
 
-                // Check for tool calls
                 if (choice.Message.ToolCalls is { Count: > 0 })
                 {
                     foreach (var toolCall in choice.Message.ToolCalls)
@@ -151,11 +144,9 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                         var result = await ExecuteToolCallAsync(toolCall, databaseName!, engine!.Value, connectionString!, cancellationToken);
                         messages.Add(new ChatMessage("tool", result, toolCall.Id));
                     }
-                    // Continue loop for next round
                     continue;
                 }
 
-                // No tool calls — this is the final text response
                 var reply = choice.Message.Content?.Trim();
                 if (string.IsNullOrWhiteSpace(reply))
                 {
@@ -181,12 +172,6 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             AiAssistRequest request,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(_settings.ApiKey))
-            {
-                yield return new AiStreamChunk { Error = "AI assistant is not configured. Set the OpenRouterAi:ApiKey configuration value." };
-                yield break;
-            }
-
             // ── Resolve workspace database info ──
             var (engine, databaseName, connectionString) = await ResolveDatabaseInfoAsync(request.WorkspaceId, cancellationToken);
             if (engine == null)
@@ -195,13 +180,12 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 yield break;
             }
 
-            // ── Process tool calls first (non-streaming) ──
+            // ── Build initial messages ──
             var messages = AiPromptBuilder.BuildMessages(request, engine.ToString()!);
             var tools = AiPromptBuilder.BuildToolDefinitions();
 
-            var toolResult = await ProcessToolRoundsForStreamAsync(messages, tools, databaseName!, engine!.Value, connectionString!, cancellationToken);
-
-            if (toolResult.Cancelled) yield break;
+            // ── Process tool calls first (non-streaming) ──
+            var toolResult = await ProcessToolRoundsAsync(messages, tools, databaseName!, engine!.Value, connectionString!, cancellationToken);
 
             if (toolResult.Error != null)
             {
@@ -209,112 +193,18 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 yield break;
             }
 
-            // Tool rounds complete — messages now contains the full tool-call history.
-            // Stream the final AI response token-by-token.
-            await foreach (var chunk in StreamFinalResponseAsync(messages, toolResult.DbChanged, cancellationToken))
+            if (toolResult.FinalMessage == null)
             {
-                yield return chunk;
-            }
-        }
-
-        /// <summary>
-        /// Makes a single streaming (SSE) call to the AI provider and yields token chunks.
-        /// Called after all tool-call rounds are complete so that the final text response
-        /// is streamed in real-time rather than buffered into a single chunk.
-        /// </summary>
-        private async IAsyncEnumerable<AiStreamChunk> StreamFinalResponseAsync(
-            List<ChatMessage> messages,
-            bool dbChanged,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
-        {
-            var payload = new ChatCompletionRequest
-            {
-                Model = _settings.Model,
-                Messages = messages,
-                Temperature = _settings.Temperature,
-                MaxTokens = _settings.MaxTokens,
-                Stream = true
-            };
-
-            // Phase 1: Open the HTTP connection (no yield — catch is allowed here).
-            HttpResponseMessage? httpResponse = null;
-            string? connectionError = null;
-            bool cancelled = false;
-
-            try
-            {
-                using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_settings.BaseUrl.TrimEnd('/')}/chat/completions")
-                {
-                    Content = JsonContent.Create(payload, options: AiJsonOptions.Default)
-                };
-                httpRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _settings.ApiKey);
-
-                httpResponse = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-
-                if (!httpResponse.IsSuccessStatusCode)
-                {
-                    var body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
-                    connectionError = AiPromptBuilder.FormatProviderError((int)httpResponse.StatusCode, body);
-                }
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                cancelled = true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Could not start OpenRouter AI stream at {BaseUrl}.", _settings.BaseUrl);
-                connectionError = $"Could not connect to the AI provider at '{_settings.BaseUrl}'.";
-            }
-
-            // Phase 2: Yield error / cancellation — safe outside try-catch.
-            if (cancelled)
-            {
-                httpResponse?.Dispose();
-                yield break;
-            }
-            if (connectionError != null)
-            {
-                httpResponse?.Dispose();
-                yield return new AiStreamChunk { Error = connectionError };
+                yield return new AiStreamChunk { Error = $"The AI did not produce a final answer after {MaxToolRounds} rounds of tool calls." };
                 yield break;
             }
 
-            // Phase 3: Read and yield SSE chunks — try-finally is allowed with yield.
-            Stream? responseStream = null;
-            try
+            var text = toolResult.FinalMessage.Content;
+            if (!string.IsNullOrEmpty(text))
             {
-                responseStream = await httpResponse!.Content.ReadAsStreamAsync(cancellationToken);
-                using var reader = new System.IO.StreamReader(responseStream);
-
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    var line = await reader.ReadLineAsync(cancellationToken);
-                    if (line == null) break;
-                    if (!line.StartsWith("data:")) continue;
-
-                    var data = line["data:".Length..].Trim();
-                    if (data == "[DONE]") break;
-                    if (string.IsNullOrEmpty(data)) continue;
-
-                    StreamCompletionChunk? sseChunk;
-                    try { sseChunk = System.Text.Json.JsonSerializer.Deserialize<StreamCompletionChunk>(data, AiJsonOptions.Default); }
-                    catch { continue; }
-
-                    var content = sseChunk?.Choices?.FirstOrDefault()?.Delta?.Content;
-                    if (!string.IsNullOrEmpty(content))
-                        yield return new AiStreamChunk { Delta = content };
-
-                    if (sseChunk?.Choices?.FirstOrDefault()?.FinishReason == "stop") break;
-                }
-
-                yield return new AiStreamChunk { Done = true, Model = _settings.Model, DbChanged = dbChanged };
+                yield return new AiStreamChunk { Delta = text };
             }
-            finally
-            {
-                responseStream?.Dispose();
-                httpResponse?.Dispose();
-            }
+            yield return new AiStreamChunk { Done = true, Model = _settings.Model, DbChanged = toolResult.DbChanged };
         }
 
         // ── Helpers ──
@@ -458,84 +348,6 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             string databaseName, DatabaseEngine engine, string connectionString,
             CancellationToken cancellationToken)
         {
-            for (int round = 0; round < MaxToolRounds; round++)
-            {
-                var payload = new ChatCompletionRequest
-                {
-                    Model = _settings.Model,
-                    Messages = messages,
-                    Temperature = _settings.Temperature,
-                    MaxTokens = _settings.MaxTokens,
-                    Stream = false,
-                    Tools = tools
-                };
-
-                ChatCompletionResponse? completion;
-                try
-                {
-                    using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_settings.BaseUrl.TrimEnd('/')}/chat/completions")
-                    {
-                        Content = JsonContent.Create(payload, options: AiJsonOptions.Default)
-                    };
-                    httpRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _settings.ApiKey);
-
-                    using var httpResponse = await _httpClient.SendAsync(httpRequest, cancellationToken);
-
-                    if (!httpResponse.IsSuccessStatusCode)
-                    {
-                        var body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
-                        _logger.LogError("OpenRouter AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
-                        return new ToolRoundResult { Error = AiPromptBuilder.FormatProviderError((int)httpResponse.StatusCode, body) };
-                    }
-
-                    completion = await httpResponse.Content.ReadFromJsonAsync<ChatCompletionResponse>(AiJsonOptions.Default, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    return new ToolRoundResult { Cancelled = true };
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Could not start OpenRouter AI stream at {BaseUrl}.", _settings.BaseUrl);
-                    return new ToolRoundResult { Error = $"Could not connect to the AI provider at '{_settings.BaseUrl}'." };
-                }
-
-                var choice = completion?.Choices?.FirstOrDefault();
-                if (choice?.Message == null)
-                {
-                    return new ToolRoundResult { Error = "The AI returned an empty response." };
-                }
-
-                messages.Add(choice.Message);
-
-                if (choice.Message.ToolCalls is { Count: > 0 })
-                {
-                    foreach (var toolCall in choice.Message.ToolCalls)
-                    {
-                        var result = await ExecuteToolCallAsync(toolCall, databaseName, engine, connectionString, cancellationToken);
-                        messages.Add(new ChatMessage("tool", result, toolCall.Id));
-                    }
-                    continue;
-                }
-
-                // Final answer with tool calls — return here for AssistAsync (which doesn't stream).
-                return new ToolRoundResult { FinalMessage = choice.Message };
-            }
-
-            return new ToolRoundResult { Error = $"The AI did not produce a final answer after {MaxToolRounds} rounds of tool calls." };
-        }
-
-        /// <summary>
-        /// Runs tool-call rounds for <see cref="StreamAsync"/>: identical to the main loop
-        /// but stops BEFORE making the final non-tool-call API call, leaving <paramref name="messages"/>
-        /// in the correct state for a follow-up streaming request.
-        /// Returns <see cref="ToolRoundResult.ToolRoundsDone"/> = true when ready to stream.
-        /// </summary>
-        private async Task<ToolRoundResult> ProcessToolRoundsForStreamAsync(
-            List<ChatMessage> messages, List<ToolDefinition> tools,
-            string databaseName, DatabaseEngine engine, string connectionString,
-            CancellationToken cancellationToken)
-        {
             bool dbChanged = false;
             for (int round = 0; round < MaxToolRounds; round++)
             {
@@ -556,14 +368,18 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     {
                         Content = JsonContent.Create(payload, options: AiJsonOptions.Default)
                     };
-                    httpRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _settings.ApiKey);
+
+                    if (!string.IsNullOrWhiteSpace(_settings.ApiKey))
+                    {
+                        httpRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _settings.ApiKey);
+                    }
 
                     using var httpResponse = await _httpClient.SendAsync(httpRequest, cancellationToken);
 
                     if (!httpResponse.IsSuccessStatusCode)
                     {
                         var body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
-                        _logger.LogError("OpenRouter AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
+                        _logger.LogError("Opencode AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
                         return new ToolRoundResult { Error = AiPromptBuilder.FormatProviderError((int)httpResponse.StatusCode, body) };
                     }
 
@@ -575,18 +391,20 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Could not reach OpenRouter AI at {BaseUrl}.", _settings.BaseUrl);
-                    return new ToolRoundResult { Error = $"Could not connect to the AI provider at '{_settings.BaseUrl}'." };
+                    _logger.LogError(ex, "Could not start Opencode AI stream at {BaseUrl}.", _settings.BaseUrl);
+                    return new ToolRoundResult { Error = $"Could not connect to the local AI provider at '{_settings.BaseUrl}'." };
                 }
 
                 var choice = completion?.Choices?.FirstOrDefault();
                 if (choice?.Message == null)
+                {
                     return new ToolRoundResult { Error = "The AI returned an empty response." };
+                }
+
+                messages.Add(choice.Message);
 
                 if (choice.Message.ToolCalls is { Count: > 0 })
                 {
-                    // Add tool-call message + results; continue to next round.
-                    messages.Add(choice.Message);
                     foreach (var toolCall in choice.Message.ToolCalls)
                     {
                         var result = await ExecuteToolCallAsync(toolCall, databaseName, engine, connectionString, cancellationToken);
@@ -601,9 +419,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     continue;
                 }
 
-                // No tool calls → ready for streaming final response.
-                // Do NOT add this message to `messages`; the streaming call will generate it.
-                return new ToolRoundResult { ToolRoundsDone = true, DbChanged = dbChanged };
+                return new ToolRoundResult { FinalMessage = choice.Message, DbChanged = dbChanged };
             }
 
             return new ToolRoundResult { Error = $"The AI did not produce a final answer after {MaxToolRounds} rounds of tool calls." };
@@ -618,10 +434,6 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             public ChatMessage? FinalMessage { get; set; }
             public string? Error { get; set; }
             public bool Cancelled { get; set; }
-            /// <summary>Set by <see cref="ProcessToolRoundsForStreamAsync"/> when all tool
-            /// rounds are complete and the caller should make a streaming final call.</summary>
-            public bool ToolRoundsDone { get; set; }
-            /// <summary>True when at least one execute_write call succeeded during tool rounds.</summary>
             public bool DbChanged { get; set; }
         }
     }

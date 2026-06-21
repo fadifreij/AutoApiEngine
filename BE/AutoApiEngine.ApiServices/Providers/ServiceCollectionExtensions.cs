@@ -40,11 +40,23 @@ namespace AutoApiEngine.ApiServices.Providers
             // DDL file management service
             services.AddScoped<IDdlFileService, DdlFileService>();
 
-            // AI database assistant (advisory only — never executes SQL)
+            // ── MCP-style Database Tool Service (used by AI assistant) ──
+            services.AddScoped<IDatabaseToolService, DatabaseToolService>();
+
+            // ── AI Assistant (strategy pattern with provider selection) ──
+            //
+            // Two IAiAssistantService implementations are registered as concrete types
+            // (each with its own typed HttpClient).  AiAssistantFactory implements the
+            // interface and delegates to the right one based on AiSettings.Provider.
+
             services.Configure<AiSettings>(config.GetSection("Ai"));
-            services.AddHttpClient<IAiAssistantService, AiAssistantService>(client =>
+            services.Configure<OpenRouterAiSettings>(config.GetSection("OpenRouterAi"));
+            services.Configure<OpencodeAiSettings>(config.GetSection("OpencodeAi"));
+
+            // OpenRouter / external provider
+            services.AddHttpClient<AiAssistantService>(client =>
             {
-                client.Timeout = TimeSpan.FromSeconds(120);
+                client.Timeout = TimeSpan.FromSeconds(300);
             })
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
             {
@@ -71,6 +83,37 @@ namespace AutoApiEngine.ApiServices.Providers
                     }
                 }
             });
+
+            // Opencode / local AI provider
+            services.AddHttpClient<OpencodeAiAssistantService>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(300);
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                ConnectTimeout = TimeSpan.FromSeconds(10),
+                ConnectCallback = async (context, cancellationToken) =>
+                {
+                    var socket = new System.Net.Sockets.Socket(
+                        System.Net.Sockets.AddressFamily.InterNetwork,
+                        System.Net.Sockets.SocketType.Stream,
+                        System.Net.Sockets.ProtocolType.Tcp)
+                    { NoDelay = true };
+                    try
+                    {
+                        await socket.ConnectAsync(context.DnsEndPoint, cancellationToken);
+                        return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+                    }
+                    catch
+                    {
+                        socket.Dispose();
+                        throw;
+                    }
+                }
+            });
+
+            // Strategy-pattern factory — this is what controllers inject
+            services.AddScoped<IAiAssistantService, AiAssistantFactory>();
 
             return services;
         }
