@@ -1,4 +1,5 @@
 using AutoApiEngine.ServiceAbstraction;
+using AutoApiEngine.ServiceAbstraction.DTO;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using System.Text.RegularExpressions;
@@ -43,6 +44,48 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             await cmd.ExecuteNonQueryAsync(cancellationToken);
 
             return databaseName;
+        }
+
+        public async Task<TestConnectionResult> TestConnectionAsync(string serverHost, string? userName, string? password, string? databaseName, DatabaseEngine engine, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var csBuilder = new SqlConnectionStringBuilder
+                {
+                    DataSource = serverHost,
+                    InitialCatalog = databaseName ?? "master",
+                    TrustServerCertificate = true,
+                    ConnectTimeout = 10
+                };
+
+                if (!string.IsNullOrWhiteSpace(userName))
+                {
+                    csBuilder.UserID = userName;
+                    csBuilder.Password = password ?? "";
+                }
+                else
+                {
+                    csBuilder.IntegratedSecurity = true;
+                }
+
+                await using var connection = new SqlConnection(csBuilder.ConnectionString);
+                await connection.OpenAsync(cancellationToken);
+
+                return new TestConnectionResult
+                {
+                    Success = true,
+                    Message = "Connection successful",
+                    ServerVersion = connection.ServerVersion
+                };
+            }
+            catch (Exception ex)
+            {
+                return new TestConnectionResult
+                {
+                    Success = false,
+                    Message = ex.Message
+                };
+            }
         }
 
         public async Task<DatabaseStatsResult> GetDatabaseStatsAsync(string databaseName, DatabaseEngine engine, string connectionString, CancellationToken cancellationToken = default)

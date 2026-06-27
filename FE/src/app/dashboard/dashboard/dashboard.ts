@@ -8,6 +8,7 @@ interface WorkspaceStats {
   id: string;
   name: string;
   databaseName: string;
+  serverHost: string | null;
   databaseEngine: string;
   tablesCount: number;
   viewsCount: number;

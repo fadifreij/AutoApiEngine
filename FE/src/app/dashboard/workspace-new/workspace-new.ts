@@ -7,6 +7,12 @@ import { environment } from '../../../environments/environment';
 import { AuthService } from '../../shared/auth/auth.service';
 import { WorkspaceStateService } from '../../shared/workspace-state.service';
 
+interface TestConnectionResponse {
+  success: boolean;
+  message: string;
+  serverVersion: string | null;
+}
+
 interface DbEngineOption {
   value: string;
   label: string;
@@ -79,27 +85,71 @@ export class WorkspaceNew {
 
   onNameInput(value: string): void {
     this.name.set(value);
-    // mark as touched as soon as the user types
     if (!this.nameTouched()) this.nameTouched.set(true);
+    this.refreshCreateDisabled();
   }
 
   onEncryptionKeyInput(value: string): void {
     this.encryptionKey.set(value);
     if (!this.encryptionKeyTouched()) this.encryptionKeyTouched.set(true);
+    this.refreshCreateDisabled();
   }
   encryptionKey = signal('');
 
   formData = {
     databaseEngine: 'SqlServer',
-    host: '',
+    serverHost: '',
+    databaseName: '',
     userName: '',
     password: ''
   };
+
+  /** Connection test states: idle | testing | success | failed */
+  connectionStatus = signal<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  connectionMessage = signal('');
+  connectionVersion = signal('');
+
+  /** Set to true only when Test Connection succeeds. Reset on any field change or failure. */
+  connectionVerified = signal(false);
+
+  /** Whether the Create Workspace button should be disabled — recalculated imperatively. */
+  createDisabled = signal(true);
 
   submitting = false;
   error = '';
   showSuccessOverlay = false;
   showFailureOverlay = false;
+
+  /** Recalculate createDisabled from all dependencies. Called on every relevant change. */
+  private refreshCreateDisabled(): void {
+  
+    if (!this.isNameValid()) {
+      this.createDisabled.set(true);
+      return;
+    }
+    if (this.dbType() === 'hosted') {
+      this.createDisabled.set(!(this.encryptionKey() || '').trim());
+      return;
+    }
+    console.log(this.connectionStatus())
+    this.createDisabled.set(this.connectionStatus() !== 'success');
+  }
+
+  setDbType(type: 'hosted' | 'external'): void {
+    this.dbType.set(type);
+    this.refreshCreateDisabled();
+  }
+
+  /** Reset connection test status when form fields change */
+  markConnectionIdle(): void {
+    if (this.connectionStatus() !== 'idle') {
+      this.connectionStatus.set('idle');
+      this.connectionMessage.set('');
+      this.connectionVersion.set('');
+      this.connectionVerified.set(false);
+      this.refreshCreateDisabled();
+    }
+  }
 
   get selectedEngine(): DbEngineOption | undefined {
     return this.dbEngineOptions.find(e => e.value === this.formData.databaseEngine);
@@ -112,21 +162,57 @@ export class WorkspaceNew {
   selectDbEngine(value: string): void {
     this.formData.databaseEngine = value;
     this.dbEngineOpen.set(false);
+    this.markConnectionIdle();
   }
 
   closeDbEngine(): void {
     this.dbEngineOpen.set(false);
   }
 
-  canSubmit = computed(() => {
-    // require a valid workspace/database name in all cases
-    if (!this.isNameValid()) return false;
-    if (this.dbType() === 'hosted') {
-      const key = (this.encryptionKey() || '').trim();
-      return key.length > 0;
+  testConnection(): void {
+    if (!this.formData.serverHost.trim()) {
+      this.connectionStatus.set('failed');
+      this.connectionMessage.set('Server host is required.');
+      return;
     }
-    return true;
-  });
+
+    this.connectionStatus.set('testing');
+    this.connectionMessage.set('');
+    this.connectionVersion.set('');
+
+    const body = {
+      databaseEngine: this.formData.databaseEngine,
+      serverHost: this.formData.serverHost,
+      userName: this.formData.userName || null,
+      password: this.formData.password || null,
+      databaseName: this.formData.databaseName || null
+    };
+
+    this.http.post<TestConnectionResponse>(
+      `${environment.apiUrl}/workspaces/test-connection`,
+      body,
+      { withCredentials: true }
+    ).subscribe({
+      next: (res) => {
+        const ok = res.success;
+        this.connectionStatus.set(ok ? 'success' : 'failed');
+        this.connectionMessage.set(res.message || (ok ? 'Connection successful' : 'Connection failed'));
+        if (res.serverVersion) this.connectionVersion.set(res.serverVersion);
+        this.connectionVerified.set(ok);
+        this.refreshCreateDisabled();
+      },
+      error: (err) => {
+        this.connectionStatus.set('failed');
+        const body = err?.error;
+        this.connectionMessage.set(
+          typeof body === 'string' ? body
+            : body?.message || body?.title || err?.message || 'Connection test failed'
+        );
+        this.connectionVerified.set(false);
+        this.refreshCreateDisabled();
+      }
+    });
+  }
 
   onSubmit(): void {
     if (!this.name()) {
@@ -152,7 +238,8 @@ export class WorkspaceNew {
       body.databaseEngine = this.formData.databaseEngine;
       body.dbUserName = this.formData.userName || null;
       body.dbPassword = this.formData.password || null;
-      body.databaseName = this.formData.host || null;
+      body.serverHost = this.formData.serverHost || null;
+      body.databaseName = this.formData.databaseName || null;
       body.encryptionKey = null;
     }
 

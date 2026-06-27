@@ -29,6 +29,11 @@ namespace AutoApiEngine.Domain.Entities
         [StringLength(50)]
         public string? DatabaseName { get; set; }
 
+        /// <summary>Server address for external DB connections (e.g., "db.example.com:1433")</summary>
+        [Column(TypeName = "VARCHAR")]
+        [StringLength(200)]
+        public string? ServerHost { get; set; }
+
         public DatabaseEngine DatabaseEngine { get; set; } = DatabaseEngine.SqlServer;
 
         public bool IsActive { get; set; } = true;

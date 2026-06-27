@@ -1,5 +1,6 @@
 using AutoApiEngine.Domain.Entities;
 using AutoApiEngine.Domain.Enums;
+using AutoApiEngine.ServiceAbstraction.DTO;
 using System.Data.Common;
 
 namespace AutoApiEngine.ServiceAbstraction
@@ -26,6 +27,8 @@ namespace AutoApiEngine.ServiceAbstraction
         Task<string> CreateDatabaseAsync(string databaseName, DatabaseEngine engine, CancellationToken cancellationToken = default);
 
         Task<DatabaseStatsResult> GetDatabaseStatsAsync(string databaseName, DatabaseEngine engine, string connectionString, CancellationToken cancellationToken = default);
+
+        Task<TestConnectionResult> TestConnectionAsync(string serverHost, string? userName, string? password, string? databaseName, DatabaseEngine engine, CancellationToken cancellationToken = default);
 
         Task BackupAsync(
             DatabaseEngine engine,

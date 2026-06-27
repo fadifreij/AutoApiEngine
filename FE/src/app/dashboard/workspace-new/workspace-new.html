@@ -68,7 +68,7 @@
         <p class="form-section-desc">Choose where your database lives.</p>
 
         <div class="db-type-toggle">
-          <div class="db-type-option" [class.selected]="dbType() === 'hosted'" (click)="dbType.set('hosted')">
+          <div class="db-type-option" [class.selected]="dbType() === 'hosted'" (click)="setDbType('hosted')">
             <svg viewBox="0 0 48 48" fill="none" stroke="#4f46e5" stroke-width="2">
               <rect x="8" y="6" width="32" height="36" rx="4" />
               <path d="M8 16h32M8 26h32" />
@@ -79,7 +79,7 @@
             <h4>Hosted by Us</h4>
             <p>We manage everything. Zero config needed.</p>
           </div>
-          <div class="db-type-option" [class.selected]="dbType() === 'external'" (click)="dbType.set('external')">
+          <div class="db-type-option" [class.selected]="dbType() === 'external'" (click)="setDbType('external')">
             <svg viewBox="0 0 48 48" fill="none" stroke="#6b7280" stroke-width="2">
               <circle cx="24" cy="24" r="18" />
               <path d="M6 24h36M24 6c5 5 8 11 8 18s-3 13-8 18c-5-5-8-11-8-18s3-13 8-18z" />
@@ -136,30 +136,88 @@
           </div>
 
           <div class="form-group">
-            <label>Host / Connection String</label>
-            <input type="text" [(ngModel)]="formData.host" name="host" placeholder="e.g. db.example.com:5432/mydb">
+            <label>Server Host</label>
+            <input type="text" [(ngModel)]="formData.serverHost" name="serverHost"
+              placeholder="e.g. db.example.com, 192.168.1.50\instance, or host:port"
+              (input)="markConnectionIdle()">
+          </div>
+          <div class="form-group">
+            <label>Database Name</label>
+            <input type="text" [(ngModel)]="formData.databaseName" name="databaseName"
+              placeholder="e.g. my_database (leave empty to test server only)"
+              (input)="markConnectionIdle()">
           </div>
           <div class="form-row-2">
             <div class="form-group">
               <label>Username</label>
-              <input type="text" [(ngModel)]="formData.userName" name="userName" placeholder="db_user">
+              <input type="text" [(ngModel)]="formData.userName" name="userName" placeholder="db_user"
+                (input)="markConnectionIdle()">
             </div>
             <div class="form-group">
               <label>Password</label>
               <input type="password" [(ngModel)]="formData.password" name="externalPassword"
-                placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;">
+                placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"
+                (input)="markConnectionIdle()">
             </div>
           </div>
           <div class="test-conn">
-            <button class="btn btn-outline btn-sm" type="button">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round">
+            <button class="btn btn-conn"
+              [class.idle]="connectionStatus() === 'idle' || connectionStatus() === 'testing'"
+              [class.success]="connectionStatus() === 'success'"
+              [class.failed]="connectionStatus() === 'failed'"
+              type="button" (click)="testConnection()"
+              [disabled]="connectionStatus() === 'testing' || !formData.serverHost.trim()">
+              @if (connectionStatus() === 'testing') {
+              <span class="loader"></span>
+              Testing…
+              } @else if (connectionStatus() === 'success') {
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+              Connected
+              @if (connectionVersion()) {
+              <span class="version-tag">{{ connectionVersion() }}</span>
+              }
+              } @else if (connectionStatus() === 'failed') {
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              Connection Failed
+              } @else {
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
                 <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
                 <path d="M22 4L12 14.01l-3-3" />
               </svg>
               Test Connection
+              }
             </button>
-            <span>Verify before creating</span>
+
+            @if (connectionStatus() === 'success') {
+            <div class="conn-result conn-result--success">
+              <div class="conn-result-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+              </div>
+              <div class="conn-result-body">
+                <span class="conn-result-title">Connection successful</span>
+                @if (connectionVersion()) {
+                <span class="conn-result-detail">Server version: <strong>{{ connectionVersion() }}</strong></span>
+                }
+              </div>
+            </div>
+            } @else if (connectionStatus() === 'failed') {
+            <div class="conn-result conn-result--failed">
+              <div class="conn-result-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </div>
+              <div class="conn-result-body">
+                <span class="conn-result-title">Connection failed</span>
+                <span class="conn-result-detail">{{ connectionMessage() }}</span>
+              </div>
+            </div>
+            } @else if (connectionStatus() === 'idle') {
+            <span class="conn-hint">Enter your database credentials and click Test Connection.</span>
+            }
           </div>
         </div>
         }
@@ -171,7 +229,7 @@
 
       <div class="form-actions">
         <a routerLink="/app/dashboard" class="btn btn-outline">Cancel</a>
-        <button type="submit" class="btn btn-primary" [disabled]="submitting || !canSubmit()">
+        <button type="submit" class="btn btn-primary" [disabled]="submitting || createDisabled()">
           @if (submitting) {
           <span class="loader"></span>
           Creating…
