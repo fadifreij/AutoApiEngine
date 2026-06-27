@@ -6,7 +6,13 @@
     } @else if (error()) {
       <div class="subtitle">{{ error() }}</div>
     } @else {
-      <div class="subtitle">Workspace: {{ workspaceName }} · Last sync: {{ lastSyncLabel }}</div>
+      <div class="subtitle">Workspace: {{ workspaceName }} · Last sync: {{ lastSyncLabel }}
+        @if (stats()?.serverHost) {
+          · <span class="conn-badge">{{ stats()?.databaseEngine }} → {{ stats()?.serverHost }}/{{ stats()?.databaseName }}</span>
+        } @else if (stats()?.databaseName) {
+          · <span class="conn-badge hosted">{{ stats()?.databaseEngine }} · {{ stats()?.databaseName }}</span>
+        }
+      </div>
     }
   </div>
   <div class="header-actions">

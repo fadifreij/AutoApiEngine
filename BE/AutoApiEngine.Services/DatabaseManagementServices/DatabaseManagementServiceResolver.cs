@@ -1,4 +1,5 @@
 using AutoApiEngine.ServiceAbstraction;
+using AutoApiEngine.ServiceAbstraction.DTO;
 using Microsoft.Extensions.Logging;
 using AutoApiEngine.Domain.Enums;
 using AutoApiEngine.Domain.Entities;
@@ -31,6 +32,15 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             {
                 DatabaseEngine.MySql => _mysql.CreateDatabaseAsync(databaseName, engine, cancellationToken),
                 _ => _sql.CreateDatabaseAsync(databaseName, engine, cancellationToken)
+            };
+        }
+
+        public Task<TestConnectionResult> TestConnectionAsync(string serverHost, string? userName, string? password, string? databaseName, DatabaseEngine engine, CancellationToken cancellationToken = default)
+        {
+            return engine switch
+            {
+                DatabaseEngine.MySql => _mysql.TestConnectionAsync(serverHost, userName, password, databaseName, engine, cancellationToken),
+                _ => _sql.TestConnectionAsync(serverHost, userName, password, databaseName, engine, cancellationToken)
             };
         }
 

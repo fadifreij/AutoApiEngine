@@ -1,4 +1,5 @@
 using AutoApiEngine.ServiceAbstraction;
+using AutoApiEngine.ServiceAbstraction.DTO;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using System.Text;
@@ -33,6 +34,34 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             await cmd.ExecuteNonQueryAsync(cancellationToken);
 
             return databaseName;
+        }
+
+        public async Task<TestConnectionResult> TestConnectionAsync(string serverHost, string? userName, string? password, string? databaseName, DatabaseEngine engine, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var connStr = $"Server={serverHost};Uid={userName ?? "root"};Pwd={password ?? ""};Connection Timeout=10;";
+                if (!string.IsNullOrWhiteSpace(databaseName))
+                    connStr += $"Database={databaseName};";
+
+                await using var connection = new MySqlConnection(connStr);
+                await connection.OpenAsync(cancellationToken);
+
+                return new TestConnectionResult
+                {
+                    Success = true,
+                    Message = "Connection successful",
+                    ServerVersion = connection.ServerVersion
+                };
+            }
+            catch (Exception ex)
+            {
+                return new TestConnectionResult
+                {
+                    Success = false,
+                    Message = ex.Message
+                };
+            }
         }
 
         public async Task<DatabaseStatsResult> GetDatabaseStatsAsync(string databaseName, DatabaseEngine engine, string connectionString, CancellationToken cancellationToken = default)

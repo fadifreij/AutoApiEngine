@@ -7,6 +7,7 @@
         public string? DbUserName { get; set; }
         public string? DbPassword { get; set; }
         public string? DatabaseName { get; set; }
+        public string? ServerHost { get; set; }
         public string? DatabaseEngine { get; set; }
         public bool IsActive { get; set; } = true;
     }

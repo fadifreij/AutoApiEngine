@@ -7,6 +7,7 @@ using AutoApiEngine.Services.DatabaseManagementServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Data.SqlClient;
 
 namespace AutoApiEngine.Presentation.Controllers
 {
@@ -37,8 +38,54 @@ namespace AutoApiEngine.Presentation.Controllers
             return engine switch
             {
                 DatabaseEngine.MySql => _serviceProvider.GetRequiredService<MySqlDatabaseManagementService>(),
+                DatabaseEngine.PostgreSql => throw new NotSupportedException("PostgreSQL is not yet supported."),
+                DatabaseEngine.Sqlite => throw new NotSupportedException("SQLite is not yet supported."),
                 _ => _serviceProvider.GetRequiredService<IDatabaseManagementService>()
             };
+        }
+
+        /// <summary>
+        /// Builds a connection string from workspace credentials. For hosted workspaces,
+        /// returns the app's default connection string. For external workspaces, builds
+        /// from the stored ServerHost, DbUserName, DbPassword.
+        /// </summary>
+        private string BuildConnectionString(Workspace workspace)
+        {
+            var isHosted = string.IsNullOrWhiteSpace(workspace.ServerHost)
+                        && string.IsNullOrWhiteSpace(workspace.DbUserName);
+            if (isHosted)
+            {
+                return workspace.DatabaseEngine switch
+                {
+                    DatabaseEngine.MySql => _configuration.GetConnectionString("MySqlConnection")
+                        ?? "Server=localhost;Port=3307;Uid=root;Pwd=root;",
+                    _ => _configuration.GetConnectionString("SqlServerConnection")
+                        ?? "Server=LAPTOP-II43H7KF;Trusted_Connection=True;TrustServerCertificate=True;"
+                };
+            }
+
+            // External — build from stored credentials
+            if (workspace.DatabaseEngine == DatabaseEngine.MySql)
+            {
+                return $"Server={workspace.ServerHost};Uid={workspace.DbUserName};Pwd={workspace.DbPassword};";
+            }
+
+            // SQL Server
+            var csb = new SqlConnectionStringBuilder
+            {
+                DataSource = workspace.ServerHost,
+                TrustServerCertificate = true
+            };
+            if (!string.IsNullOrWhiteSpace(workspace.DbUserName))
+            {
+                csb.UserID = workspace.DbUserName;
+                csb.Password = workspace.DbPassword ?? "";
+            }
+            else
+            {
+                csb.IntegratedSecurity = true;
+            }
+            return csb.ConnectionString;
         }
 
         private static DatabaseEngine ParseEngine(string? value)
@@ -127,9 +174,7 @@ namespace AutoApiEngine.Presentation.Controllers
                     try
                     {
                         var dbService = GetDatabaseService(workspace.DatabaseEngine);
-                        var connectionString = workspace.DatabaseEngine == DatabaseEngine.MySql
-                            ? "Server=localhost;Port=3307;Uid=root;Pwd=root;"
-                            : "Server=LAPTOP-II43H7KF;Trusted_Connection=True;TrustServerCertificate=True;";
+                        var connectionString = BuildConnectionString(workspace);
 
                         dbStats = await dbService.GetDatabaseStatsAsync(
                             workspace.DatabaseName,
@@ -147,6 +192,7 @@ namespace AutoApiEngine.Presentation.Controllers
                     Id = workspace.Id,
                     Name = workspace.Name,
                     DatabaseName = workspace.DatabaseName,
+                    ServerHost = workspace.ServerHost,
                     DatabaseEngine = workspace.DatabaseEngine,
                     TablesCount = dbStats is not null ? dbStats.TablesCount : workspace.TablesCount,
                     ViewsCount = dbStats is not null ? dbStats.ViewsCount : 0,
@@ -160,6 +206,32 @@ namespace AutoApiEngine.Presentation.Controllers
             });
         }
 
+        /// <summary>
+        /// Tests a database connection using the provided credentials without creating a workspace.
+        /// </summary>
+        [HttpPost("test-connection")]
+        public async Task<IActionResult> TestConnection([FromBody] TestConnectionDto dto, CancellationToken cancellationToken = default)
+        {
+            return await HandleRequestAsync(async () =>
+            {
+                if (string.IsNullOrWhiteSpace(dto.ServerHost))
+                    throw new ArgumentException("Server host is required.");
+
+                var engine = ParseEngine(dto.DatabaseEngine);
+                var dbService = GetDatabaseService(engine);
+
+                var result = await dbService.TestConnectionAsync(
+                    dto.ServerHost,
+                    dto.UserName,
+                    dto.Password,
+                    dto.DatabaseName,
+                    engine,
+                    cancellationToken);
+
+                return result;
+            });
+        }
+
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateWorkspaceDto dto, CancellationToken cancellationToken = default)
         {
@@ -168,7 +240,8 @@ namespace AutoApiEngine.Presentation.Controllers
                 if (string.IsNullOrWhiteSpace(dto.Name))
                     throw new ArgumentException("Workspace name is required.");
 
-                var isHosted = string.IsNullOrWhiteSpace(dto.DbUserName) && string.IsNullOrWhiteSpace(dto.DatabaseName);
+                var isHosted = string.IsNullOrWhiteSpace(dto.DbUserName)
+                            && string.IsNullOrWhiteSpace(dto.ServerHost);
 
                 var engine = ParseEngine(
                     !string.IsNullOrWhiteSpace(dto.DatabaseEngine)
@@ -205,6 +278,8 @@ namespace AutoApiEngine.Presentation.Controllers
                     EncryptionKey = dto.EncryptionKey,
                     DbUserName = dto.DbUserName,
                     DbPassword = dto.DbPassword,
+                    DatabaseName = dto.DatabaseName,
+                    ServerHost = dto.ServerHost,
                     DatabaseEngine = engine,
                     OrganizationId = orgId,
                     Organization = organization,
@@ -252,8 +327,6 @@ namespace AutoApiEngine.Presentation.Controllers
                 if (string.IsNullOrWhiteSpace(dto.Name))
                     throw new ArgumentException("Workspace name is required.");
 
-                var isHosted = string.IsNullOrWhiteSpace(dto.DbUserName) && string.IsNullOrWhiteSpace(dto.DatabaseName);
-
                 var engine = ParseEngine(
                     !string.IsNullOrWhiteSpace(dto.DatabaseEngine)
                         ? dto.DatabaseEngine
@@ -268,6 +341,7 @@ namespace AutoApiEngine.Presentation.Controllers
                 workspace.DbUserName = dto.DbUserName;
                 workspace.DbPassword = dto.DbPassword;
                 workspace.DatabaseName = dto.DatabaseName;
+                workspace.ServerHost = dto.ServerHost;
                 workspace.DatabaseEngine = engine;
                 workspace.IsActive = dto.IsActive;
 
