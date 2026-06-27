@@ -42,6 +42,9 @@ The repo has 3 independent working directories:
 - `DockerImages/docker-compose.yml` has plaintext dev credentials — keep out of logs.
 - No CI workflows exist yet (`.github/workflows/` is empty).
 - Two EF migration files are gitignored (InitialCreate).
+- **OpenCode server auto-starts** with the backend via `OpenCodeServerHostedService` (port 3000, Big Pickle LLM). No manual `opencode serve` needed.
+- **Big Pickle LLM** (`opencode/big-pickle`) is the default AI model. Configured in `appsettings.json` → `OpencodeAi`.
+- **MCP filesystem** is configured in `opencode.json` — gives Big Pickle access to the full workspace.
 
 ## Reference Docs (supplemental context)
 

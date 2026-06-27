@@ -3,26 +3,29 @@ namespace AutoApiEngine.ServiceAbstraction.DTO
     /// <summary>
     /// Configuration for the local Opencode AI provider.
     /// Bound from the "OpencodeAi" configuration section.
-    /// Uses an OpenAI-compatible Chat Completions endpoint running locally
-    /// (e.g. Ollama, LocalAI, or the Opencode inference server).
-    /// Default model is "opencode/big-pickle".
+    /// Uses the OpenCode proxy server which translates between OpenAI-compatible
+    /// Chat Completions API and the local OpenCode server's session API.
+    /// The default model is "opencode/big-pickle" (Big Pickle LLM).
     /// </summary>
     public class OpencodeAiSettings
     {
         /// <summary>
-        /// Base URL of the local OpenAI-compatible endpoint.
-        /// Defaults to http://localhost:11434/v1 (Ollama-compatible).
+        /// Base URL of the local OpenCode server (NOT a proxy).
+        /// Defaults to http://127.0.0.1:3000 (opencode serve default port).
+        /// The service calls the OpenCode session API directly.
         /// </summary>
-        public string BaseUrl { get; set; } = "http://localhost:11434/v1";
+        public string BaseUrl { get; set; } = "http://127.0.0.1:3000";
 
         /// <summary>
-        /// Optional API key for the local endpoint (if required).
-        /// Most local providers leave this empty.
+        /// Optional API key for the OpenCode proxy (if required).
         /// </summary>
         public string ApiKey { get; set; } = string.Empty;
 
-        /// <summary>Model identifier. Default: gemma4:latest.</summary>
-        public string Model { get; set; } = "gemma4:latest";
+        /// <summary>
+        /// Model identifier. The Big Pickle LLM is the default.
+        /// Model ID format: opencode/big-pickle.
+        /// </summary>
+        public string Model { get; set; } = "opencode/big-pickle";
 
         /// <summary>Sampling temperature (lower = more deterministic/faster).</summary>
         public double Temperature { get; set; } = 0.1;

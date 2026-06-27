@@ -68,5 +68,12 @@
                 "edit": "allow"
             }
         }
+    },
+    "mcp": {
+        "workspace-filesystem": {
+            "type": "local",
+            "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "D:\\AutoCrud_Full"],
+            "enabled": true
+        }
     }
 }

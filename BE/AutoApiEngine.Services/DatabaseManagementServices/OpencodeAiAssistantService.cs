@@ -1,5 +1,6 @@
-using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using AutoApiEngine.Domain.Enums;
 using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.ServiceAbstraction.DTO;
@@ -10,15 +11,16 @@ using Microsoft.Extensions.Options;
 namespace AutoApiEngine.Services.DatabaseManagementServices
 {
     /// <summary>
-    /// AI assistant implementation that calls a local OpenAI-compatible Chat Completions
-    /// endpoint (e.g. Ollama, LocalAI, or the Opencode inference server).
+    /// AI assistant implementation that calls the local OpenCode server's native
+    /// session API directly (port 3000 by default) using the Big Pickle LLM
+    /// (model ID: opencode/big-pickle).
     ///
-    /// Uses MCP-style tool calling (OpenAI function-calling) to let the AI dynamically
-    /// discover database schema and inspect data instead of pre-loading all schema context.
-    /// The <see cref="DatabaseToolService"/> enforces read-only SELECT queries.
+    /// Instead of OpenAI-compatible function calling, tool desciptions are embedded
+    /// in the system prompt as JSON. The AI responds with JSON code blocks that the
+    /// service parses to execute database tools (list_tables, describe_table, etc.).
     ///
-    /// This is an alternative to <see cref="AiAssistantService"/> and uses its own
-    /// configuration section ("OpencodeAi"). The default model is "gemma4:latest".
+    /// This avoids an extra proxy hop and communicates directly with OpenCode's
+    /// HTTP server at http://127.0.0.1:{Port}.
     /// </summary>
     public class OpencodeAiAssistantService : IAiAssistantService
     {
@@ -30,6 +32,18 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         private readonly IConfiguration _configuration;
 
         private const int MaxToolRounds = 5;
+
+        // OpenCode server API paths
+        private string ServerUrl => _settings.BaseUrl.TrimEnd('/'); // e.g. http://127.0.0.1:3000
+        private string SessionApi => $"{ServerUrl}/session";
+        private string MessageApi(string sessionId) => $"{ServerUrl}/session/{sessionId}/message";
+
+        // Basic auth for the OpenCode server
+        private string AuthHeader => $"Basic {Convert.ToBase64String(Encoding.ASCII.GetBytes($"opencode:{_settings.ApiKey ?? "local-dev-key"}"))}";
+
+        // Reusable session ID (created once, reused across requests)
+        private static string? _cachedSessionId;
+        private static readonly object _sessionLock = new();
 
         public OpencodeAiAssistantService(
             HttpClient httpClient,
@@ -47,7 +61,9 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             _logger = logger;
         }
 
-        public async Task<AiAssistResponse> AssistAsync(AiAssistRequest request, CancellationToken cancellationToken = default)
+        public async Task<AiAssistResponse> AssistAsync(
+            AiAssistRequest request,
+            CancellationToken cancellationToken = default)
         {
             // ── Resolve workspace database info ──
             var (engine, databaseName, connectionString) = await ResolveDatabaseInfoAsync(request.WorkspaceId, cancellationToken);
@@ -56,108 +72,93 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 return new AiAssistResponse { Success = false, Error = "Workspace not found or has no database configured." };
             }
 
-            // ── Build initial messages (no schema context pre-loaded) ──
-            var messages = AiPromptBuilder.BuildMessages(request, engine.ToString()!);
-            var tools = AiPromptBuilder.BuildToolDefinitions();
+            // ── Ensure we have an OpenCode session ──
+            var sessionId = await GetOrCreateSessionAsync(cancellationToken);
+            if (sessionId == null)
+            {
+                return new AiAssistResponse
+                {
+                    Success = false,
+                    Error = "Could not connect to the local OpenCode server. Ensure `opencode serve` is running."
+                };
+            }
+
+            // ── Build messages with tool definitions embedded as text ──
+            var engineName = engine.ToString()!;
+            var systemPrompt = BuildSystemPromptWithTools(engineName);
+            var messages = new List<ChatMessage>
+            {
+                new("system", systemPrompt)
+            };
+
+            foreach (var msg in request.History ?? new List<AiChatMessage>())
+            {
+                var role = msg.Role?.Trim().ToLowerInvariant();
+                if ((role == "user" || role == "assistant") && !string.IsNullOrWhiteSpace(msg.Content))
+                {
+                    messages.Add(new ChatMessage(role, msg.Content));
+                }
+            }
+
+            var userContent = new StringBuilder(request.Prompt?.Trim() ?? string.Empty);
+            if (!string.IsNullOrWhiteSpace(request.CurrentSql))
+            {
+                userContent.Append("\n\n-- SQL currently in my editor --\n```sql\n")
+                           .Append(request.CurrentSql!.Trim())
+                           .Append("\n```");
+            }
+            messages.Add(new ChatMessage("user", userContent.ToString()));
 
             // ── Multi-round tool-calling loop ──
             for (int round = 0; round < MaxToolRounds; round++)
             {
-                var payload = new ChatCompletionRequest
+                // Translate OpenAI messages → OpenCode parts
+                var parts = ConvertMessagesToParts(messages);
+
+                // Send to OpenCode server
+                var ocResponse = await SendToOpenCodeAsync(sessionId, parts, cancellationToken);
+                if (ocResponse == null)
                 {
-                    Model = _settings.Model,
-                    Messages = messages,
-                    Temperature = _settings.Temperature,
-                    MaxTokens = _settings.MaxTokens,
-                    Stream = false,
-                    Tools = tools
-                };
-
-                ChatCompletionResponse? completion;
-                try
-                {
-                    using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_settings.BaseUrl.TrimEnd('/')}/chat/completions")
-                    {
-                        Content = JsonContent.Create(payload, options: AiJsonOptions.Default)
-                    };
-
-                    if (!string.IsNullOrWhiteSpace(_settings.ApiKey))
-                    {
-                        httpRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _settings.ApiKey);
-                    }
-
-                    using var httpResponse = await _httpClient.SendAsync(httpRequest, cancellationToken);
-
-                    if (!httpResponse.IsSuccessStatusCode)
-                    {
-                        var body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
-                        _logger.LogError("Opencode AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
-                        return new AiAssistResponse
-                        {
-                            Success = false,
-                            Error = AiPromptBuilder.FormatProviderError((int)httpResponse.StatusCode, body)
-                        };
-                    }
-
-                    completion = await httpResponse.Content.ReadFromJsonAsync<ChatCompletionResponse>(AiJsonOptions.Default, cancellationToken);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (TaskCanceledException ex)
-                {
-                    _logger.LogError(ex, "Opencode AI request timed out after {Timeout}s contacting {BaseUrl}.", _httpClient.Timeout.TotalSeconds, _settings.BaseUrl);
                     return new AiAssistResponse
                     {
                         Success = false,
-                        Error = $"The local AI provider did not respond in time ({_httpClient.Timeout.TotalSeconds:N0}s). The endpoint '{_settings.BaseUrl}' may not be running. Verify OpencodeAi:BaseUrl."
+                        Error = "The local OpenCode server did not respond in time. Verify it is running on port 3000."
                     };
-                }
-                catch (HttpRequestException ex)
-                {
-                    _logger.LogError(ex, "Network error reaching Opencode AI provider at {BaseUrl}.", _settings.BaseUrl);
-                    return new AiAssistResponse
-                    {
-                        Success = false,
-                        Error = $"Could not connect to the local AI provider at '{_settings.BaseUrl}'. Make sure the server is running (e.g. `ollama serve`) and that OpencodeAi:BaseUrl is correct."
-                    };
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Opencode AI assistant request failed.");
-                    return new AiAssistResponse { Success = false, Error = "The local AI service failed unexpectedly. Please try again." };
                 }
 
-                var choice = completion?.Choices?.FirstOrDefault();
-                if (choice?.Message == null)
+                var replyText = ocResponse.Text;
+                if (string.IsNullOrWhiteSpace(replyText))
                 {
                     return new AiAssistResponse { Success = false, Error = "The AI returned an empty response." };
                 }
 
-                messages.Add(choice.Message);
+                // Check for tool calls embedded as JSON blocks in the text
+                var toolCalls = ExtractToolCallsFromText(replyText);
 
-                if (choice.Message.ToolCalls is { Count: > 0 })
+                if (toolCalls.Count > 0)
                 {
-                    foreach (var toolCall in choice.Message.ToolCalls)
+                    // Add assistant message with the text (minus the tool call JSON)
+                    var cleanText = RemoveToolCallBlocks(replyText);
+                    if (!string.IsNullOrWhiteSpace(cleanText))
                     {
-                        var result = await ExecuteToolCallAsync(toolCall, databaseName!, engine!.Value, connectionString!, cancellationToken);
-                        messages.Add(new ChatMessage("tool", result, toolCall.Id));
+                        messages.Add(new ChatMessage("assistant", cleanText));
+                    }
+
+                    // Execute each tool call
+                    foreach (var tc in toolCalls)
+                    {
+                        var result = await ExecuteNamedToolAsync(tc.Name, tc.Arguments, databaseName!, engine!.Value, connectionString!, cancellationToken);
+                        messages.Add(new ChatMessage("tool", result, tc.Id));
                     }
                     continue;
                 }
 
-                var reply = choice.Message.Content?.Trim();
-                if (string.IsNullOrWhiteSpace(reply))
-                {
-                    return new AiAssistResponse { Success = false, Error = "The AI returned an empty response." };
-                }
-
+                // No tool calls — this is the final answer
                 return new AiAssistResponse
                 {
                     Success = true,
-                    Reply = reply,
-                    Model = completion?.Model ?? _settings.Model
+                    Reply = replyText,
+                    Model = "opencode/big-pickle"
                 };
             }
 
@@ -172,45 +173,350 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             AiAssistRequest request,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            // ── Resolve workspace database info ──
-            var (engine, databaseName, connectionString) = await ResolveDatabaseInfoAsync(request.WorkspaceId, cancellationToken);
-            if (engine == null)
+            // For streaming, use the non-streaming AssistAsync and yield the result as a single chunk.
+            // (The OpenCode server session API does not natively support SSE streaming.)
+            var response = await AssistAsync(request, cancellationToken);
+            if (!response.Success)
             {
-                yield return new AiStreamChunk { Error = "Workspace not found or has no database configured." };
+                yield return new AiStreamChunk { Error = response.Error };
                 yield break;
             }
-
-            // ── Build initial messages ──
-            var messages = AiPromptBuilder.BuildMessages(request, engine.ToString()!);
-            var tools = AiPromptBuilder.BuildToolDefinitions();
-
-            // ── Process tool calls first (non-streaming) ──
-            var toolResult = await ProcessToolRoundsAsync(messages, tools, databaseName!, engine!.Value, connectionString!, cancellationToken);
-
-            if (toolResult.Error != null)
-            {
-                yield return new AiStreamChunk { Error = toolResult.Error };
-                yield break;
-            }
-
-            if (toolResult.FinalMessage == null)
-            {
-                yield return new AiStreamChunk { Error = $"The AI did not produce a final answer after {MaxToolRounds} rounds of tool calls." };
-                yield break;
-            }
-
-            var text = toolResult.FinalMessage.Content;
-            if (!string.IsNullOrEmpty(text))
-            {
-                yield return new AiStreamChunk { Delta = text };
-            }
-            yield return new AiStreamChunk { Done = true, Model = _settings.Model, DbChanged = toolResult.DbChanged };
+            yield return new AiStreamChunk { Delta = response.Reply };
+            yield return new AiStreamChunk { Done = true, Model = "opencode/big-pickle" };
         }
 
-        // ── Helpers ──
+        // ── OpenCode Server API Methods ──
 
-        private async Task<(DatabaseEngine? engine, string? databaseName, string? connectionString)> ResolveDatabaseInfoAsync(
-            string workspaceId, CancellationToken cancellationToken)
+        private async Task<string?> GetOrCreateSessionAsync(CancellationToken ct)
+        {
+            // Return cached session if still valid
+            if (_cachedSessionId != null)
+            {
+                try
+                {
+                    var req = new HttpRequestMessage(HttpMethod.Get, $"{SessionApi}/{_cachedSessionId}");
+                    req.Headers.TryAddWithoutValidation("Authorization", AuthHeader);
+                    var res = await _httpClient.SendAsync(req, ct);
+                    if (res.IsSuccessStatusCode) return _cachedSessionId;
+                }
+                catch { /* Session expired, create new one */ }
+            }
+
+            lock (_sessionLock)
+            {
+                // Double-check after acquiring lock
+                if (_cachedSessionId != null) return _cachedSessionId;
+            }
+
+            try
+            {
+                var payload = "{}"; // Empty body — OpenCode creates a default session
+                var req = new HttpRequestMessage(HttpMethod.Post, SessionApi)
+                {
+                    Content = new StringContent(payload, Encoding.UTF8, "application/json")
+                };
+                req.Headers.TryAddWithoutValidation("Authorization", AuthHeader);
+
+                using var res = await _httpClient.SendAsync(req, ct);
+                if (!res.IsSuccessStatusCode)
+                {
+                    _logger.LogError("OpenCode session creation failed: {Status}", (int)res.StatusCode);
+                    return null;
+                }
+
+                var body = await res.Content.ReadAsStringAsync(ct);
+                using var doc = JsonDocument.Parse(body);
+                var sessionId = doc.RootElement.GetProperty("id").GetString();
+
+                lock (_sessionLock)
+                {
+                    _cachedSessionId = sessionId;
+                }
+
+                _logger.LogInformation("Created OpenCode session: {SessionId}", sessionId);
+                return sessionId;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create OpenCode session at {Url}", SessionApi);
+                return null;
+            }
+        }
+
+        private async Task<OpenCodeResponse?> SendToOpenCodeAsync(
+            string sessionId, List<OpenCodePart> parts, CancellationToken ct)
+        {
+            try
+            {
+                var bodyObj = new { parts, noReply = false };
+                var json = JsonSerializer.Serialize(bodyObj, AiJsonOptions.Default);
+                var req = new HttpRequestMessage(HttpMethod.Post, MessageApi(sessionId))
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+                req.Headers.TryAddWithoutValidation("Authorization", AuthHeader);
+
+                using var res = await _httpClient.SendAsync(req, ct);
+                if (!res.IsSuccessStatusCode)
+                {
+                    var errBody = await res.Content.ReadAsStringAsync(ct);
+                    _logger.LogError("OpenCode message failed: {Status} — {Body}", (int)res.StatusCode, errBody);
+                    return null;
+                }
+
+                var responseBody = await res.Content.ReadAsStringAsync(ct);
+                using var doc = JsonDocument.Parse(responseBody);
+
+                // Extract text parts
+                var textParts = new List<string>();
+                if (doc.RootElement.TryGetProperty("parts", out var partsArray))
+                {
+                    foreach (var part in partsArray.EnumerateArray())
+                    {
+                        if (part.TryGetProperty("type", out var typeEl) &&
+                            typeEl.GetString() == "text" &&
+                            part.TryGetProperty("text", out var textEl))
+                        {
+                            textParts.Add(textEl.GetString() ?? "");
+                        }
+                    }
+                }
+
+                var modelId = "opencode/big-pickle";
+                if (doc.RootElement.TryGetProperty("info", out var info))
+                {
+                    if (info.TryGetProperty("modelID", out var mid))
+                        modelId = mid.GetString() ?? modelId;
+                }
+
+                return new OpenCodeResponse
+                {
+                    Text = string.Join("\n", textParts),
+                    ModelId = modelId
+                };
+            }
+            catch (TaskCanceledException)
+            {
+                _logger.LogWarning("OpenCode request timed out for session {SessionId}", sessionId);
+                return null;
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "Network error reaching OpenCode server at {Url}", ServerUrl);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "OpenCode request failed unexpectedly");
+                return null;
+            }
+        }
+
+        // ── Message / Tool Translation ──
+
+        /// <summary>
+        /// Builds the system prompt with tool definitions embedded as JSON text.
+        /// The AI is instructed to output tool calls as ```json code blocks.
+        /// </summary>
+        private static string BuildSystemPromptWithTools(string engineName)
+        {
+            var basePrompt = AiPromptBuilder.BuildSystemPrompt(engineName);
+            var tools = AiPromptBuilder.BuildToolDefinitions();
+            var toolsJson = JsonSerializer.Serialize(tools, AiJsonOptions.Default);
+
+            return $@"{basePrompt}
+
+== TOOL CALLING FORMAT ==
+You have the following database tools available. When you need to use a tool, output a JSON code block like this:
+
+```json
+{{""tool"": ""tool_name"", ""arguments"": {{""key"": ""value""}}}}
+```
+
+Available tools:
+{toolsJson}
+
+IMPORTANT:
+- Output ONE tool call per JSON block.
+- After receiving the tool result, continue the conversation naturally.
+- When you have enough information to answer the user, provide a final response in plain text (no JSON block).
+- Do NOT invent tool names — use only the tools listed above.";
+        }
+
+        /// <summary>
+        /// Converts OpenAI-format ChatMessage list to OpenCode parts format.
+        /// </summary>
+        private static List<OpenCodePart> ConvertMessagesToParts(List<ChatMessage> messages)
+        {
+            var parts = new List<OpenCodePart>();
+
+            foreach (var msg in messages)
+            {
+                if (msg.Role == "system")
+                {
+                    parts.Add(new OpenCodePart("text", $"[System Instruction]\n{msg.Content ?? ""}"));
+                }
+                else if (msg.Role == "user")
+                {
+                    parts.Add(new OpenCodePart("text", $"[User]\n{msg.Content ?? ""}"));
+                }
+                else if (msg.Role == "assistant")
+                {
+                    if (!string.IsNullOrWhiteSpace(msg.Content))
+                    {
+                        parts.Add(new OpenCodePart("text", $"[Assistant]\n{msg.Content}"));
+                    }
+                    if (msg.ToolCalls != null)
+                    {
+                        foreach (var tc in msg.ToolCalls)
+                        {
+                            parts.Add(new OpenCodePart("text",
+                                $"[Tool Call: {tc.Function?.Name ?? "unknown"}]\nArguments: {tc.Function?.Arguments ?? "{}"}"));
+                        }
+                    }
+                }
+                else if (msg.Role == "tool")
+                {
+                    parts.Add(new OpenCodePart("text",
+                        $"[Tool Result for {msg.ToolCallId ?? "tool"}]\n{msg.Content ?? "(empty)"}"));
+                }
+            }
+
+            return parts;
+        }
+
+        /// <summary>
+        /// Extracts tool calls from AI response text by looking for JSON code blocks
+        /// with the format: {{"tool": "tool_name", "arguments": {{...}}}}
+        /// </summary>
+        private static List<ParsedToolCall> ExtractToolCallsFromText(string text)
+        {
+            var results = new List<ParsedToolCall>();
+            if (string.IsNullOrWhiteSpace(text)) return results;
+
+            // Match JSON code blocks ```json ... ```
+            var jsonBlockRegex = new Regex(@"```json\s*(\{.*?\})\s*```", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            var matches = jsonBlockRegex.Matches(text);
+
+            foreach (Match match in matches)
+            {
+                try
+                {
+                    var json = match.Groups[1].Value;
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+
+                    if (root.TryGetProperty("tool", out var toolEl) &&
+                        root.TryGetProperty("arguments", out var argsEl))
+                    {
+                        results.Add(new ParsedToolCall
+                        {
+                            Id = $"tc_{Guid.NewGuid():N}"[..20],
+                            Name = toolEl.GetString() ?? "",
+                            Arguments = argsEl.GetRawText()
+                        });
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Malformed JSON block — skip
+                }
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// Removes JSON tool call blocks from the text, leaving just the natural language content.
+        /// </summary>
+        private static string RemoveToolCallBlocks(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return text;
+            var cleaned = Regex.Replace(text, @"```json\s*\{.*?\}\s*```", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            return cleaned.Trim();
+        }
+
+        // ── Tool Execution ──
+
+        private async Task<string> ExecuteNamedToolAsync(
+            string toolName, string argumentsJson, string databaseName,
+            DatabaseEngine engine, string connectionString, CancellationToken ct)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(argumentsJson)) argumentsJson = "{}";
+                var args = JsonSerializer.Deserialize<JsonElement>(argumentsJson, AiJsonOptions.Default);
+
+                return toolName switch
+                {
+                    "list_tables" => await _databaseTools.ListTablesAsync(databaseName, engine, connectionString, ct),
+                    "describe_table" => await ExecuteDescribeTableAsync(args, databaseName, engine, connectionString, ct),
+                    "search_schema" => await ExecuteSearchSchemaAsync(args, databaseName, engine, connectionString, ct),
+                    "list_views" => await _databaseTools.ListViewsAsync(databaseName, engine, connectionString, ct),
+                    "list_routines" => await _databaseTools.ListRoutinesAsync(databaseName, engine, connectionString, ct),
+                    "execute_query" => await ExecuteReadOnlyQueryAsync(args, databaseName, engine, connectionString, ct),
+                    "execute_write" => await ExecuteWriteAsync(args, databaseName, engine, connectionString, ct),
+                    _ => $"Error: Unknown tool '{toolName}'."
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Tool '{Name}' execution failed", toolName);
+                return $"Error executing '{toolName}': {ex.Message}";
+            }
+        }
+
+        private async Task<string> ExecuteWriteAsync(
+            JsonElement args, string databaseName, DatabaseEngine engine,
+            string connectionString, CancellationToken ct)
+        {
+            var sql = GetStringProperty(args, "sql");
+            return string.IsNullOrWhiteSpace(sql)
+                ? "Error: Missing 'sql' argument."
+                : await _databaseTools.ExecuteWriteAsync(databaseName, engine, connectionString, sql, ct);
+        }
+
+        private async Task<string> ExecuteDescribeTableAsync(
+            JsonElement args, string databaseName, DatabaseEngine engine,
+            string connectionString, CancellationToken ct)
+        {
+            var tableName = GetStringProperty(args, "table_name");
+            return string.IsNullOrWhiteSpace(tableName)
+                ? "Error: Missing 'table_name' argument."
+                : await _databaseTools.DescribeTableAsync(databaseName, engine, connectionString, tableName, ct);
+        }
+
+        private async Task<string> ExecuteSearchSchemaAsync(
+            JsonElement args, string databaseName, DatabaseEngine engine,
+            string connectionString, CancellationToken ct)
+        {
+            var query = GetStringProperty(args, "query");
+            return string.IsNullOrWhiteSpace(query)
+                ? "Error: Missing 'query' argument."
+                : await _databaseTools.SearchSchemaAsync(databaseName, engine, connectionString, query, ct);
+        }
+
+        private async Task<string> ExecuteReadOnlyQueryAsync(
+            JsonElement args, string databaseName, DatabaseEngine engine,
+            string connectionString, CancellationToken ct)
+        {
+            var sql = GetStringProperty(args, "sql");
+            return string.IsNullOrWhiteSpace(sql)
+                ? "Error: Missing 'sql' argument."
+                : await _databaseTools.ExecuteReadOnlyQueryAsync(databaseName, engine, connectionString, sql, ct);
+        }
+
+        private static string GetStringProperty(JsonElement element, string propertyName)
+        {
+            return element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String
+                ? prop.GetString() ?? ""
+                : "";
+        }
+
+        // ── Workspace / Connection Helpers ──
+
+        private async Task<(DatabaseEngine? engine, string? databaseName, string? connectionString)>
+            ResolveDatabaseInfoAsync(string workspaceId, CancellationToken cancellationToken)
         {
             try
             {
@@ -226,76 +532,6 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 _logger.LogWarning(ex, "Could not resolve database info for workspace {WorkspaceId}.", workspaceId);
                 return (null, null, null);
             }
-        }
-
-        private async Task<string> ExecuteToolCallAsync(
-            ToolCall toolCall, string databaseName, DatabaseEngine engine, string connectionString,
-            CancellationToken cancellationToken)
-        {
-            var fn = toolCall.Function;
-            try
-            {
-                return fn.Name switch
-                {
-                    "list_tables" => await _databaseTools.ListTablesAsync(databaseName, engine, connectionString, cancellationToken),
-                    "describe_table" => await ExecuteDescribeTableAsync(fn, databaseName, engine, connectionString, cancellationToken),
-                    "search_schema" => await ExecuteSearchSchemaAsync(fn, databaseName, engine, connectionString, cancellationToken),
-                    "list_views" => await _databaseTools.ListViewsAsync(databaseName, engine, connectionString, cancellationToken),
-                    "list_routines" => await _databaseTools.ListRoutinesAsync(databaseName, engine, connectionString, cancellationToken),
-                    "execute_query" => await ExecuteReadOnlyQueryAsync(fn, databaseName, engine, connectionString, cancellationToken),
-                    "execute_write" => await ExecuteWriteAsync(fn, databaseName, engine, connectionString, cancellationToken),
-                    _ => $"Error: Unknown tool '{fn.Name}'."
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Tool call '{Name}' failed", fn.Name);
-                return $"Error executing '{fn.Name}': {ex.Message}";
-            }
-        }
-
-        private async Task<string> ExecuteWriteAsync(
-            FunctionCall fn, string databaseName, DatabaseEngine engine, string connectionString,
-            CancellationToken cancellationToken)
-        {
-            var args = JsonSerializer.Deserialize<JsonElement>(fn.Arguments, AiJsonOptions.Default);
-            var sql = args.GetProperty("sql").GetString();
-            return string.IsNullOrWhiteSpace(sql)
-                ? "Error: Missing 'sql' argument."
-                : await _databaseTools.ExecuteWriteAsync(databaseName, engine, connectionString, sql, cancellationToken);
-        }
-
-        private async Task<string> ExecuteDescribeTableAsync(
-            FunctionCall fn, string databaseName, DatabaseEngine engine, string connectionString,
-            CancellationToken cancellationToken)
-        {
-            var args = JsonSerializer.Deserialize<JsonElement>(fn.Arguments, AiJsonOptions.Default);
-            var tableName = args.GetProperty("table_name").GetString();
-            return string.IsNullOrWhiteSpace(tableName)
-                ? "Error: Missing 'table_name' argument."
-                : await _databaseTools.DescribeTableAsync(databaseName, engine, connectionString, tableName, cancellationToken);
-        }
-
-        private async Task<string> ExecuteSearchSchemaAsync(
-            FunctionCall fn, string databaseName, DatabaseEngine engine, string connectionString,
-            CancellationToken cancellationToken)
-        {
-            var args = JsonSerializer.Deserialize<JsonElement>(fn.Arguments, AiJsonOptions.Default);
-            var query = args.GetProperty("query").GetString();
-            return string.IsNullOrWhiteSpace(query)
-                ? "Error: Missing 'query' argument."
-                : await _databaseTools.SearchSchemaAsync(databaseName, engine, connectionString, query, cancellationToken);
-        }
-
-        private async Task<string> ExecuteReadOnlyQueryAsync(
-            FunctionCall fn, string databaseName, DatabaseEngine engine, string connectionString,
-            CancellationToken cancellationToken)
-        {
-            var args = JsonSerializer.Deserialize<JsonElement>(fn.Arguments, AiJsonOptions.Default);
-            var sql = args.GetProperty("sql").GetString();
-            return string.IsNullOrWhiteSpace(sql)
-                ? "Error: Missing 'sql' argument."
-                : await _databaseTools.ExecuteReadOnlyQueryAsync(databaseName, engine, connectionString, sql, cancellationToken);
         }
 
         private string BuildConnectionString(DatabaseEngine engine, Domain.Entities.Workspace workspace)
@@ -339,102 +575,31 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             return sqlCsb.ConnectionString;
         }
 
-        /// <summary>
-        /// Runs tool-calling rounds without yielding, so the caller (StreamAsync) can
-        /// safely yield results outside any try-catch block.
-        /// </summary>
-        private async Task<ToolRoundResult> ProcessToolRoundsAsync(
-            List<ChatMessage> messages, List<ToolDefinition> tools,
-            string databaseName, DatabaseEngine engine, string connectionString,
-            CancellationToken cancellationToken)
+        // ── Internal Types ──
+
+        private sealed class ParsedToolCall
         {
-            bool dbChanged = false;
-            for (int round = 0; round < MaxToolRounds; round++)
-            {
-                var payload = new ChatCompletionRequest
-                {
-                    Model = _settings.Model,
-                    Messages = messages,
-                    Temperature = _settings.Temperature,
-                    MaxTokens = _settings.MaxTokens,
-                    Stream = false,
-                    Tools = tools
-                };
-
-                ChatCompletionResponse? completion;
-                try
-                {
-                    using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_settings.BaseUrl.TrimEnd('/')}/chat/completions")
-                    {
-                        Content = JsonContent.Create(payload, options: AiJsonOptions.Default)
-                    };
-
-                    if (!string.IsNullOrWhiteSpace(_settings.ApiKey))
-                    {
-                        httpRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _settings.ApiKey);
-                    }
-
-                    using var httpResponse = await _httpClient.SendAsync(httpRequest, cancellationToken);
-
-                    if (!httpResponse.IsSuccessStatusCode)
-                    {
-                        var body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
-                        _logger.LogError("Opencode AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
-                        return new ToolRoundResult { Error = AiPromptBuilder.FormatProviderError((int)httpResponse.StatusCode, body) };
-                    }
-
-                    completion = await httpResponse.Content.ReadFromJsonAsync<ChatCompletionResponse>(AiJsonOptions.Default, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    return new ToolRoundResult { Cancelled = true };
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Could not start Opencode AI stream at {BaseUrl}.", _settings.BaseUrl);
-                    return new ToolRoundResult { Error = $"Could not connect to the local AI provider at '{_settings.BaseUrl}'." };
-                }
-
-                var choice = completion?.Choices?.FirstOrDefault();
-                if (choice?.Message == null)
-                {
-                    return new ToolRoundResult { Error = "The AI returned an empty response." };
-                }
-
-                messages.Add(choice.Message);
-
-                if (choice.Message.ToolCalls is { Count: > 0 })
-                {
-                    foreach (var toolCall in choice.Message.ToolCalls)
-                    {
-                        var result = await ExecuteToolCallAsync(toolCall, databaseName, engine, connectionString, cancellationToken);
-                        messages.Add(new ChatMessage("tool", result, toolCall.Id));
-
-                        if (toolCall.Function.Name == "execute_write" &&
-                            result.StartsWith("Success:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            dbChanged = true;
-                        }
-                    }
-                    continue;
-                }
-
-                return new ToolRoundResult { FinalMessage = choice.Message, DbChanged = dbChanged };
-            }
-
-            return new ToolRoundResult { Error = $"The AI did not produce a final answer after {MaxToolRounds} rounds of tool calls." };
+            public string Id { get; set; } = "";
+            public string Name { get; set; } = "";
+            public string Arguments { get; set; } = "{}";
         }
 
-        /// <summary>
-        /// Result of the tool-calling rounds, used to pass data from the non-yielding
-        /// helper back to the yielding StreamAsync method.
-        /// </summary>
-        private sealed class ToolRoundResult
+        private sealed class OpenCodeResponse
         {
-            public ChatMessage? FinalMessage { get; set; }
-            public string? Error { get; set; }
-            public bool Cancelled { get; set; }
-            public bool DbChanged { get; set; }
+            public string Text { get; set; } = "";
+            public string ModelId { get; set; } = "opencode/big-pickle";
+        }
+
+        private sealed class OpenCodePart
+        {
+            public string Type { get; set; }
+            public string Text { get; set; }
+
+            public OpenCodePart(string type, string text)
+            {
+                Type = type;
+                Text = text;
+            }
         }
     }
 }

@@ -1,0 +1,15 @@
+{
+  "name": "opencode-api-proxy",
+  "version": "1.0.0",
+  "description": "OpenAI-compatible proxy for the OpenCode server (Big Pickle LLM)",
+  "main": "proxy-server.js",
+  "scripts": {
+    "start": "node proxy-server.js",
+    "serve": "node proxy-server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "uuid": "^10.0.0"
+  },
+  "private": true
+}
