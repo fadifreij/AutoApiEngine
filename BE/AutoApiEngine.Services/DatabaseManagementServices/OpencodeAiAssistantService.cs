@@ -110,6 +110,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             messages.Add(new ChatMessage("user", userContent.ToString()));
 
             // ── Multi-round tool-calling loop ──
+            bool dbChanged = false;
             for (int round = 0; round < MaxToolRounds; round++)
             {
                 // Translate OpenAI messages → OpenCode parts
@@ -149,6 +150,13 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     {
                         var result = await ExecuteNamedToolAsync(tc.Name, tc.Arguments, databaseName!, engine!.Value, connectionString!, cancellationToken);
                         messages.Add(new ChatMessage("tool", result, tc.Id));
+
+                        // Track successful execute_write calls — this means the database was modified
+                        if (tc.Name == "execute_write" &&
+                            result.StartsWith("Success:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            dbChanged = true;
+                        }
                     }
                     continue;
                 }
@@ -158,7 +166,8 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 {
                     Success = true,
                     Reply = replyText,
-                    Model = "opencode/big-pickle"
+                    Model = "opencode/big-pickle",
+                    DbChanged = dbChanged
                 };
             }
 
@@ -182,7 +191,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 yield break;
             }
             yield return new AiStreamChunk { Delta = response.Reply };
-            yield return new AiStreamChunk { Done = true, Model = "opencode/big-pickle" };
+            yield return new AiStreamChunk { Done = true, Model = "opencode/big-pickle", DbChanged = response.DbChanged };
         }
 
         // ── OpenCode Server API Methods ──

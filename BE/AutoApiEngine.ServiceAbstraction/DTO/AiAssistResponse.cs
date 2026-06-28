@@ -16,5 +16,10 @@ namespace AutoApiEngine.ServiceAbstraction.DTO
 
         /// <summary>The model that produced the reply (informational).</summary>
         public string? Model { get; set; }
+
+        /// <summary>True when at least one execute_write tool call succeeded during the
+        /// assistant's tool rounds — indicates the database was modified and the caller
+        /// should refresh its schema / results.</summary>
+        public bool DbChanged { get; set; }
     }
 }
