@@ -38,7 +38,8 @@ namespace AutoApiEngine.Persistence.Context
 
         public DbSet<Organization> Organizations { get; set; } = null!;
         public DbSet<Workspace> Workspaces { get; set; } = null!;
-       
+        public DbSet<DeployedApi> DeployedApis { get; set; } = null!;
+
         public DbSet<Plan> Plans { get; set; } = null!;
         public DbSet<Subscription> Subscriptions { get; set; } = null!;
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -73,6 +74,12 @@ namespace AutoApiEngine.Persistence.Context
                 .HasOne(w => w.Organization)
                 .WithMany(o => o.Workspaces)
                 .HasForeignKey(w => w.OrganizationId);
+
+            modelBuilder.Entity<DeployedApi>()
+                .HasOne(d => d.Workspace)
+                .WithMany()
+                .HasForeignKey(d => d.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
            
             modelBuilder.Entity<Plan>().HasData(
             new Plan

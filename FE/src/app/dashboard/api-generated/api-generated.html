@@ -1,95 +1,463 @@
 <div class="page-header">
   <div>
-    <h1 class="page-title">Generated APIs</h1>
-    <div class="page-subtitle">Auto-generated CRUD endpoints for each table in your workspace</div>
-  </div>
-  <button class="btn btn-primary btn-sm">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
-    Regenerate All
-  </button>
-</div>
-
-<div class="base-url-bar">
-  <span class="label">Base URL</span>
-  <span class="url">https://api.apiengine.io/v1/ws/ecommerce-db</span>
-  <button>Copy</button>
-</div>
-
-<div class="filter-bar">
-  <input type="text" placeholder="Search tables or endpoints…" readonly>
-  <div class="filter-pill active">All</div>
-  <div class="filter-pill">GET</div>
-  <div class="filter-pill">POST</div>
-  <div class="filter-pill">PUT</div>
-  <div class="filter-pill">DELETE</div>
-  <div class="api-count-label">Showing <strong>48</strong> endpoints across <strong>12</strong> tables</div>
-</div>
-
-<!-- TABLE: users -->
-<div class="table-card">
-  <div class="table-card-header">
-    <div class="table-name">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
-      <h3>users</h3>
-      <span class="col-count">· 8 columns · 5 endpoints</span>
-    </div>
-    <div class="table-status">
-      <span class="status-dot active"></span>
-      <span class="status-text">Active</span>
-      <div class="toggle-switch"></div>
-    </div>
-  </div>
-  <div class="endpoints-list">
-    <div class="endpoint-row"><span class="method-badge get">GET</span><span class="endpoint-path">/users</span><span class="endpoint-desc">List all users (paginated)</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge get">GET</span><span class="endpoint-path">/users/:id</span><span class="endpoint-desc">Get user by ID</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge post">POST</span><span class="endpoint-path">/users</span><span class="endpoint-desc">Create a new user</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge put">PUT</span><span class="endpoint-path">/users/:id</span><span class="endpoint-desc">Update user by ID</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge delete">DELETE</span><span class="endpoint-path">/users/:id</span><span class="endpoint-desc">Delete user by ID</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
+    <h1 class="page-title">Dynamic API Explorer</h1>
+    <div class="page-subtitle">Select any database object and generate RESTful endpoints with filters, paging, and related-table expansion</div>
   </div>
 </div>
 
-<!-- TABLE: products -->
-<div class="table-card">
-  <div class="table-card-header">
-    <div class="table-name">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
-      <h3>products</h3>
-      <span class="col-count">· 12 columns · 6 endpoints</span>
-    </div>
-    <div class="table-status">
-      <span class="status-dot active"></span>
-      <span class="status-text">Active</span>
-      <div class="toggle-switch"></div>
-    </div>
+<!-- ── Error Banner ── -->
+@if (errorMessage()) {
+  <div class="error-banner">
+    <span>{{ errorMessage() }}</span>
+    <button class="error-close" (click)="errorMessage.set('')">×</button>
   </div>
-  <div class="endpoints-list">
-    <div class="endpoint-row"><span class="method-badge get">GET</span><span class="endpoint-path">/products</span><span class="endpoint-desc">List all products (paginated)</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge get">GET</span><span class="endpoint-path">/products/:id</span><span class="endpoint-desc">Get product by ID</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge post">POST</span><span class="endpoint-path">/products</span><span class="endpoint-desc">Create a new product</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge put">PUT</span><span class="endpoint-path">/products/:id</span><span class="endpoint-desc">Update product by ID</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge patch">PATCH</span><span class="endpoint-path">/products/:id</span><span class="endpoint-desc">Partial update product</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge delete">DELETE</span><span class="endpoint-path">/products/:id</span><span class="endpoint-desc">Delete product by ID</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-  </div>
-</div>
+}
 
-<!-- TABLE: orders -->
-<div class="table-card">
-  <div class="table-card-header">
-    <div class="table-name">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
-      <h3>orders</h3>
-      <span class="col-count">· 10 columns · 4 endpoints</span>
+<div class="explorer-layout">
+  <!-- ── LEFT PANEL: Object Selector ── -->
+  <div class="left-panel">
+    <div class="panel-header">
+      <h3>Database Objects</h3>
+      @if (loadingObjects()) {
+        <span class="loading-spinner"></span>
+      }
     </div>
-    <div class="table-status">
-      <span class="status-dot active"></span>
-      <span class="status-text">Active</span>
-      <div class="toggle-switch"></div>
+
+    <div class="search-box">
+      <input
+        type="text"
+        placeholder="Search objects…"
+        [ngModel]="searchQuery()"
+        (ngModelChange)="searchQuery.set($event)"
+      />
+    </div>
+
+    <div class="object-list">
+      @for (obj of filteredObjects(); track obj.name) {
+        <div
+          class="object-item"
+          [class.selected]="obj.name === selectedObject()"
+          (click)="onSelectObject(obj.name)"
+        >
+          <span class="object-icon">{{ getObjectIcon(obj.type) }}</span>
+          <div class="object-info">
+            <span class="object-name">{{ obj.name }}</span>
+            <span class="object-type-badge" [class]="obj.type.toLowerCase()">
+              {{ objectTypeBadge(obj.type) }}
+              @if (obj.columnCount !== undefined) {
+                <span> · {{ obj.columnCount }} cols</span>
+              }
+            </span>
+          </div>
+        </div>
+      } @empty {
+        @if (!loadingObjects()) {
+          <div class="empty-state">No objects found</div>
+        }
+      }
     </div>
   </div>
-  <div class="endpoints-list">
-    <div class="endpoint-row"><span class="method-badge get">GET</span><span class="endpoint-path">/orders</span><span class="endpoint-desc">List all orders (paginated)</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge get">GET</span><span class="endpoint-path">/orders/:id</span><span class="endpoint-desc">Get order by ID</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge post">POST</span><span class="endpoint-path">/orders</span><span class="endpoint-desc">Create a new order</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
-    <div class="endpoint-row"><span class="method-badge delete">DELETE</span><span class="endpoint-path">/orders/:id</span><span class="endpoint-desc">Delete order by ID</span><div class="endpoint-actions"><button>Try</button><button>Docs</button></div></div>
+
+  <!-- ── RIGHT PANEL: Configuration ── -->
+  <div class="right-panel">
+    @if (!selectedObject()) {
+      <div class="select-prompt">
+        <div class="prompt-icon">📋</div>
+        <h2>Select a database object</h2>
+        <p>Choose a table, view, stored procedure, or function from the left panel to configure its API endpoints.</p>
+      </div>
+    } @else if (loadingMetadata()) {
+      <div class="loading-panel">
+        <span class="loading-spinner large"></span>
+        <p>Loading metadata for <strong>{{ selectedObject() }}</strong>…</p>
+      </div>
+    } @else {
+      <!-- Selected Object Header -->
+      <div class="object-header">
+        <div>
+          <h2>{{ getObjectIcon(selectedMetadata()?.objectType ?? '') }} {{ selectedObject() }}</h2>
+          <span class="object-meta-badge">{{ selectedMetadata()?.objectType }}</span>
+          <span class="object-meta-schema">Schema: {{ selectedMetadata()?.schema }}</span>
+          <span class="object-meta-cols">{{ availableColumns().length }} columns</span>
+          @if ((selectedMetadata()?.primaryKeyColumns?.length ?? 0) > 0) {
+            <span class="object-meta-pk">PK: {{ selectedMetadata()?.primaryKeyColumns?.join(', ') }}</span>
+          }
+        </div>
+      </div>
+
+      <!-- Tab Bar -->
+      <div class="tab-bar">
+        <button class="tab" [class.active]="activeTab() === 'config'" (click)="activeTab.set('config')">Configuration</button>
+        <button class="tab" [class.active]="activeTab() === 'endpoints'" (click)="activeTab.set('endpoints')">Endpoints</button>
+      </div>
+
+      @if (activeTab() === 'config') {
+        <!-- ══════════ CONFIGURATION TAB ══════════ -->
+        <div class="config-scroll">
+
+          <!-- SECTION: Column Selection -->
+          <section class="config-section">
+            <div class="section-header">
+              <h3>📌 Columns</h3>
+              <div class="section-actions">
+                <button class="btn-text" (click)="selectAllColumns()">Select All</button>
+                <button class="btn-text" (click)="selectOnlyPk()">PK Only</button>
+              </div>
+            </div>
+            <p class="field-hint" style="margin: 0 0 8px 0;">
+              Each selected column becomes a separate <code>&amp;select=</code> parameter.
+              Example: <code>?select=Id&amp;select=Name&amp;select=ContactNo</code> — no <code>%2C</code> needed.
+            </p>
+            <div class="column-grid">
+              @for (col of availableColumns(); track col.name) {
+                <label class="column-chip" [class.selected]="selectedColumns().has(col.name)">
+                  <input
+                    type="checkbox"
+                    [checked]="selectedColumns().has(col.name)"
+                    (change)="toggleColumn(col.name)"
+                  />
+                  <span class="col-name">{{ col.name }}</span>
+                  <span class="col-type">{{ col.dataType }}</span>
+                  @if (col.isPrimaryKey) {
+                    <span class="pk-badge">PK</span>
+                  }
+                  @if (col.isNullable) {
+                    <span class="nullable-badge">NULL</span>
+                  }
+                </label>
+              }
+            </div>
+          </section>
+
+          <!-- SECTION: Related Tables (FK includes) -->
+          @if ((selectedMetadata()?.foreignKeys?.length ?? 0) > 0 || (selectedMetadata()?.referencedBy?.length ?? 0) > 0) {
+            <section class="config-section">
+              <div class="section-header">
+                <h3>🔗 Related Tables</h3>
+              </div>
+
+              @if ((selectedMetadata()?.foreignKeys?.length ?? 0) > 0) {
+                <div class="relation-subsection">
+                  <h4>This table references:</h4>
+                  @for (fk of selectedMetadata()?.foreignKeys; track fk.fkName) {
+                    <div class="relation-card">
+                      <label class="relation-toggle">
+                        <input
+                          type="checkbox"
+                          [checked]="includedRelations().has(fk.referencedTable)"
+                          (change)="toggleRelation(fk.referencedTable, ['*'])"
+                        />
+                        <span class="relation-table">{{ fk.referencedTable }}</span>
+                        <span class="relation-fk">{{ fk.column }} → {{ fk.referencedColumn }}</span>
+                      </label>
+                      @if (includedRelations().has(fk.referencedTable)) {
+                        <div class="relation-columns">
+                          <label class="rel-col-all">
+                            <input
+                              type="checkbox"
+                              [checked]="true"
+                              (change)="toggleRelation(fk.referencedTable, ['*'])"
+                            />
+                            <span>All columns (*)</span>
+                          </label>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+
+              @if ((selectedMetadata()?.referencedBy?.length ?? 0) > 0) {
+                <div class="relation-subsection">
+                  <h4>Referenced by:</h4>
+                  @for (ref of selectedMetadata()?.referencedBy; track ref.fkName) {
+                    <div class="relation-card">
+                      <label class="relation-toggle">
+                        <input
+                          type="checkbox"
+                          [checked]="includedRelations().has(ref.table)"
+                          (change)="toggleRelation(ref.table, ['*'])"
+                        />
+                        <span class="relation-table">{{ ref.table }}</span>
+                        <span class="relation-fk">{{ ref.column }} references this</span>
+                      </label>
+                    </div>
+                  }
+                </div>
+              }
+            </section>
+          }
+
+          <!-- SECTION: Filters -->
+          <section class="config-section">
+            <div class="section-header">
+              <h3>🔍 Filters</h3>
+              <button class="btn-text" (click)="addFilter()">+ Add Filter</button>
+            </div>
+            <p class="field-hint" style="margin: 0 0 8px 0;">
+              Each filter becomes a separate <code>&amp;filter=</code> parameter.
+              Example: <code>?filter=name:contains:john&amp;filter=age:gt:25</code>
+            </p>
+            <div class="filter-list">
+              @for (f of filters(); track idx; let idx = $index) {
+                <div class="filter-row">
+                  @if (idx > 0) {
+                    <select
+                      class="filter-logic"
+                      [ngModel]="f.logic"
+                      (ngModelChange)="updateFilter(idx, 'logic', $event)"
+                    >
+                      <option value="and">AND</option>
+                      <option value="or">OR</option>
+                    </select>
+                  } @else {
+                    <span class="filter-logic-placeholder">WHERE</span>
+                  }
+                  <select
+                    class="filter-column"
+                    [ngModel]="f.column"
+                    (ngModelChange)="updateFilter(idx, 'column', $event)"
+                  >
+                    <option value="">— Column —</option>
+                    @for (col of availableColumns(); track col.name) {
+                      <option [value]="col.name">{{ col.name }}</option>
+                    }
+                  </select>
+                  <select
+                    class="filter-operator"
+                    [ngModel]="f.operator"
+                    (ngModelChange)="updateFilter(idx, 'operator', $event)"
+                  >
+                    <option value="eq">=</option>
+                    <option value="neq">≠</option>
+                    <option value="gt">&gt;</option>
+                    <option value="gte">≥</option>
+                    <option value="lt">&lt;</option>
+                    <option value="lte">≤</option>
+                    <option value="contains">Contains</option>
+                    <option value="startswith">Starts With</option>
+                    <option value="endswith">Ends With</option>
+                    <option value="in">In</option>
+                    <option value="isnull">Is Null</option>
+                    <option value="isnotnull">Is Not Null</option>
+                  </select>
+                  @if (f.operator !== 'isnull' && f.operator !== 'isnotnull') {
+                    <input
+                      class="filter-value"
+                      type="text"
+                      placeholder="Value"
+                      [ngModel]="f.value"
+                      (ngModelChange)="updateFilter(idx, 'value', $event)"
+                    />
+                  }
+                  <button class="btn-remove" (click)="removeFilter(idx)" title="Remove filter">×</button>
+                </div>
+              }
+            </div>
+          </section>
+
+          <!-- SECTION: Sorting -->
+          <section class="config-section">
+            <div class="section-header">
+              <h3>📊 Sorting</h3>
+              <button class="btn-text" (click)="addSort()">+ Add Sort</button>
+            </div>
+            <p class="field-hint" style="margin: 0 0 8px 0;">
+              Each sort becomes a separate <code>&amp;sort=</code> parameter.
+              Example: <code>?sort=lastName:asc&amp;sort=firstName:desc</code>
+            </p>
+            <div class="sort-list">
+              @for (s of sorts(); track idx; let idx = $index) {
+                <div class="sort-row">
+                  <select
+                    class="sort-column"
+                    [ngModel]="s.column"
+                    (ngModelChange)="updateSort(idx, 'column', $event)"
+                  >
+                    <option value="">— Column —</option>
+                    @for (col of availableColumns(); track col.name) {
+                      <option [value]="col.name">{{ col.name }}</option>
+                    }
+                  </select>
+                  <select
+                    class="sort-direction"
+                    [ngModel]="s.direction"
+                    (ngModelChange)="updateSort(idx, 'direction', $event)"
+                  >
+                    <option value="asc">ASC</option>
+                    <option value="desc">DESC</option>
+                  </select>
+                  <button class="btn-remove" (click)="removeSort(idx)" title="Remove sort">×</button>
+                </div>
+              }
+            </div>
+          </section>
+
+          <!-- SECTION: Paging -->
+          <section class="config-section">
+            <div class="section-header">
+              <h3>📄 Paging</h3>
+            </div>
+            <div class="paging-config">
+              <label class="paging-field">
+                <span>Page Size</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  [ngModel]="pageSize()"
+                  (ngModelChange)="pageSize.set(Math.min(1000, Math.max(0, Number($event))))"
+                />
+                <span class="field-hint">0 = no limit, max 1000</span>
+              </label>
+            </div>
+          </section>
+
+        </div>
+      }
+
+      @if (activeTab() === 'endpoints') {
+        <!-- ══════════ ENDPOINTS TAB ══════════ -->
+        <div class="endpoints-scroll">
+          <div class="base-url-bar">
+            <span class="label">Base URL</span>
+            <span class="url">{{ dynamicApi.buildEndpointUrl(workspaceId(), selectedObject()) }}</span>
+            <button (click)="copyUrl(dynamicApi.buildEndpointUrl(workspaceId(), selectedObject()))">Copy</button>
+          </div>
+
+          <div class="query-preview">
+            <div class="preview-header">
+              <span>Query String Preview</span>
+              <button (click)="copyUrl(dynamicApi.buildEndpointUrl(workspaceId(), selectedObject()) + computedQueryString())">
+                {{ copyFeedback() || 'Copy Full URL' }}
+              </button>
+            </div>
+            <div class="preview-code">{{ computedQueryString() || '(No query parameters)' }}</div>
+            <p class="field-hint" style="margin: 6px 0 0 0; font-size: 0.85rem;">
+              💡 Multiple values use repeated <code>&amp;key=value</code> syntax (e.g.
+              <code>?select=Id&amp;select=Name&amp;filter=status:eq:active</code>).
+              No URL-encoding needed — the UI uses <code>&amp;</code> separators, not <code>%2C</code> or <code>%3A</code>.
+            </p>
+          </div>
+
+          @for (ep of generatedUrls(); track ep.method + ep.path) {
+            <div class="endpoint-card">
+              <div class="endpoint-row">
+                <span class="method-badge {{ ep.methodClass }}">{{ ep.method }}</span>
+                <span class="endpoint-path">{{ ep.path }}</span>
+                <span class="endpoint-desc">{{ ep.description }}</span>
+                <div class="endpoint-actions">
+                  <button (click)="copyUrl(ep.fullUrl)" title="Copy URL">Copy</button>
+                </div>
+              </div>
+              <div class="endpoint-url-display">
+                <code>{{ ep.fullUrl }}</code>
+              </div>
+            </div>
+          }
+
+          <!-- ════════ DEPLOY API SECTION ════════ -->
+          <section class="config-section deploy-section">
+            <div class="section-header">
+              <h3>🚀 Deploy API</h3>
+            </div>
+            <p class="deploy-desc">Save this configuration as a reusable API. The current filters, sorts, column selection, and page size will be stored.</p>
+
+            @if (deployError()) {
+              <div class="deploy-error">{{ deployError() }}</div>
+            }
+            @if (deploySuccess()) {
+              <div class="deploy-success">{{ deploySuccess() }}</div>
+            }
+
+            <button class="btn-deploy" (click)="deployApi()">Deploy as "{{ selectedObject() }} API"</button>
+          </section>
+
+          <!-- ════════ DEPLOYED APIs LIST ════════ -->
+          <section class="config-section deployed-list-section">
+            <div class="section-header">
+              <h3>📦 Deployed APIs</h3>
+            </div>
+
+            @if (loadingDeployed()) {
+              <span class="loading-spinner"></span>
+            } @else if (deployedApis().length === 0) {
+              <p class="empty-hint">No deployed APIs yet. Configure your query above and click "Deploy".</p>
+            } @else {
+              <div class="deployed-list">
+                @for (api of deployedApis(); track api.id) {
+                  <div class="deployed-card"
+                    [class.selected]="selectedDeployedApi()?.id === api.id"
+                    (click)="selectAndTest(api)">
+                    <div class="deployed-card-header">
+                      <strong>{{ api.name }}</strong>
+                      <span class="deployed-object">{{ api.objectName }}</span>
+                    </div>
+                    <div class="deployed-card-meta">
+                      <span>Page: {{ api.pageSize }}</span>
+                      <span>Created: {{ api.createdAt | date:'short' }}</span>
+                    </div>
+                    <button class="btn-delete-deployed" (click)="$event.stopPropagation(); deleteDeployedApi(api.id)" title="Delete">×</button>
+                  </div>
+                }
+              </div>
+            }
+          </section>
+
+          <!-- ════════ TEST API SECTION ════════ -->
+          @if (selectedDeployedApi()) {
+            <section class="config-section test-section">
+              <div class="section-header">
+                <h3>🧪 Test: {{ selectedDeployedApi()?.name }}</h3>
+              </div>
+
+              @if (testLoading()) {
+                <div class="test-loading">
+                  <span class="loading-spinner"></span>
+                  <span>Executing query…</span>
+                </div>
+              } @else if (testError()) {
+                <div class="test-error">{{ testError() }}</div>
+              } @else if (testResults()) {
+                <div class="test-tabs">
+                  <button class="tab" [class.active]="testViewTab() === 'table'" (click)="testViewTab.set('table')">Table</button>
+                  <button class="tab" [class.active]="testViewTab() === 'json'" (click)="testViewTab.set('json')">Raw JSON</button>
+                  <span class="test-count">{{ testResults()?.data?.length ?? 0 }} rows @if (testResults()?.totalCount != null) { (total {{ testResults()?.totalCount }}) }</span>
+                </div>
+
+                @if (testViewTab() === 'table') {
+                  <div class="test-table-wrapper">
+                    <table class="test-table">
+                      <thead>
+                        <tr>
+                          @for (col of getTestColumns(); track col) {
+                            <th>{{ col }}</th>
+                          }
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (row of testResults()?.data; track $index) {
+                          <tr>
+                            @for (col of getTestColumns(); track col) {
+                              <td>{{ row[col] ?? '' }}</td>
+                            }
+                          </tr>
+                        } @empty {
+                          <tr><td [attr.colspan]="getTestColumns().length || 1">No data returned</td></tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+
+                @if (testViewTab() === 'json') {
+                  <pre class="test-json">{{ testResults() | json }}</pre>
+                }
+              }
+            </section>
+          }
+        </div>
+      }
+    }
   </div>
 </div>
