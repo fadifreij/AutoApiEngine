@@ -41,6 +41,7 @@ export interface ColumnMetadata {
   dataType: string;
   isNullable: boolean;
   isPrimaryKey: boolean;
+  isIdentity: boolean;
 }
 
 export interface ObjectMetadata {

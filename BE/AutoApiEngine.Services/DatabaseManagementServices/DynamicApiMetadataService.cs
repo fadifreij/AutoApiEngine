@@ -73,7 +73,8 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     Name = c.Name,
                     DataType = c.DataType,
                     IsNullable = c.IsNullable,
-                    IsPrimaryKey = c.IsPrimaryKey
+                    IsPrimaryKey = c.IsPrimaryKey,
+                    IsIdentity = c.IsIdentity
                 }).ToList(),
                 PrimaryKeyColumns = meta.PrimaryKeyColumns,
                 ForeignKeys = fkInfo?.ForeignKeys ?? new List<ForeignKeyDetailDto>(),

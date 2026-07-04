@@ -24,5 +24,6 @@ namespace AutoApiEngine.ServiceAbstraction.DTO
         public string DataType { get; set; } = string.Empty;
         public bool IsNullable { get; set; }
         public bool IsPrimaryKey { get; set; }
+        public bool IsIdentity { get; set; }
     }
 }

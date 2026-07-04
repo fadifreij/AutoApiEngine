@@ -748,6 +748,53 @@
       word-break: break-all;
     }
   }
+
+  .endpoint-body {
+    border-top: 1px solid var(--gray-100);
+    background: #1e1e2e;
+
+    .body-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px 0;
+
+      .body-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #a6adc8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .btn-copy-body {
+        background: none;
+        border: 1px solid #45475a;
+        border-radius: 5px;
+        padding: 2px 8px;
+        cursor: pointer;
+        font-size: 10px;
+        color: #a6adc8;
+        font-family: var(--font);
+
+        &:hover {
+          border-color: #89b4fa;
+          color: #89b4fa;
+        }
+      }
+    }
+
+    .body-preview {
+      margin: 0;
+      padding: 10px 14px 12px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #cdd6f4;
+      line-height: 1.6;
+      white-space: pre;
+      overflow-x: auto;
+    }
+  }
 }
 
 .method-badge {

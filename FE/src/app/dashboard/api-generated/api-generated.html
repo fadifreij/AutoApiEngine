@@ -353,6 +353,15 @@
               <div class="endpoint-url-display">
                 <code>{{ ep.fullUrl }}</code>
               </div>
+              @if (ep.bodyTemplate) {
+                <div class="endpoint-body">
+                  <div class="body-header">
+                    <span class="body-label">Request Body (JSON)</span>
+                    <button class="btn-copy-body" (click)="copyUrl(ep.bodyTemplate!)" title="Copy body">Copy Body</button>
+                  </div>
+                  <pre class="body-preview">{{ ep.bodyTemplate }}</pre>
+                </div>
+              }
             </div>
           }
 

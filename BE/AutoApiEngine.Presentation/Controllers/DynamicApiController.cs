@@ -126,10 +126,7 @@ namespace AutoApiEngine.Presentation.Controllers
         {
             try
             {
-                //var accessCheck = await VerifyWorkspaceAccessAsync(workspaceId, cancellationToken);
-               // if (accessCheck != null) return accessCheck;
-
-                // Handle composite PK lookup: ?pk1=v1&pk2=v2
+               // Handle composite PK lookup: ?pk1=v1&pk2=v2
                 if (HttpContext.Request.Query.ContainsKey("pk1"))
                 {
                     var pkValues = new Dictionary<string, string>();
@@ -178,9 +175,6 @@ namespace AutoApiEngine.Presentation.Controllers
         {
             try
             {
-                var accessCheck = await VerifyWorkspaceAccessAsync(workspaceId, cancellationToken);
-                if (accessCheck != null) return accessCheck;
-
                 var result = await _dynamicApiService.GetByIdAsync(workspaceId, objectName, id, query, cancellationToken);
                 return Ok(result);
             }
@@ -209,10 +203,7 @@ namespace AutoApiEngine.Presentation.Controllers
             CancellationToken cancellationToken)
         {
             try
-            {
-                var accessCheck = await VerifyWorkspaceAccessAsync(workspaceId, cancellationToken);
-                if (accessCheck != null) return accessCheck;
-
+            {               
                 var result = await _dynamicApiService.CreateAsync(workspaceId, objectName, data, cancellationToken);
                 return Ok(result);
             }
@@ -244,10 +235,7 @@ namespace AutoApiEngine.Presentation.Controllers
         {
             try
             {
-                var accessCheck = await VerifyWorkspaceAccessAsync(workspaceId, cancellationToken);
-                if (accessCheck != null) return accessCheck;
-
-                var result = await _dynamicApiService.UpdateAsync(workspaceId, objectName, id, data, cancellationToken);
+               var result = await _dynamicApiService.UpdateAsync(workspaceId, objectName, id, data, cancellationToken);
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)
@@ -276,9 +264,6 @@ namespace AutoApiEngine.Presentation.Controllers
         {
             try
             {
-                var accessCheck = await VerifyWorkspaceAccessAsync(workspaceId, cancellationToken);
-                if (accessCheck != null) return accessCheck;
-
                 var result = await _dynamicApiService.DeleteAsync(workspaceId, objectName, id, cancellationToken);
                 return Ok(result);
             }
