@@ -66,6 +66,12 @@ export class DashboardLayout {
           }
         }
         this.syncWorkspaceState();
+
+        // On initial load, also switch MCP to the default workspace
+        const activeId = this.workspaceState.selectedWorkspaceId();
+        if (activeId) {
+          this.switchMcp(activeId);
+        }
       },
       error: () => {
         this.workspaces.set([]);
@@ -94,6 +100,24 @@ export class DashboardLayout {
     const name = this.workspaces().find(w => w.id === workspaceId)?.name ?? '';
     this.workspaceState.setSelectedWorkspace(workspaceId, name);
     this.workspaceDropdownOpen.set(false);
+
+    // Notify backend to switch MCP config to this workspace's database
+    this.switchMcp(workspaceId);
+  }
+
+  /**
+   * Calls POST /api/workspaces/{id}/switch-mcp to rebuild the MCP config
+   * and restart the OpenCode server with the new workspace's database connection.
+   */
+  private switchMcp(workspaceId: string): void {
+    this.http.post(`${environment.apiUrl}/workspaces/${workspaceId}/switch-mcp`, {}).subscribe({
+      next: (res: any) => {
+        console.log('[MCP] Switched:', res?.message);
+      },
+      error: (err) => {
+        console.warn('[MCP] Switch failed (non-blocking):', err?.error?.message || err.message);
+      }
+    });
   }
 
   toggleProfile(event: MouseEvent) {

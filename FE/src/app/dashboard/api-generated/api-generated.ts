@@ -101,13 +101,56 @@ export class ApiGenerated {
   /** Map of related table name → selected columns */
   readonly includedRelations = signal<Map<string, Set<string>>>(new Map());
 
-  /** Toggle an entire related table on/off */
-  toggleRelation(tableName: string, columns: string[]): void {
+  /** Metadata for each related table (columns list). Key is flat name or dot-path for nested (e.g. "TableA.TableB") */
+  readonly relatedTablesMeta = signal<Map<string, ColumnMetadata[]>>(new Map());
+
+  /** Parent→children mapping for nested hierarchy display. Key = parent table key, value = child keys */
+  readonly relatedTableHierarchy = signal<Map<string, string[]>>(new Map());
+
+  /** Loading state for related table metadata */
+  readonly loadingRelated = signal(false);
+
+  /** Color palette for related tables */
+  private readonly relationPalette = [
+    '#7c3aed', '#059669', '#b45309', '#dc2626',
+    '#0891b2', '#d97706', '#be185d', '#1d4ed8'
+  ];
+
+  /** Assign a color — top-level related tables get palette colors, nested tables inherit their parent's color */
+  readonly tableColor = computed(() => {
+    const map = new Map<string, string>();
+    const topLevel: string[] = [];
+    const hierarchy = this.relatedTableHierarchy();
+
+    for (const key of this.relatedTablesMeta().keys()) {
+      if (!key.includes('.')) topLevel.push(key);
+    }
+
+    topLevel.forEach((name, i) => {
+      const color = this.relationPalette[i % this.relationPalette.length];
+      map.set(name, color);
+      // Children inherit parent color
+      const children = hierarchy.get(name);
+      if (children) {
+        for (const child of children) {
+          map.set(child, color);
+        }
+      }
+    });
+
+    return map;
+  });
+
+  /** Toggle an entire related table on/off — when ON, selects all its columns */
+  toggleRelation(tableName: string): void {
     const m = new Map(this.includedRelations());
     if (m.has(tableName)) {
       m.delete(tableName);
     } else {
-      m.set(tableName, new Set(columns));
+      const relCols = this.relatedTablesMeta().get(tableName);
+      if (relCols) {
+        m.set(tableName, new Set(relCols.map(c => c.name)));
+      }
     }
     this.includedRelations.set(m);
   }
@@ -121,6 +164,154 @@ export class ApiGenerated {
     if (s.has(colName)) s.delete(colName); else s.add(colName);
     if (s.size === 0) m.delete(tableName); else m.set(tableName, s);
     this.includedRelations.set(m);
+  }
+
+  /** Is a specific related table fully selected (all columns checked)? */
+  isRelationFullySelected(tableName: string): boolean {
+    const selected = this.includedRelations().get(tableName);
+    const all = this.relatedTablesMeta().get(tableName);
+    if (!selected || !all) return false;
+    return selected.size === all.length;
+  }
+
+  /** Load column metadata for all related tables — recursive (grandchildren included). */
+  private loadRelatedTablesMeta(workspaceId: string): void {
+    const meta = this.selectedMetadata();
+    if (!meta) return;
+
+    this.loadingRelated.set(true);
+    const allMeta = new Map<string, ColumnMetadata[]>();
+    const hierarchy = new Map<string, string[]>();
+    const pending = new Set<string>();
+    let completed = 0;
+
+    // Seed first-level tables
+    for (const fk of meta.foreignKeys ?? []) pending.add(fk.referencedTable);
+    for (const ref of meta.referencedBy ?? []) pending.add(ref.table);
+
+    if (pending.size === 0) {
+      this.relatedTablesMeta.set(new Map());
+      this.relatedTableHierarchy.set(new Map());
+      this.loadingRelated.set(false);
+      return;
+    }
+
+    const loadedKeys = new Set<string>();
+
+    // Collect potential FK pairs for hierarchy from the main table
+    for (const fk of meta.foreignKeys ?? []) {
+      if (!hierarchy.has(fk.referencedTable)) hierarchy.set(fk.referencedTable, []);
+    }
+    for (const ref of meta.referencedBy ?? []) {
+      if (!hierarchy.has(ref.table)) hierarchy.set(ref.table, []);
+    }
+
+    // Each load decrements a counter; when zero, we're done
+    let remaining = 0;
+
+    const finishOne = () => {
+      remaining--;
+      if (remaining <= 0) {
+        this.relatedTablesMeta.set(new Map(allMeta));
+        this.relatedTableHierarchy.set(new Map(hierarchy));
+        this.loadingRelated.set(false);
+      }
+    };
+
+    const loadOne = (tableKey: string, actualTableName: string) => {
+      remaining++;
+      this.dynamicApi.getObjectMetadata(workspaceId, actualTableName).subscribe({
+        next: (relMeta) => {
+          allMeta.set(tableKey, relMeta.columns);
+          loadedKeys.add(tableKey);
+
+          // If this is a first-level load, discover nested (grandchild) tables
+          if (!tableKey.includes('.')) {
+            for (const nestedFk of relMeta.foreignKeys ?? []) {
+              const childKey = `${tableKey}.${nestedFk.referencedTable}`;
+              if (!loadedKeys.has(childKey) && !allMeta.has(childKey)) {
+                const existing = hierarchy.get(tableKey) ?? [];
+                existing.push(childKey);
+                hierarchy.set(tableKey, existing);
+                loadOne(childKey, nestedFk.referencedTable);
+              }
+            }
+            for (const nestedRef of relMeta.referencedBy ?? []) {
+              const childKey = `${tableKey}.${nestedRef.table}`;
+              if (!loadedKeys.has(childKey) && !allMeta.has(childKey)) {
+                const existing = hierarchy.get(tableKey) ?? [];
+                existing.push(childKey);
+                hierarchy.set(tableKey, existing);
+                loadOne(childKey, nestedRef.table);
+              }
+            }
+          }
+
+          finishOne();
+        },
+        error: () => finishOne()
+      });
+    };
+
+    // Kick off first-level loads
+    for (const tableName of pending) {
+      loadOne(tableName, tableName);
+    }
+  }
+
+  /** Flattened list of all selectable columns (main + active related) for filter/sort dropdowns */
+  readonly allSelectableColumns = computed(() => {
+    const result: { display: string; value: string; table: string }[] = [];
+
+    // Main table columns (no prefix)
+    const mainMeta = this.selectedMetadata();
+    if (mainMeta) {
+      for (const col of mainMeta.columns) {
+        result.push({ display: col.name, value: col.name, table: '' });
+      }
+    }
+
+    // Related table columns (only for tables currently selected in includedRelations)
+    const rels = this.includedRelations();
+    const relMeta = this.relatedTablesMeta();
+    for (const [tableName] of rels) {
+      const cols = relMeta.get(tableName);
+      if (cols) {
+        for (const col of cols) {
+          result.push({ display: `${tableName}.${col.name}`, value: `${tableName}.${col.name}`, table: tableName });
+        }
+      }
+    }
+
+    return result;
+  });
+
+  /** Computed: list of related table names that are currently expanded (included) */
+  readonly activeRelatedTables = computed(() => {
+    return Array.from(this.includedRelations().keys());
+  });
+
+  /** Get the display label for a related table key (strips parent prefix for nested) */
+  getRelatedTableLabel(key: string): string {
+    if (!key.includes('.')) return key;
+    const parts = key.split('.');
+    return parts[parts.length - 1];
+  }
+
+  /** Get the parent key from a dot-path key (empty string if top-level) */
+  getRelatedTableParent(key: string): string {
+    if (!key.includes('.')) return '';
+    return key.substring(0, key.lastIndexOf('.'));
+  }
+
+  /** Get child keys for a given parent from the hierarchy */
+  getChildKeys(parentKey: string): string[] {
+    return this.relatedTableHierarchy().get(parentKey) ?? [];
+  }
+
+  /** Check if a given key is a nested (grandchild) table */
+  isNestedRelatedTable(key: string): boolean {
+    return key.includes('.');
   }
 
   // ── Filters ──
@@ -461,12 +652,15 @@ export class ApiGenerated {
     this.pageSize.set(100);
     this.currentPage.set(1);
 
+    this.relatedTablesMeta.set(new Map());
     this.dynamicApi.getObjectMetadata(this.workspaceId(), name).subscribe({
       next: (meta) => {
         this.selectedMetadata.set(meta);
         // Default: select all columns
         this.selectedColumns.set(new Set(meta.columns.map(c => c.name)));
         this.loadingMetadata.set(false);
+        // Kick off related table metadata loading
+        this.loadRelatedTablesMeta(this.workspaceId());
       },
       error: (err) => {
         const metaErr = err.error?.details

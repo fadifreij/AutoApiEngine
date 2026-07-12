@@ -25,7 +25,7 @@ and the AI responds with JSON code blocks for tool calls.
 ## Prerequisites
 
 - Node.js v18+ (v22.18.0 installed)
-- OpenCode CLI v1.17.11+ (`npm install -g opencode-ai`)
+- OpenCode CLI v1.17.11+ (`npm install opencode-ai`) in opencode directory
 - .NET 10 SDK (for the backend)
 
 ## Environment Variables (Project-Specific)

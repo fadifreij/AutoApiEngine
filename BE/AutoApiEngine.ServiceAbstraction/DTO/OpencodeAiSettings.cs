@@ -38,5 +38,12 @@ namespace AutoApiEngine.ServiceAbstraction.DTO
         /// system prompt. Prevents requests from exceeding the model's context window.
         /// </summary>
         public int MaxSchemaContextChars { get; set; } = 60000;
+
+        /// <summary>
+        /// Absolute path to the opencode/ directory (contains opencode.json, MCP config).
+        /// If empty, defaults to {ContentRoot}/opencode (works for both dev and published).
+        /// Override via "OpencodeAi:OpenCodeDir" in appsettings.json or env var.
+        /// </summary>
+        public string OpenCodeDir { get; set; } = string.Empty;
     }
 }

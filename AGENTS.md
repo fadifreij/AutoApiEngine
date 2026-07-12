@@ -18,13 +18,13 @@ The main agent instructions are in `.opencode/instructions.md`.
 ## Quickstart
 
 ```powershell
-# Infrastructure
+# 1. Infrastructure
 cd DockerImages; docker compose up -d
 
-# Backend (HTTPS)
+# 2. Backend (HTTPS) — auto-starts OpenCode server (Big Pickle) on port 3000
 cd BE; dotnet run --project AutoApiEngine.ApiServices/AutoApiEngine.ApiServices.csproj --launch-profile https
 
-# Frontend
+# 3. Frontend
 cd FE; npm install; npm start
 ```
 
@@ -35,6 +35,7 @@ cd FE; npm install; npm start
 - Keycloak: http://localhost:8081
 - SQL Server: localhost:1433
 - MySQL: localhost:3307
+- **OpenCode Server (Big Pickle)**: http://127.0.0.1:3000
 
 ## Reference Docs
 

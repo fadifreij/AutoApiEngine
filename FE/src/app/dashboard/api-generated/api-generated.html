@@ -106,8 +106,25 @@
             </div>
             <p class="field-hint" style="margin: 0 0 8px 0;">
               Each selected column becomes a separate <code>&amp;select=</code> parameter.
-              Example: <code>?select=Id&amp;select=Name&amp;select=ContactNo</code> — no <code>%2C</code> needed.
+              Example: <code>?select=Id&amp;select=Name&amp;select=ContactNo</code>.
             </p>
+
+            <!-- Color Legend — shows only top-level tables (nested inherit parent color) -->
+            @if (activeRelatedTables().length > 0) {
+              <div class="color-legend">
+                <span class="legend-label">Table colors:</span>
+                <span class="legend-item legend-main">Main Table</span>
+                @for (tbl of activeRelatedTables(); track tbl) {
+                  @if (!isNestedRelatedTable(tbl)) {
+                    <span class="legend-item" [style.--tbl-color]="tableColor().get(tbl)">
+                      {{ tbl }}
+                    </span>
+                  }
+                }
+              </div>
+            }
+
+            <!-- Main table columns -->
             <div class="column-grid">
               @for (col of availableColumns(); track col.name) {
                 <label class="column-chip" [class.selected]="selectedColumns().has(col.name)">
@@ -127,39 +144,115 @@
                 </label>
               }
             </div>
+
+            <!-- Related table columns (only for active/selected relations) — supports nested dot-path keys -->
+            @for (tbl of activeRelatedTables(); track tbl) {
+              @let relCols = relatedTablesMeta().get(tbl);
+              @let tblLabel = getRelatedTableLabel(tbl);
+              @if (relCols && relCols.length > 0) {
+                <div class="relation-column-divider" [style.--tbl-color]="tableColor().get(tbl)">
+                  <span class="relation-column-divider-label">{{ tblLabel }} columns</span>
+                  @if (tbl !== tblLabel) {
+                    <span class="relation-column-divider-path">(via {{ getRelatedTableParent(tbl) }})</span>
+                  }
+                </div>
+                <div class="column-grid">
+                  @for (col of relCols; track col.name) {
+                    <label
+                      class="column-chip relation-chip"
+                      [class.selected]="includedRelations().get(tbl)?.has(col.name)"
+                      [style.--tbl-color]="tableColor().get(tbl)"
+                    >
+                      <input
+                        type="checkbox"
+                        [checked]="includedRelations().get(tbl)?.has(col.name) ?? false"
+                        (change)="toggleRelationColumn(tbl, col.name)"
+                      />
+                      <span class="col-name">{{ col.name }}</span>
+                      <span class="col-type">{{ col.dataType }}</span>
+                      @if (col.isPrimaryKey) {
+                        <span class="pk-badge">PK</span>
+                      }
+                      @if (col.isNullable) {
+                        <span class="nullable-badge">NULL</span>
+                      }
+                    </label>
+                  }
+                </div>
+              }
+            }
           </section>
 
-          <!-- SECTION: Related Tables (FK includes) -->
+          <!-- SECTION: Related Tables (FK includes) — with nested (grandchild) tables -->
           @if ((selectedMetadata()?.foreignKeys?.length ?? 0) > 0 || (selectedMetadata()?.referencedBy?.length ?? 0) > 0) {
             <section class="config-section">
               <div class="section-header">
                 <h3>🔗 Related Tables</h3>
+                @if (loadingRelated()) {
+                  <span class="loading-spinner"></span>
+                }
               </div>
 
               @if ((selectedMetadata()?.foreignKeys?.length ?? 0) > 0) {
                 <div class="relation-subsection">
                   <h4>This table references:</h4>
                   @for (fk of selectedMetadata()?.foreignKeys; track fk.fkName) {
-                    <div class="relation-card">
+                    @let tableKey = fk.referencedTable;
+                    @let isSelected = includedRelations().has(tableKey);
+                    @let relCols = relatedTablesMeta().get(tableKey);
+                    @let children = getChildKeys(tableKey);
+                    <div class="relation-card" [style.--tbl-color]="tableColor().get(tableKey)">
                       <label class="relation-toggle">
-                        <input
-                          type="checkbox"
-                          [checked]="includedRelations().has(fk.referencedTable)"
-                          (change)="toggleRelation(fk.referencedTable, ['*'])"
-                        />
-                        <span class="relation-table">{{ fk.referencedTable }}</span>
+                        <input type="checkbox" [checked]="isSelected" (change)="toggleRelation(tableKey)" />
+                        <span class="relation-table">{{ tableKey }}</span>
                         <span class="relation-fk">{{ fk.column }} → {{ fk.referencedColumn }}</span>
                       </label>
-                      @if (includedRelations().has(fk.referencedTable)) {
+                      @if (isSelected && relCols) {
                         <div class="relation-columns">
                           <label class="rel-col-all">
-                            <input
-                              type="checkbox"
-                              [checked]="true"
-                              (change)="toggleRelation(fk.referencedTable, ['*'])"
-                            />
-                            <span>All columns (*)</span>
+                            <input type="checkbox" [checked]="isRelationFullySelected(tableKey)" (change)="toggleRelation(tableKey)" />
+                            <span>All columns ({{ relCols.length }})</span>
                           </label>
+                          @for (relCol of relCols; track relCol.name) {
+                            <label class="rel-col-item" [style.--tbl-color]="tableColor().get(tableKey)">
+                              <input type="checkbox" [checked]="includedRelations().get(tableKey)?.has(relCol.name) ?? false" (change)="toggleRelationColumn(tableKey, relCol.name)" />
+                              <span class="rel-col-name">{{ relCol.name }}</span>
+                              <span class="rel-col-type">{{ relCol.dataType }}</span>
+                            </label>
+                          }
+                          <!-- Nested child tables (grandchildren) -->
+                          @if (children.length > 0) {
+                            <div class="nested-relations">
+                              <span class="nested-relations-label">↳ Nested:</span>
+                              @for (childKey of children; track childKey) {
+                                @let childSelected = includedRelations().has(childKey);
+                                @let childCols = relatedTablesMeta().get(childKey);
+                                @let childLabel = getRelatedTableLabel(childKey);
+                                <div class="relation-card nested-card" [style.--tbl-color]="tableColor().get(childKey)">
+                                  <label class="relation-toggle">
+                                    <input type="checkbox" [checked]="childSelected" (change)="toggleRelation(childKey)" />
+                                    <span class="relation-table">{{ childLabel }}</span>
+                                    <span class="relation-fk">via {{ getRelatedTableParent(childKey) }}</span>
+                                  </label>
+                                  @if (childSelected && childCols) {
+                                    <div class="relation-columns">
+                                      <label class="rel-col-all">
+                                        <input type="checkbox" [checked]="isRelationFullySelected(childKey)" (change)="toggleRelation(childKey)" />
+                                        <span>All columns ({{ childCols.length }})</span>
+                                      </label>
+                                      @for (nestedCol of childCols; track nestedCol.name) {
+                                        <label class="rel-col-item" [style.--tbl-color]="tableColor().get(childKey)">
+                                          <input type="checkbox" [checked]="includedRelations().get(childKey)?.has(nestedCol.name) ?? false" (change)="toggleRelationColumn(childKey, nestedCol.name)" />
+                                          <span class="rel-col-name">{{ nestedCol.name }}</span>
+                                          <span class="rel-col-type">{{ nestedCol.dataType }}</span>
+                                        </label>
+                                      }
+                                    </div>
+                                  }
+                                </div>
+                              }
+                            </div>
+                          }
                         </div>
                       }
                     </div>
@@ -171,16 +264,64 @@
                 <div class="relation-subsection">
                   <h4>Referenced by:</h4>
                   @for (ref of selectedMetadata()?.referencedBy; track ref.fkName) {
-                    <div class="relation-card">
+                    @let tableKey = ref.table;
+                    @let isSelected = includedRelations().has(tableKey);
+                    @let relCols = relatedTablesMeta().get(tableKey);
+                    @let children = getChildKeys(tableKey);
+                    <div class="relation-card" [style.--tbl-color]="tableColor().get(tableKey)">
                       <label class="relation-toggle">
-                        <input
-                          type="checkbox"
-                          [checked]="includedRelations().has(ref.table)"
-                          (change)="toggleRelation(ref.table, ['*'])"
-                        />
-                        <span class="relation-table">{{ ref.table }}</span>
+                        <input type="checkbox" [checked]="isSelected" (change)="toggleRelation(tableKey)" />
+                        <span class="relation-table">{{ tableKey }}</span>
                         <span class="relation-fk">{{ ref.column }} references this</span>
                       </label>
+                      @if (isSelected && relCols) {
+                        <div class="relation-columns">
+                          <label class="rel-col-all">
+                            <input type="checkbox" [checked]="isRelationFullySelected(tableKey)" (change)="toggleRelation(tableKey)" />
+                            <span>All columns ({{ relCols.length }})</span>
+                          </label>
+                          @for (relCol of relCols; track relCol.name) {
+                            <label class="rel-col-item" [style.--tbl-color]="tableColor().get(tableKey)">
+                              <input type="checkbox" [checked]="includedRelations().get(tableKey)?.has(relCol.name) ?? false" (change)="toggleRelationColumn(tableKey, relCol.name)" />
+                              <span class="rel-col-name">{{ relCol.name }}</span>
+                              <span class="rel-col-type">{{ relCol.dataType }}</span>
+                            </label>
+                          }
+                          <!-- Nested child tables (grandchildren) -->
+                          @if (children.length > 0) {
+                            <div class="nested-relations">
+                              <span class="nested-relations-label">↳ Nested:</span>
+                              @for (childKey of children; track childKey) {
+                                @let childSelected = includedRelations().has(childKey);
+                                @let childCols = relatedTablesMeta().get(childKey);
+                                @let childLabel = getRelatedTableLabel(childKey);
+                                <div class="relation-card nested-card" [style.--tbl-color]="tableColor().get(childKey)">
+                                  <label class="relation-toggle">
+                                    <input type="checkbox" [checked]="childSelected" (change)="toggleRelation(childKey)" />
+                                    <span class="relation-table">{{ childLabel }}</span>
+                                    <span class="relation-fk">via {{ getRelatedTableParent(childKey) }}</span>
+                                  </label>
+                                  @if (childSelected && childCols) {
+                                    <div class="relation-columns">
+                                      <label class="rel-col-all">
+                                        <input type="checkbox" [checked]="isRelationFullySelected(childKey)" (change)="toggleRelation(childKey)" />
+                                        <span>All columns ({{ childCols.length }})</span>
+                                      </label>
+                                      @for (nestedCol of childCols; track nestedCol.name) {
+                                        <label class="rel-col-item" [style.--tbl-color]="tableColor().get(childKey)">
+                                          <input type="checkbox" [checked]="includedRelations().get(childKey)?.has(nestedCol.name) ?? false" (change)="toggleRelationColumn(childKey, nestedCol.name)" />
+                                          <span class="rel-col-name">{{ nestedCol.name }}</span>
+                                          <span class="rel-col-type">{{ nestedCol.dataType }}</span>
+                                        </label>
+                                      }
+                                    </div>
+                                  }
+                                </div>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
                     </div>
                   }
                 </div>
@@ -219,8 +360,18 @@
                     (ngModelChange)="updateFilter(idx, 'column', $event)"
                   >
                     <option value="">— Column —</option>
-                    @for (col of availableColumns(); track col.name) {
-                      <option [value]="col.name">{{ col.name }}</option>
+                    <optgroup label="Main Table">
+                      @for (col of availableColumns(); track col.name) {
+                        <option [value]="col.name">{{ col.name }}</option>
+                      }
+                    </optgroup>
+                    @for (tbl of activeRelatedTables(); track tbl) {
+                      @let tblLabel = getRelatedTableLabel(tbl);
+                      <optgroup [label]="tblLabel">
+                        @for (col of relatedTablesMeta().get(tbl) ?? []; track col.name) {
+                          <option [value]="tbl + '.' + col.name">{{ tbl }}.{{ col.name }}</option>
+                        }
+                      </optgroup>
                     }
                   </select>
                   <select
@@ -275,8 +426,18 @@
                     (ngModelChange)="updateSort(idx, 'column', $event)"
                   >
                     <option value="">— Column —</option>
-                    @for (col of availableColumns(); track col.name) {
-                      <option [value]="col.name">{{ col.name }}</option>
+                    <optgroup label="Main Table">
+                      @for (col of availableColumns(); track col.name) {
+                        <option [value]="col.name">{{ col.name }}</option>
+                      }
+                    </optgroup>
+                    @for (tbl of activeRelatedTables(); track tbl) {
+                      @let tblLabel = getRelatedTableLabel(tbl);
+                      <optgroup [label]="tblLabel">
+                        @for (col of relatedTablesMeta().get(tbl) ?? []; track col.name) {
+                          <option [value]="tbl + '.' + col.name">{{ tbl }}.{{ col.name }}</option>
+                        }
+                      </optgroup>
                     }
                   </select>
                   <select

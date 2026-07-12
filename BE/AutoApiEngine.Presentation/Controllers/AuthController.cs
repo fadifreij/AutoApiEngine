@@ -2,11 +2,13 @@ using AutoApiEngine.Persistence.Context;
 using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.ServiceAbstraction.DTO;
 using AutoApiEngine.Services.AuthServices;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Runtime;
@@ -17,6 +19,12 @@ namespace AutoApiEngine.Presentation.Controllers
     [Route("api/auth")]
     public class AuthController : ControllerBase
     {
+        private readonly IWebHostEnvironment _env;
+
+        public AuthController(IWebHostEnvironment env)
+        {
+            _env = env;
+        }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterRequest request, [FromServices] IAuthService authService)
@@ -82,30 +90,31 @@ namespace AutoApiEngine.Presentation.Controllers
         public async Task<IActionResult> Logout([FromBody] LogoutRequest request, [FromServices] KeycloakService keycloakService)
         {
             // Must delete with same options the cookie was set with, otherwise browser won't clear it
-            Response.Cookies.Delete("refresh_token", new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Path = "/"
-            });
+            Response.Cookies.Delete("refresh_token", GetCookieOptions(days: 0));
             var logoutUrl = await keycloakService.LogoutAsync(request.PostLogoutRedirectUri, request.IdTokenHint);
 
             return Ok(new { logoutUrl });
             
         }
 
-        // ✅ shared helper to avoid repeating cookie options
-        private void AppendRefreshTokenCookie(string refreshToken)
+        private CookieOptions GetCookieOptions(int days = 7)
         {
-            Response.Cookies.Append("refresh_token", refreshToken, new CookieOptions
+            // The SPA (http://localhost:4200) calls this API cross-site (different origin/scheme),
+            // so the browser only sends the cookie back when it is SameSite=None + Secure.
+            // The backend is served over HTTPS in both dev and prod, so Secure=true is always valid.
+            return new CookieOptions
             {
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.None,
                 Path = "/",
-                Expires = DateTimeOffset.UtcNow.AddDays(7)
-            });
+                Expires = DateTimeOffset.UtcNow.AddDays(days)
+            };
+        }
+
+        private void AppendRefreshTokenCookie(string refreshToken)
+        {
+            Response.Cookies.Append("refresh_token", refreshToken, GetCookieOptions());
         }
 
         private static async Task<string?> ResolveOrganizationId(string accessToken, ApplicationDbContext context)
@@ -130,14 +139,7 @@ namespace AutoApiEngine.Presentation.Controllers
 
         private void ClearRefreshTokenCookie()
         {
-            // Must delete with the same options the cookie was set with.
-            Response.Cookies.Delete("refresh_token", new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Path = "/"
-            });
+            Response.Cookies.Delete("refresh_token", GetCookieOptions(days: 0));
         }
 
 
