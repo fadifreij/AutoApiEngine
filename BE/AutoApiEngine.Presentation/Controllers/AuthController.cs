@@ -99,14 +99,15 @@ namespace AutoApiEngine.Presentation.Controllers
 
         private CookieOptions GetCookieOptions(int days = 7)
         {
-            // The SPA (http://localhost:4200) calls this API cross-site (different origin/scheme),
-            // so the browser only sends the cookie back when it is SameSite=None + Secure.
-            // The backend is served over HTTPS in both dev and prod, so Secure=true is always valid.
+            // Dev: the SPA reaches the API same-origin via the Angular dev-server proxy
+            // (http://localhost:4200 -> proxy -> backend), so Lax + non-Secure is correct.
+            // Prod: SPA and API are cross-site over HTTPS, which requires SameSite=None + Secure.
+            var isDev = _env.IsDevelopment();
             return new CookieOptions
             {
                 HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
+                Secure = !isDev,
+                SameSite = isDev ? SameSiteMode.Lax : SameSiteMode.None,
                 Path = "/",
                 Expires = DateTimeOffset.UtcNow.AddDays(days)
             };
