@@ -8,6 +8,9 @@ namespace AutoApiEngine.ApiServices.HostedServices;
 /// Auto-starts the local OpenCode server as a child process when the backend starts,
 /// and shuts it down when the backend stops. Eliminates the need to manually run
 /// <c>opencode serve --port 3000</c>.
+///
+/// Also exposes a restart method so the server can be restarted when the MCP config
+/// changes (e.g., when a user switches workspaces).
 /// </summary>
 public sealed class OpenCodeServerHostedService : IHostedService, IDisposable
 {
@@ -16,9 +19,7 @@ public sealed class OpenCodeServerHostedService : IHostedService, IDisposable
     private Process? _serverProcess;
     private readonly string _opencodeExe;
     private CancellationTokenSource? _healthCts;
-
-    // PowerShell wrapper for executing opencode.ps1 on Windows
-    private const string PowerShellExe = "powershell.exe";
+    private readonly object _lock = new();
 
     public OpenCodeServerHostedService(
         IOptions<OpencodeAiSettings> settings,
@@ -35,11 +36,59 @@ public sealed class OpenCodeServerHostedService : IHostedService, IDisposable
         {
             _logger.LogWarning(
                 "OpenCode CLI not found. The backend AI service will fail to connect. " +
-                "Install with: npm install -g opencode-ai");
+                "Install locally: cd opencode && npm install");
             return Task.CompletedTask;
         }
 
-        // Extract hostname and port from settings.BaseUrl
+        StartServer();
+        return Task.CompletedTask;
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await StopServerAsync();
+    }
+
+    /// <summary>
+    /// Restarts the OpenCode server. Called when MCP config changes (workspace switch).
+    /// Waits for the server to become healthy before returning.
+    /// </summary>
+    public async Task RestartAsync(CancellationToken ct = default)
+    {
+        _logger.LogInformation("Restarting OpenCode server due to MCP config change...");
+
+        await StopServerAsync();
+
+        // Small delay to let port release
+        await Task.Delay(500, ct);
+
+        StartServer();
+
+        // Wait for health
+        var uri = new Uri(_settings.BaseUrl.TrimEnd('/'));
+        await WaitForHealthAsync(uri, ct);
+
+        _logger.LogInformation("OpenCode server restarted and healthy.");
+    }
+
+    /// <summary>
+    /// Returns the path to the opencode/ directory (where opencode.json with MCP config lives).
+    /// </summary>
+    public string GetOpenCodeDirectory()
+    {
+        return FindOpenCodeDirectory();
+    }
+
+    // ── Private: Start / Stop ──
+
+    private void StartServer()
+    {
+        if (string.IsNullOrEmpty(_opencodeExe))
+        {
+            _logger.LogWarning("OpenCode CLI not found. Cannot start server.");
+            return;
+        }
+
         var uri = new Uri(_settings.BaseUrl.TrimEnd('/'));
         var hostname = uri.Host;
         var port = uri.Port;
@@ -50,15 +99,18 @@ public sealed class OpenCodeServerHostedService : IHostedService, IDisposable
 
         try
         {
+            var workDir = FindOpenCodeDirectory();
+            _logger.LogInformation("OpenCode server WorkingDirectory: {Dir}", workDir);
+
             var psi = new ProcessStartInfo
             {
                 FileName = _opencodeExe,
-                Arguments = $"serve --port {port} --hostname {hostname}",
+                Arguments = $"serve --port {port} --hostname {hostname} --pure",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                WorkingDirectory = AppContext.BaseDirectory
+                WorkingDirectory = workDir
             };
 
             // Set the password for the OpenCode server
@@ -69,7 +121,6 @@ public sealed class OpenCodeServerHostedService : IHostedService, IDisposable
 
             _serverProcess = new Process { StartInfo = psi };
 
-            // Capture stdout for diagnostics
             _serverProcess.OutputDataReceived += (_, e) =>
             {
                 if (!string.IsNullOrWhiteSpace(e.Data))
@@ -85,7 +136,7 @@ public sealed class OpenCodeServerHostedService : IHostedService, IDisposable
             {
                 _logger.LogError("Failed to start OpenCode server process.");
                 _serverProcess = null;
-                return Task.CompletedTask;
+                return;
             }
 
             _serverProcess.BeginOutputReadLine();
@@ -95,57 +146,107 @@ public sealed class OpenCodeServerHostedService : IHostedService, IDisposable
                 "OpenCode server started (PID: {Pid}). Waiting for it to become healthy...",
                 _serverProcess.Id);
 
-            // Start health-check loop in the background
-            _healthCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _healthCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
             _ = WaitForHealthAsync(uri, _healthCts.Token);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Could not start OpenCode server process. " +
-                "Verify opencode-ai is installed: npm install -g opencode-ai");
+                "Install locally: cd opencode && npm install");
         }
-
-        return Task.CompletedTask;
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    private Task StopServerAsync()
     {
         _healthCts?.Cancel();
 
+        // Kill tracked process
         if (_serverProcess is { HasExited: false })
         {
             _logger.LogInformation("Shutting down OpenCode server (PID: {Pid})...", _serverProcess.Id);
-
             try
             {
-                // Graceful shutdown via SIGTERM-equivalent on Windows
-                if (_serverProcess.CloseMainWindow())
-                {
-                    var exited = _serverProcess.WaitForExit(5000);
-                    if (!exited)
-                    {
-                        _serverProcess.Kill(entireProcessTree: true);
-                    }
-                }
-                else
-                {
-                    _serverProcess.Kill(entireProcessTree: true);
-                }
+                _serverProcess.Kill(entireProcessTree: true);
+                _serverProcess.WaitForExit(3000);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error while stopping OpenCode server.");
+                _logger.LogWarning(ex, "Error while stopping tracked OpenCode process.");
             }
         }
 
         _serverProcess?.Dispose();
         _serverProcess = null;
+
+        // Also kill any orphaned opencode processes on our port
+        KillOrphanedProcesses();
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Kills any orphaned opencode.exe processes listening on the configured port.
+    /// Handles cases where Visual Studio terminates the backend without cleanup.
+    /// </summary>
+    private void KillOrphanedProcesses()
+    {
+        var uri = new Uri(_settings.BaseUrl.TrimEnd('/'));
+        var port = uri.Port;
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "netstat",
+                Arguments = "-ano",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            };
+            var netstat = Process.Start(psi);
+            if (netstat == null) return;
+
+            var output = netstat.StandardOutput.ReadToEnd();
+            netstat.WaitForExit(3000);
+
+            foreach (var line in output.Split('\n'))
+            {
+                if (!line.Contains($":{port} ") || !line.Contains("LISTENING"))
+                    continue;
+
+                var parts = line.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length < 5) continue;
+
+                var pidStr = parts[^1];
+                if (!int.TryParse(pidStr, out var pid)) continue;
+                if (pid <= 4) continue; // skip system processes
+
+                try
+                {
+                    var proc = Process.GetProcessById(pid);
+                    if (proc.ProcessName.Contains("opencode", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.LogWarning("Killing orphaned OpenCode process PID={Pid} on port {Port}.", pid, port);
+                        proc.Kill(entireProcessTree: true);
+                    }
+                }
+                catch
+                {
+                    // Process already exited or access denied
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not check for orphaned OpenCode processes.");
+        }
     }
 
     public void Dispose()
     {
         _healthCts?.Cancel();
         _healthCts?.Dispose();
+        KillOrphanedProcesses();
         _serverProcess?.Dispose();
     }
 
@@ -194,38 +295,57 @@ public sealed class OpenCodeServerHostedService : IHostedService, IDisposable
             "The AI service may fail until it is available.", healthUrl);
     }
 
+    // ── Helper: find opencode/ directory (where opencode.json with MCP config lives) ──
+
+    private string FindOpenCodeDirectory()
+    {
+        // 1. Explicit config (appsettings.json or env var) — always wins
+        if (!string.IsNullOrWhiteSpace(_settings.OpenCodeDir))
+        {
+            if (File.Exists(Path.Combine(_settings.OpenCodeDir, "opencode.json")))
+                return _settings.OpenCodeDir;
+        }
+
+        // 2. Relative to executable — works in both dev and published
+        var exeDir = AppContext.BaseDirectory;
+        var candidate = Path.Combine(exeDir, "opencode");
+        if (File.Exists(Path.Combine(candidate, "opencode.json")))
+            return candidate;
+
+        // 3. Search up the tree (up to 6 levels) — catches dev layout
+        var current = exeDir;
+        for (int i = 0; i < 6; i++)
+        {
+            current = Path.GetDirectoryName(current);
+            if (current == null) break;
+
+            candidate = Path.Combine(current, "opencode");
+            if (File.Exists(Path.Combine(candidate, "opencode.json")))
+                return candidate;
+        }
+
+        // 4. Fallback — return expected path (will warn at startup)
+        return Path.Combine(exeDir, "opencode");
+    }
+
     // ── Helper: find opencode executable ──
 
     private static string FindOpencodeExecutable()
     {
-        // Check common locations
-        var candidates = new[]
-        {
-            // npm global install
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "npm", "node_modules", "opencode-ai", "bin", "opencode.exe"),
-            // Local node_modules
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "node_modules",
-                "opencode-ai", "bin", "opencode.exe"),
-            // PATH lookup
-            "opencode.exe"
-        };
+        // 1. Local install in opencode/node_modules/opencode-ai/bin/ (dedicated instance — preferred)
+        var opencodeDir = FindOpenCodeDirectoryStatic();
+        var localExe = Path.Combine(opencodeDir, "node_modules", "opencode-ai", "bin", "opencode.exe");
+        if (File.Exists(localExe))
+            return Path.GetFullPath(localExe);
 
-        foreach (var candidate in candidates)
-        {
-            try
-            {
-                if (File.Exists(candidate))
-                    return Path.GetFullPath(candidate);
-            }
-            catch
-            {
-                // Ignore invalid paths
-            }
-        }
+        // 2. Global npm install
+        var globalExe = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "npm", "node_modules", "opencode-ai", "bin", "opencode.exe");
+        if (File.Exists(globalExe))
+            return Path.GetFullPath(globalExe);
 
-        // Fallback: try PATH
+        // 3. Fallback: try PATH
         try
         {
             var which = Process.Start(new ProcessStartInfo
@@ -250,5 +370,28 @@ public sealed class OpenCodeServerHostedService : IHostedService, IDisposable
         }
 
         return string.Empty;
+    }
+
+    /// <summary>
+    /// Static version for use in FindOpencodeExecutable (no _settings access needed).
+    /// Searches for opencode/ folder relative to the executable.
+    /// </summary>
+    private static string FindOpenCodeDirectoryStatic()
+    {
+        var exeDir = AppContext.BaseDirectory;
+
+        // Search up the tree (up to 6 levels)
+        var current = exeDir;
+        for (int i = 0; i < 6; i++)
+        {
+            current = Path.GetDirectoryName(current);
+            if (current == null) break;
+
+            var candidate = Path.Combine(current, "opencode");
+            if (File.Exists(Path.Combine(candidate, "opencode.json")))
+                return candidate;
+        }
+
+        return Path.Combine(exeDir, "opencode");
     }
 }

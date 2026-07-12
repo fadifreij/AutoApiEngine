@@ -1,0 +1,51 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    "instructions": [
+        "system-instructions.md"
+    ],
+    "permission": {
+        "*": "allow",
+        "bash": "allow",
+        "edit": "allow"
+    },
+    "mcp": {
+        "sqlserver": {
+            "type": "local",
+            "command": ["npx", "-y", "@tugberkgunver/mcp-sqlserver"],
+            "enabled": true,
+            "environment": {
+                "SQLSERVER_HOST": "localhost",
+                "SQLSERVER_PORT": "1433",
+                "SQLSERVER_USER": "sa",
+                "SQLSERVER_PASSWORD": "Welcome@123",
+                "SQLSERVER_DATABASE": "AcmeDB"
+            }
+        },
+        "mysql": {
+            "type": "local",
+            "command": ["npx", "-y", "@benborla29/mcp-server-mysql"],
+            "enabled": false,
+            "environment": {
+                "MYSQL_HOST": "localhost",
+                "MYSQL_PORT": "3307",
+                "MYSQL_USER": "root",
+                "MYSQL_PASSWORD": "root",
+                "MYSQL_DATABASE": "DbPortal"
+            }
+        },
+        "postgres": {
+            "type": "local",
+            "command": ["npx", "-y", "@sarmadparvez/postgresql-mcp"],
+            "enabled": false,
+            "environment": {
+                "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/DbPortal?mode=readonly"
+            }
+        },
+        "sqlite": {
+            "type": "local",
+            "command": ["npx", "-y", "mcp-sqlite"],
+            "enabled": false,
+            "args": [""]
+        }
+    }
+}

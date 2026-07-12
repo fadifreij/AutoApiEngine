@@ -1,9 +1,12 @@
 using AutoApiEngine.ServiceAbstraction;
+using AutoApiEngine.ServiceAbstraction.Common;
 using AutoApiEngine.ServiceAbstraction.DTO;
 using AutoApiEngine.Services.AuthServices;
 using AutoApiEngine.Services.DatabaseManagementServices;
 using AutoApiEngine.Services.Services;
 using AutoApiEngine.Services.Repositories;
+using AutoApiEngine.Services.Repositories.Common;
+using AutoApiEngine.ApiServices.HostedServices;
 
 namespace AutoApiEngine.ApiServices.Providers
 {
@@ -114,6 +117,31 @@ namespace AutoApiEngine.ApiServices.Providers
 
             // Strategy-pattern factory — this is what controllers inject
             services.AddScoped<IAiAssistantService, AiAssistantFactory>();
+
+            // ── Dynamic Generic API (FK discovery + SQL builder) ──
+            services.AddScoped<SqlForeignKeyService>();
+            services.AddScoped<MySqlForeignKeyService>();
+            services.AddScoped<IForeignKeyService, ForeignKeyServiceResolver>();
+            services.AddScoped<DynamicApiService>();
+            services.AddScoped<IDynamicApiService>(sp => sp.GetRequiredService<DynamicApiService>());
+            services.AddScoped<IDynamicApiMetadataService, DynamicApiMetadataService>();
+
+            // ── Deployed API service ──
+            services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+            services.AddScoped<IDeployedApiService, DeployedApiService>();
+
+            // ── MCP Configuration Builder (dynamic per-workspace MCP configs) ──
+            services.AddSingleton<McpConfigBuilder>();
+            services.AddScoped<IMcpWorkspaceService, McpWorkspaceService>();
+
+            // ── MCP Workspace Switcher (builds config + restarts OpenCode server) ──
+            services.AddScoped<IMcpWorkspaceSwitcher>(sp =>
+            {
+                var configBuilder = sp.GetRequiredService<McpConfigBuilder>();
+                var hostedService = sp.GetRequiredService<OpenCodeServerHostedService>();
+                var logger = sp.GetRequiredService<ILogger<McpWorkspaceSwitcher>>();
+                return new McpWorkspaceSwitcher(configBuilder, hostedService.RestartAsync, logger);
+            });
 
             return services;
         }
