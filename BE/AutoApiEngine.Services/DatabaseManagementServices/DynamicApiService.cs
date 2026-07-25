@@ -53,7 +53,21 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         {
             var (workspace, meta) = await LoadWorkspaceAndMetaAsync(workspaceId, objectName, cancellationToken);
 
-            var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: true, workspace.DatabaseEngine);
+            // Fetch FK info if query selects related columns
+            var relationNames = ExtractRelationNames(query);
+            ForeignKeyInfoDto? fkInfo = null;
+            if (relationNames.Count > 0)
+            {
+                var connStr = BuildConnectionString(workspace);
+                fkInfo = await _foreignKeyService.GetForeignKeysAsync(
+                    workspace.DatabaseName ?? "",
+                    workspace.DatabaseEngine,
+                    connStr,
+                    meta.TableName,
+                    cancellationToken);
+            }
+
+            var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: true, workspace.DatabaseEngine, fkInfo);
             _logger.LogDebug("Dynamic GET list: {Sql}", sql);
             var data = await ExecuteQueryAsync(workspace, sql, parameters, cancellationToken);
 
@@ -105,7 +119,21 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 var existingFilters = query.Filter ?? new List<string>();
                 query.Filter = new List<string>(existingFilters) { $"{pkCol}:eq:{id}" };
 
-                var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: false, workspace.DatabaseEngine);
+                // Fetch FK info if query selects related columns
+                var relationNames = ExtractRelationNames(query);
+                ForeignKeyInfoDto? fkInfo = null;
+                if (relationNames.Count > 0)
+                {
+                    var connStr = BuildConnectionString(workspace);
+                    fkInfo = await _foreignKeyService.GetForeignKeysAsync(
+                        workspace.DatabaseName ?? "",
+                        workspace.DatabaseEngine,
+                        connStr,
+                        meta.TableName,
+                        cancellationToken);
+                }
+
+                var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: false, workspace.DatabaseEngine, fkInfo);
                 _logger.LogDebug("Dynamic GET by ID: {Sql}", sql);
                 var data = await ExecuteQueryAsync(workspace, sql, parameters, cancellationToken);
 
@@ -147,7 +175,21 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
             try
             {
-                var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: false, workspace.DatabaseEngine);
+                // Fetch FK info if query selects related columns
+                var relationNames = ExtractRelationNames(query);
+                ForeignKeyInfoDto? fkInfo = null;
+                if (relationNames.Count > 0)
+                {
+                    var connStr = BuildConnectionString(workspace);
+                    fkInfo = await _foreignKeyService.GetForeignKeysAsync(
+                        workspace.DatabaseName ?? "",
+                        workspace.DatabaseEngine,
+                        connStr,
+                        meta.TableName,
+                        cancellationToken);
+                }
+
+                var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: false, workspace.DatabaseEngine, fkInfo);
                 _logger.LogDebug("Dynamic GET by composite key: {Sql}", sql);
                 var data = await ExecuteQueryAsync(workspace, sql, parameters, cancellationToken);
 
@@ -546,10 +588,12 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         // ─────────────────────────────────────────────────────────────────
 
         private (string Sql, List<DbParameter> Parameters) BuildSelectQuery(
-            TableMetadata meta, DynamicApiQueryRequest query, bool includePaging, DatabaseEngine engine)
+            TableMetadata meta, DynamicApiQueryRequest query, bool includePaging, DatabaseEngine engine,
+            ForeignKeyInfoDto? fkInfo = null)
         {
             var parameters = new List<DbParameter>();
             var qi = QuoteIdentifier(engine);
+            var qiClose = qi == "[" ? "]" : qi;
             var sb = new StringBuilder();
 
             // SELECT
@@ -558,7 +602,19 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             var selectItems = BuildSelectList(meta, selectStr, qi);
             sb.Append(string.Join(", ", selectItems));
 
-            sb.Append($" FROM {qi}{meta.Schema}{(qi == "[" ? "]" : qi)}.{qi}{meta.TableName}{(qi == "[" ? "]" : qi)}");
+            sb.Append($" FROM {qi}{meta.Schema}{qiClose}.{qi}{meta.TableName}{qiClose}");
+
+            // LEFT JOINs for related columns
+            if (fkInfo != null)
+            {
+                var relationNames = ExtractRelationNames(query);
+                if (relationNames.Count > 0)
+                {
+                    var joinClauses = BuildJoinClauses(
+                        meta.TableName, meta.Schema, relationNames, fkInfo, engine);
+                    sb.Append(joinClauses);
+                }
+            }
 
             // WHERE
             if (query.Filter != null && query.Filter.Count > 0)
@@ -609,6 +665,81 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             }
 
             return (sb.ToString(), parameters);
+        }
+
+        /// <summary>
+        /// Extracts unique relation names from dotted select items (e.g. "Categories.CategoryID" → "Categories").
+        /// </summary>
+        private static HashSet<string> ExtractRelationNames(DynamicApiQueryRequest query)
+        {
+            var relations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (query.Select == null) return relations;
+
+            foreach (var item in query.Select)
+            {
+                var dotIdx = item.IndexOf('.');
+                if (dotIdx > 0)
+                    relations.Add(item[..dotIdx]);
+            }
+            return relations;
+        }
+
+        /// <summary>
+        /// Builds LEFT JOIN clauses for each relation referenced in the SELECT list,
+        /// using foreign key metadata to resolve the join conditions.
+        /// </summary>
+        private static string BuildJoinClauses(
+            string mainTable,
+            string mainSchema,
+            HashSet<string> relationNames,
+            ForeignKeyInfoDto fkInfo,
+            DatabaseEngine engine)
+        {
+            var qi = QuoteIdentifier(engine);
+            var qiClose = qi == "[" ? "]" : qi;
+            var mainAlias = $"{qi}{mainSchema}{qiClose}.{qi}{mainTable}{qiClose}";
+            var joins = new StringBuilder();
+
+            foreach (var relation in relationNames)
+            {
+                // Case 1: Main table has an outgoing FK pointing to the related table.
+                var outgoingFk = fkInfo.ForeignKeys.FirstOrDefault(fk =>
+                    string.Equals(fk.ReferencedTable, relation, StringComparison.OrdinalIgnoreCase));
+
+                if (outgoingFk != null)
+                {
+                    // SQL: LEFT JOIN [Schema].[Related] AS [__Related]
+                    //            ON [__Related].[RefCol] = [main].[FkCol]
+                    joins.Append(
+                        $" LEFT JOIN {qi}{outgoingFk.ReferencedSchema}{qiClose}.{qi}{relation}{qiClose}" +
+                        $" AS {qi}__{relation}{qiClose}" +
+                        $" ON {qi}__{relation}{qiClose}.{qi}{outgoingFk.ReferencedColumn}{qiClose}" +
+                        $" = {mainAlias}.{qi}{outgoingFk.Column}{qiClose}");
+                    continue;
+                }
+
+                // Case 2: The related table has an incoming FK pointing to the main table.
+                var incomingFk = fkInfo.ReferencedBy.FirstOrDefault(rb =>
+                    string.Equals(rb.Table, relation, StringComparison.OrdinalIgnoreCase));
+
+                if (incomingFk != null)
+                {
+                    // SQL: LEFT JOIN [Schema].[Related] AS [__Related]
+                    //            ON [__Related].[FkCol] = [main].[RefCol]
+                    joins.Append(
+                        $" LEFT JOIN {qi}{incomingFk.TableSchema}{qiClose}.{qi}{relation}{qiClose}" +
+                        $" AS {qi}__{relation}{qiClose}" +
+                        $" ON {qi}__{relation}{qiClose}.{qi}{incomingFk.Column}{qiClose}" +
+                        $" = {mainAlias}.{qi}{incomingFk.ReferencedColumn}{qiClose}");
+                    continue;
+                }
+
+                throw new ArgumentException(
+                    $"Cannot select related column '{relation}.*' — no foreign key relationship found " +
+                    $"between '{mainTable}' and '{relation}'. Ensure the relation name matches an existing FK.");
+            }
+
+            return joins.ToString();
         }
 
         private static List<string> BuildSelectList(TableMetadata meta, string? select, string qi)
