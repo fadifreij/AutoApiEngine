@@ -11,10 +11,11 @@ namespace AutoApiEngine.Presentation.Controllers
     /// <summary>
     /// AI database assistant endpoint. Provides advisory help for writing DDL,
     /// optimizing queries/procedures, and database performance for the current
-    /// workspace. It is advisory only and never executes SQL.
+    /// workspace. Supports DDL operations (CREATE, ALTER, DROP, INSERT, UPDATE, DELETE)
+    /// with user confirmation.
     ///
-    /// The AI provider is selected via <c>AiSettings.Provider</c> in appsettings.json.
-    /// Supported values: "OpenRouter" (default) or "Opencode".
+    /// Uses Ollama as the local AI provider with portable system instructions
+    /// loaded from <c>opencode/system-instructions.md</c>.
     /// </summary>
     [ApiController]
     [Route("api/ai")]
@@ -24,18 +25,15 @@ namespace AutoApiEngine.Presentation.Controllers
         private readonly IAiAssistantService _aiAssistantService;
         private readonly AiSettings _aiSettings;
         private readonly OpenRouterAiSettings _openRouterSettings;
-        private readonly OpencodeAiSettings _opencodeSettings;
 
         public AiController(
             IAiAssistantService aiAssistantService,
             IOptions<AiSettings> aiSettings,
-            IOptions<OpenRouterAiSettings> openRouterSettings,
-            IOptions<OpencodeAiSettings> opencodeSettings)
+            IOptions<OpenRouterAiSettings> openRouterSettings)
         {
             _aiAssistantService = aiAssistantService;
             _aiSettings = aiSettings.Value;
             _openRouterSettings = openRouterSettings.Value;
-            _opencodeSettings = opencodeSettings.Value;
         }
 
         /// <summary>
@@ -45,19 +43,6 @@ namespace AutoApiEngine.Presentation.Controllers
         [HttpGet("provider")]
         public IActionResult GetProvider()
         {
-            var isOpencode = string.Equals(_aiSettings.Provider, "Opencode", StringComparison.OrdinalIgnoreCase);
-
-            if (isOpencode)
-            {
-                return Ok(new
-                {
-                    provider = _aiSettings.Provider,
-                    model = _opencodeSettings.Model,
-                    baseUrl = _opencodeSettings.BaseUrl,
-                    configSection = "OpencodeAi"
-                });
-            }
-
             return Ok(new
             {
                 provider = _aiSettings.Provider,

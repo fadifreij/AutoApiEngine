@@ -1,6 +1,8 @@
 ﻿{
     "$schema": "https://opencode.ai/config.json",
-    "instructions": [".opencode/instructions.md"],
+    "instructions": [
+        ".opencode/instructions.md"
+    ],
     "permission": {
         "*": "allow",
         "bash": "allow",
@@ -67,13 +69,6 @@
                 "*": "allow",
                 "edit": "allow"
             }
-        }
-    },
-    "mcp": {
-        "workspace-filesystem": {
-            "type": "local",
-            "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "D:\\AutoCrud_Full"],
-            "enabled": true
         }
     }
 }

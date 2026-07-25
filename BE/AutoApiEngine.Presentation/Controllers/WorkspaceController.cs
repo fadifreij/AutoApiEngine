@@ -359,33 +359,5 @@ namespace AutoApiEngine.Presentation.Controllers
                 return new { message = "Workspace deleted successfully." };
             });
         }
-
-        /// <summary>
-        /// Switches the MCP (Model Context Protocol) configuration to point to the specified workspace's database.
-        /// This builds a per-workspace MCP config, updates opencode.json, and restarts the OpenCode server.
-        /// After this, the AI assistant can query the workspace's database via MCP tools.
-        /// </summary>
-        [HttpPost("{id:guid}/switch-mcp")]
-        public async Task<IActionResult> SwitchMcp(string id, CancellationToken cancellationToken = default)
-        {
-            return await HandleRequestAsync(async () =>
-            {
-                var mcpSwitcher = _serviceProvider.GetRequiredService<IMcpWorkspaceSwitcher>();
-
-                var result = await mcpSwitcher.SwitchWorkspaceAsync(id, cancellationToken);
-                if (result == null)
-                {
-                    throw new ArgumentException($"Could not build MCP config for workspace {id}. " +
-                        "Verify the workspace exists and has valid database credentials.");
-                }
-
-                return new
-                {
-                    message = $"MCP switched to workspace {id}.",
-                    configPath = result.Value.configPath,
-                    engine = result.Value.packageName
-                };
-            });
-        }
     }
 }

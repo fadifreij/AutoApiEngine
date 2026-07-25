@@ -1,5 +1,4 @@
-﻿using AutoApiEngine.ApiServices.HostedServices;
-using AutoApiEngine.ApiServices.Providers;
+﻿using AutoApiEngine.ApiServices.Providers;
 using AutoApiEngine.Persistence.Context;
 using AutoApiEngine.Presentation.HubServices;
 using AutoApiEngine.ServiceAbstraction;
@@ -38,9 +37,6 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddOpenApi();
 builder.Services.AddApiServices(builder.Configuration);
-
-// Auto-start the local OpenCode server as a child process
-builder.Services.AddHostedService<OpenCodeServerHostedService>();
 
 var keyclockSection = builder.Configuration.GetSection("KeyClock");
 var realmUrl = $"{keyclockSection["Url"]}/realms/{keyclockSection["Realm"]}";

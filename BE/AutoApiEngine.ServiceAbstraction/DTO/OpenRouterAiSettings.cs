@@ -1,25 +1,25 @@
 namespace AutoApiEngine.ServiceAbstraction.DTO
 {
     /// <summary>
-    /// Configuration for the OpenRouter (or any external OpenAI-compatible) AI provider.
-    /// Bound from the "OpenRouterAi" configuration section.
+    /// Configuration for the AI provider (Ollama, OpenRouter, or any OpenAI-compatible endpoint).
+    /// Bound from the "OpenRouterAi" configuration section (name kept for backward compatibility).
     /// </summary>
     public class OpenRouterAiSettings
     {
-        /// <summary>Base URL of the OpenAI-compatible endpoint (e.g. https://openrouter.ai/api/v1).</summary>
-        public string BaseUrl { get; set; } = "https://openrouter.ai/api/v1";
+        /// <summary>Base URL of the OpenAI-compatible endpoint (e.g. http://localhost:11434/v1 for Ollama).</summary>
+        public string BaseUrl { get; set; } = "http://localhost:11434/v1";
 
-        /// <summary>Provider API key. Prefer user-secrets / environment variables over appsettings.json.</summary>
-        public string ApiKey { get; set; } = string.Empty;
+        /// <summary>Provider API key. Ollama does not require a real key; any non-empty value works.</summary>
+        public string ApiKey { get; set; } = "ollama";
 
-        /// <summary>Model identifier to use for completions (e.g. openai/gpt-oss-120b:free).</summary>
-        public string Model { get; set; } = "openai/gpt-oss-120b:free";
+        /// <summary>Model identifier to use for completions (e.g. qwen2.5:3b for Ollama).</summary>
+        public string Model { get; set; } = "qwen2.5:3b";
 
         /// <summary>Sampling temperature (lower = more deterministic/faster).</summary>
         public double Temperature { get; set; } = 0.1;
 
         /// <summary>Maximum tokens to generate in the reply.</summary>
-        public int MaxTokens { get; set; } = 1024;
+        public int MaxTokens { get; set; } = 4096;
 
         /// <summary>
         /// Maximum number of characters of database schema context to embed in the system

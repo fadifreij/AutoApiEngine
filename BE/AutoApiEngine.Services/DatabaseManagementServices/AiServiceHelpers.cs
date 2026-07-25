@@ -299,16 +299,18 @@ D) Stored procedure / function execution (EXEC / CALL):
 
         /// <summary>
         /// Builds the message list for the AI request from the user's input.
-        /// Unlike the old approach, this does NOT pre-load schema context.
-        /// Schema discovery happens on-demand via MCP tool calls.
+        /// Schema discovery happens on-demand via tool calls.
+        /// If <paramref name="customSystemPrompt"/> is provided, it is used instead of the
+        /// built-in system prompt (e.g. to load instructions from a portable markdown file).
         /// </summary>
         public static List<ChatMessage> BuildMessages(
             AiAssistRequest request,
-            string engineName)
+            string engineName,
+            string? customSystemPrompt = null)
         {
             var messages = new List<ChatMessage>
             {
-                new("system", BuildSystemPrompt(engineName))
+                new("system", customSystemPrompt ?? BuildSystemPrompt(engineName))
             };
 
             foreach (var msg in request.History ?? new List<AiChatMessage>())

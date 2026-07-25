@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using AutoApiEngine.Domain.Enums;
 using AutoApiEngine.ServiceAbstraction;
@@ -10,14 +11,16 @@ using Microsoft.Extensions.Options;
 namespace AutoApiEngine.Services.DatabaseManagementServices
 {
     /// <summary>
-    /// AI assistant for the Query Studio. Uses MCP-style tool calling (OpenAI
-    /// function-calling) to let the AI dynamically discover database schema and
-    /// inspect data instead of pre-loading all schema context into the prompt.
+    /// AI assistant for the Query Studio. Uses a local Ollama server (or any OpenAI-compatible
+    /// API) with MCP-style tool calling to let the AI dynamically discover database schema
+    /// and inspect data instead of pre-loading all schema context into the prompt.
     ///
-    /// SAFETY: The AI is advisory-only and never executes SQL directly. The
-    /// <see cref="DatabaseToolService"/> enforces read-only SELECT queries.
+    /// System instructions are loaded from <c>opencode/system-instructions.md</c> at startup
+    /// and cached. This makes the AI assistant portable — just copy the opencode/ folder
+    /// with instruction MD files to a new environment.
     ///
-    /// This implementation uses the <see cref="OpenRouterAiSettings"/> config section.
+    /// Supports DDL operations (CREATE, ALTER, DROP, INSERT, UPDATE, DELETE) with
+    /// user confirmation via the execute_write tool.
     /// </summary>
     public class AiAssistantService : IAiAssistantService
     {
@@ -30,6 +33,10 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
         // Max rounds of tool calls to prevent infinite loops
         private const int MaxToolRounds = 5;
+
+        // Cached system instructions loaded from opencode/system-instructions.md
+        private static string? _cachedInstructions;
+        private static readonly object InstructionsLock = new();
 
         public AiAssistantService(
             HttpClient httpClient,
@@ -49,12 +56,12 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
         public async Task<AiAssistResponse> AssistAsync(AiAssistRequest request, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(_settings.ApiKey))
+            if (string.IsNullOrWhiteSpace(_settings.BaseUrl))
             {
                 return new AiAssistResponse
                 {
                     Success = false,
-                    Error = "AI assistant is not configured. Set the OpenRouterAi:ApiKey configuration value."
+                    Error = "AI assistant is not configured. Set the OpenRouterAi:BaseUrl configuration value."
                 };
             }
 
@@ -65,8 +72,9 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 return new AiAssistResponse { Success = false, Error = "Workspace not found or has no database configured." };
             }
 
-            // ── Build initial messages (no schema context pre-loaded) ──
-            var messages = AiPromptBuilder.BuildMessages(request, engine.ToString()!);
+            // ── Build initial messages with file-based system instructions ──
+            var systemPrompt = BuildSystemPromptWithInstructions(engine.Value, databaseName!);
+            var messages = AiPromptBuilder.BuildMessages(request, engine.ToString()!, systemPrompt);
             var tools = AiPromptBuilder.BuildToolDefinitions();
 
             // ── Multi-round tool-calling loop ──
@@ -96,7 +104,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     if (!httpResponse.IsSuccessStatusCode)
                     {
                         var body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
-                        _logger.LogError("OpenRouter AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
+                        _logger.LogError("AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
                         return new AiAssistResponse
                         {
                             Success = false,
@@ -112,25 +120,25 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 }
                 catch (TaskCanceledException ex)
                 {
-                    _logger.LogError(ex, "OpenRouter AI request timed out after {Timeout}s contacting {BaseUrl}.", _httpClient.Timeout.TotalSeconds, _settings.BaseUrl);
+                    _logger.LogError(ex, "AI request timed out after {Timeout}s contacting {BaseUrl}.", _httpClient.Timeout.TotalSeconds, _settings.BaseUrl);
                     return new AiAssistResponse
                     {
                         Success = false,
-                        Error = $"The AI provider did not respond in time ({_httpClient.Timeout.TotalSeconds:N0}s). The endpoint '{_settings.BaseUrl}' may be unreachable from this server. Verify network access and the OpenRouterAi:BaseUrl setting."
+                        Error = $"The AI provider did not respond in time ({_httpClient.Timeout.TotalSeconds:N0}s). The endpoint '{_settings.BaseUrl}' may be unreachable. Verify the AI provider is running and the OpenRouterAi:BaseUrl setting is correct."
                     };
                 }
                 catch (HttpRequestException ex)
                 {
-                    _logger.LogError(ex, "Network error reaching OpenRouter AI provider at {BaseUrl}.", _settings.BaseUrl);
+                    _logger.LogError(ex, "Network error reaching AI provider at {BaseUrl}.", _settings.BaseUrl);
                     return new AiAssistResponse
                     {
                         Success = false,
-                        Error = $"Could not connect to the AI provider at '{_settings.BaseUrl}'. Check that the server has network access to this endpoint and that OpenRouterAi:BaseUrl is correct."
+                        Error = $"Could not connect to the AI provider at '{_settings.BaseUrl}'. Verify the AI provider is running and the OpenRouterAi:BaseUrl setting is correct."
                     };
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "OpenRouter AI assistant request failed.");
+                    _logger.LogError(ex, "AI assistant request failed.");
                     return new AiAssistResponse { Success = false, Error = "The AI service failed unexpectedly. Please try again." };
                 }
 
@@ -181,9 +189,9 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             AiAssistRequest request,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(_settings.ApiKey))
+            if (string.IsNullOrWhiteSpace(_settings.BaseUrl))
             {
-                yield return new AiStreamChunk { Error = "AI assistant is not configured. Set the OpenRouterAi:ApiKey configuration value." };
+                yield return new AiStreamChunk { Error = "AI assistant is not configured. Set the OpenRouterAi:BaseUrl configuration value." };
                 yield break;
             }
 
@@ -196,7 +204,8 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             }
 
             // ── Process tool calls first (non-streaming) ──
-            var messages = AiPromptBuilder.BuildMessages(request, engine.ToString()!);
+            var systemPrompt = BuildSystemPromptWithInstructions(engine.Value, databaseName!);
+            var messages = AiPromptBuilder.BuildMessages(request, engine.ToString()!, systemPrompt);
             var tools = AiPromptBuilder.BuildToolDefinitions();
 
             var toolResult = await ProcessToolRoundsForStreamAsync(messages, tools, databaseName!, engine!.Value, connectionString!, cancellationToken);
@@ -263,7 +272,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Could not start OpenRouter AI stream at {BaseUrl}.", _settings.BaseUrl);
+                _logger.LogError(ex, "Could not start AI stream at {BaseUrl}.", _settings.BaseUrl);
                 connectionError = $"Could not connect to the AI provider at '{_settings.BaseUrl}'.";
             }
 
@@ -316,6 +325,128 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 httpResponse?.Dispose();
             }
         }
+
+        // ── System Instructions Loading ──
+
+        /// <summary>
+        /// Builds the system prompt by loading instructions from
+        /// <c>opencode/system-instructions.md</c> and prepending the database context
+        /// prefix (engine + database name). Instructions are cached after first load.
+        /// </summary>
+        private string BuildSystemPromptWithInstructions(DatabaseEngine engine, string databaseName)
+        {
+            var instructions = GetSystemInstructions();
+            var dbContextPrefix = BuildDatabaseContextPrefix(engine, databaseName);
+            return $"{dbContextPrefix}\n\n{instructions}";
+        }
+
+        /// <summary>
+        /// Loads and caches the DB Copilot system instructions from
+        /// <c>opencode/system-instructions.md</c>. Falls back to an embedded copy if the file
+        /// cannot be found, so the assistant always knows the tool-call protocol.
+        /// </summary>
+        private static string GetSystemInstructions()
+        {
+            if (_cachedInstructions != null) return _cachedInstructions;
+
+            lock (InstructionsLock)
+            {
+                if (_cachedInstructions != null) return _cachedInstructions;
+
+                try
+                {
+                    var path = ResolveInstructionsPath();
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        _cachedInstructions = File.ReadAllText(path);
+                        return _cachedInstructions;
+                    }
+                }
+                catch
+                {
+                    // Fall through to embedded fallback
+                }
+
+                _cachedInstructions = FallbackInstructions;
+                return _cachedInstructions;
+            }
+        }
+
+        /// <summary>
+        /// Locates <c>system-instructions.md</c>: walks up from the app base directory
+        /// looking for <c>opencode/system-instructions.md</c>. Returns empty string if not found.
+        /// </summary>
+        private static string ResolveInstructionsPath()
+        {
+            var current = AppContext.BaseDirectory;
+            for (int i = 0; i < 8 && current != null; i++)
+            {
+                var candidate = Path.Combine(current, "opencode", "system-instructions.md");
+                if (File.Exists(candidate)) return candidate;
+                current = Path.GetDirectoryName(current);
+            }
+
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// Builds a short database context prefix prepended to the system prompt.
+        /// This tells the AI model which database engine and name it is working with,
+        /// so it targets the correct workspace database and uses the right SQL dialect.
+        /// </summary>
+        private static string BuildDatabaseContextPrefix(DatabaseEngine engine, string databaseName)
+        {
+            var engineName = engine switch
+            {
+                DatabaseEngine.SqlServer => "SQL Server",
+                DatabaseEngine.MySql => "MySQL",
+                DatabaseEngine.PostgreSql => "PostgreSQL",
+                DatabaseEngine.Sqlite => "SQLite",
+                _ => engine.ToString()
+            };
+
+            return $"[Workspace Database: {engineName} / {databaseName}] — Use the database tools to query this database. All SQL must use {engineName} syntax.";
+        }
+
+        /// <summary>
+        /// Minimal embedded copy of the DB Copilot protocol used only when
+        /// system-instructions.md cannot be located on disk.
+        /// </summary>
+        private const string FallbackInstructions = """
+You are "DB Copilot", an expert database assistant embedded in a SQL Query Studio.
+Every user message includes a context line such as `[Workspace Database: MySQL / employees_db]`
+telling you the database engine and name. Work ONLY inside that database and use its SQL dialect.
+
+CRITICAL RULES:
+1. You do NOT have the data in memory. NEVER invent table names, column names, row counts, or results.
+2. To answer ANY question about the schema or data you MUST call a tool and wait for its result.
+3. You are connected to ONE database only. Never use USE or switch databases.
+
+To call a tool, reply with ONLY a single fenced JSON block and no other text:
+```json
+{"tool": "TOOL_NAME", "arguments": { ...arguments... }}
+```
+
+Available tools:
+- list_tables — {} — list all table names
+- describe_table — {"table_name": "employees"} — columns, types, keys
+- search_schema — {"query": "employee"} — find tables/views/columns
+- list_views — {} — list views
+- list_routines — {} — list stored procedures and functions
+- execute_query — {"sql": "SELECT COUNT(*) FROM employees"} — run a read-only SELECT
+- execute_write — {"sql": "..."} — INSERT/UPDATE/DELETE/CREATE/ALTER/DROP/TRUNCATE
+
+To count rows in a table, reply with ONLY:
+```json
+{"tool": "execute_query", "arguments": {"sql": "SELECT COUNT(*) AS total FROM employees"}}
+```
+Then read the returned count and give a concise final answer in markdown.
+
+For INSERT/UPDATE/DELETE/DDL: first inspect the schema, then show the SQL in a ```sql block and
+ask the user to confirm with "yes" before calling execute_write. Always include WHERE on DELETE/UPDATE.
+Dialect: SQL Server uses TOP N and [brackets]; MySQL uses LIMIT N and `backticks`;
+PostgreSQL uses LIMIT N and "double quotes"; SQLite uses LIMIT N.
+""";
 
         // ── Helpers ──
 
@@ -484,7 +615,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     if (!httpResponse.IsSuccessStatusCode)
                     {
                         var body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
-                        _logger.LogError("OpenRouter AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
+                        _logger.LogError("AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
                         return new ToolRoundResult { Error = AiPromptBuilder.FormatProviderError((int)httpResponse.StatusCode, body) };
                     }
 
@@ -496,7 +627,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Could not start OpenRouter AI stream at {BaseUrl}.", _settings.BaseUrl);
+                    _logger.LogError(ex, "Could not reach AI provider at {BaseUrl}.", _settings.BaseUrl);
                     return new ToolRoundResult { Error = $"Could not connect to the AI provider at '{_settings.BaseUrl}'." };
                 }
 
@@ -563,7 +694,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     if (!httpResponse.IsSuccessStatusCode)
                     {
                         var body = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
-                        _logger.LogError("OpenRouter AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
+                        _logger.LogError("AI provider returned {Status}: {Body}", (int)httpResponse.StatusCode, body);
                         return new ToolRoundResult { Error = AiPromptBuilder.FormatProviderError((int)httpResponse.StatusCode, body) };
                     }
 
@@ -575,7 +706,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Could not reach OpenRouter AI at {BaseUrl}.", _settings.BaseUrl);
+                    _logger.LogError(ex, "Could not reach AI provider at {BaseUrl}.", _settings.BaseUrl);
                     return new ToolRoundResult { Error = $"Could not connect to the AI provider at '{_settings.BaseUrl}'." };
                 }
 

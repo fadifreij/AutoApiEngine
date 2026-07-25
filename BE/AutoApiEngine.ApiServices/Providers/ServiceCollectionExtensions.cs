@@ -6,7 +6,6 @@ using AutoApiEngine.Services.DatabaseManagementServices;
 using AutoApiEngine.Services.Services;
 using AutoApiEngine.Services.Repositories;
 using AutoApiEngine.Services.Repositories.Common;
-using AutoApiEngine.ApiServices.HostedServices;
 
 namespace AutoApiEngine.ApiServices.Providers
 {
@@ -46,17 +45,16 @@ namespace AutoApiEngine.ApiServices.Providers
             // ── MCP-style Database Tool Service (used by AI assistant) ──
             services.AddScoped<IDatabaseToolService, DatabaseToolService>();
 
-            // ── AI Assistant (strategy pattern with provider selection) ──
+            // ── AI Assistant (local Ollama or any OpenAI-compatible API) ──
             //
-            // Two IAiAssistantService implementations are registered as concrete types
-            // (each with its own typed HttpClient).  AiAssistantFactory implements the
-            // interface and delegates to the right one based on AiSettings.Provider.
+            // AiAssistantService is registered directly as IAiAssistantService.
+            // It loads system instructions from opencode/system-instructions.md
+            // and uses the configured AI provider for completions with tool calling.
 
             services.Configure<AiSettings>(config.GetSection("Ai"));
             services.Configure<OpenRouterAiSettings>(config.GetSection("OpenRouterAi"));
-            services.Configure<OpencodeAiSettings>(config.GetSection("OpencodeAi"));
 
-            // OpenRouter / external provider
+            // AI provider with IPv4 socket optimization
             services.AddHttpClient<AiAssistantService>(client =>
             {
                 client.Timeout = TimeSpan.FromSeconds(300);
@@ -87,36 +85,8 @@ namespace AutoApiEngine.ApiServices.Providers
                 }
             });
 
-            // Opencode / local AI provider
-            services.AddHttpClient<OpencodeAiAssistantService>(client =>
-            {
-                client.Timeout = TimeSpan.FromSeconds(300);
-            })
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-            {
-                ConnectTimeout = TimeSpan.FromSeconds(10),
-                ConnectCallback = async (context, cancellationToken) =>
-                {
-                    var socket = new System.Net.Sockets.Socket(
-                        System.Net.Sockets.AddressFamily.InterNetwork,
-                        System.Net.Sockets.SocketType.Stream,
-                        System.Net.Sockets.ProtocolType.Tcp)
-                    { NoDelay = true };
-                    try
-                    {
-                        await socket.ConnectAsync(context.DnsEndPoint, cancellationToken);
-                        return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
-                    }
-                    catch
-                    {
-                        socket.Dispose();
-                        throw;
-                    }
-                }
-            });
-
-            // Strategy-pattern factory — this is what controllers inject
-            services.AddScoped<IAiAssistantService, AiAssistantFactory>();
+            // Register AiAssistantService directly as the IAiAssistantService implementation
+            services.AddScoped<IAiAssistantService>(sp => sp.GetRequiredService<AiAssistantService>());
 
             // ── Dynamic Generic API (FK discovery + SQL builder) ──
             services.AddScoped<SqlForeignKeyService>();
@@ -129,19 +99,6 @@ namespace AutoApiEngine.ApiServices.Providers
             // ── Deployed API service ──
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
             services.AddScoped<IDeployedApiService, DeployedApiService>();
-
-            // ── MCP Configuration Builder (dynamic per-workspace MCP configs) ──
-            services.AddSingleton<McpConfigBuilder>();
-            services.AddScoped<IMcpWorkspaceService, McpWorkspaceService>();
-
-            // ── MCP Workspace Switcher (builds config + restarts OpenCode server) ──
-            services.AddScoped<IMcpWorkspaceSwitcher>(sp =>
-            {
-                var configBuilder = sp.GetRequiredService<McpConfigBuilder>();
-                var hostedService = sp.GetRequiredService<OpenCodeServerHostedService>();
-                var logger = sp.GetRequiredService<ILogger<McpWorkspaceSwitcher>>();
-                return new McpWorkspaceSwitcher(configBuilder, hostedService.RestartAsync, logger);
-            });
 
             return services;
         }
