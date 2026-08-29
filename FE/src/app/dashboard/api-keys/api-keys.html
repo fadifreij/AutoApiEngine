@@ -1,0 +1,152 @@
+<div class="page-header">
+  <div>
+    <h1 class="page-title">API Keys</h1>
+    <p class="page-subtitle">Create and manage API keys for your organization.</p>
+  </div>
+</div>
+
+@if (!orgId()) {
+  <div class="error-message">Unable to determine organization.</div>
+} @else {
+  <!-- CREATE -->
+  <div class="create-card">
+    <div class="create-card-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="7.5" cy="15.5" r="4.5" />
+        <path d="M10.7 12.3L21 2" />
+        <path d="M16 7l3 3" />
+        <path d="M7 21v-2" />
+        <path d="M17 4l3 3" />
+      </svg>
+      Create API Key
+    </div>
+
+    <form (ngSubmit)="onCreate()">
+      <div class="create-form-row">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" name="createName" [(ngModel)]="createName" placeholder="e.g. production-client, ci-pipeline"
+            required maxlength="100">
+        </div>
+        <div class="form-group">
+          <label>Expires At <span class="optional">(optional)</span></label>
+          <input type="datetime-local" name="createExpiresAt" [(ngModel)]="createExpiresAt">
+        </div>
+        <button type="submit" class="btn btn-primary create-btn" [disabled]="submitting() || !createName.trim()">
+          @if (submitting()) {
+            <span class="loader"></span>
+            Creating…
+          } @else {
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 8v8m-4-4h8" />
+            </svg>
+            Create
+          }
+        </button>
+      </div>
+    </form>
+
+    @if (formError()) {
+      <div class="error-message">{{ formError() }}</div>
+    }
+
+    @if (plainKey()) {
+      <div class="plain-key-panel">
+        <div class="plain-key-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.78 7.78 5.5 5.5 0 017.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+          </svg>
+          <div>
+            <div class="plain-key-title">API Key Created</div>
+            <div class="plain-key-warning">Copy your API key now — it will not be shown again.</div>
+          </div>
+        </div>
+        <div class="plain-key-value">
+          <code>{{ plainKey() }}</code>
+          <button type="button" class="btn btn-outline btn-sm" (click)="copyPlainKey()">
+            @if (copied()) {
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+              Copied!
+            } @else {
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+              Copy
+            }
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- LIST -->
+  <div class="keys-section">
+    <h2 class="section-title">Existing Keys</h2>
+
+    @if (loading()) {
+      <div class="loading-row">
+        <span class="loader"></span>
+        Loading API keys…
+      </div>
+    } @else if (listError()) {
+      <div class="error-message">{{ listError() }}</div>
+    } @else if (keys().length === 0) {
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.78 7.78 5.5 5.5 0 017.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+        </svg>
+        <p>No API keys yet</p>
+        <span>Create your first API key above.</span>
+      </div>
+    } @else {
+      <div class="keys-list">
+        @for (key of keys(); track key.id) {
+          <div class="key-row">
+            <div class="key-main">
+              <span class="key-name">{{ key.name }}</span>
+              <span class="key-hash" [title]="key.key">{{ keyPreview(key.key) }}</span>
+            </div>
+            <div class="key-cell">
+              <span class="cell-label">Created</span>
+              <span class="cell-value">{{ formatDate(key.createdAt) }}</span>
+            </div>
+            <div class="key-cell">
+              <span class="cell-label">Expires</span>
+              <span class="cell-value">{{ formatDate(key.expiresAt) }}</span>
+            </div>
+            <div class="key-cell">
+              <span class="cell-label">Last Used</span>
+              <span class="cell-value">{{ formatDate(key.lastUsedAt) }}</span>
+            </div>
+            <div class="key-cell">
+              <span class="cell-label">Status</span>
+              <span class="status-badge" [class.active]="key.isActive">
+                <span class="status-dot"></span>
+                {{ key.isActive ? 'Active' : 'Inactive' }}
+              </span>
+            </div>
+            <div class="key-cell key-actions">
+              <button type="button" class="delete-btn" (click)="onDelete(key)" [disabled]="deletingId() === key.id">
+                @if (deletingId() === key.id) {
+                  <span class="loader"></span>
+                } @else {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round"><path d="M3 6h18" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                }
+                Delete
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (actionMessage()) {
+        <div class="success-message">{{ actionMessage() }}</div>
+      }
+      @if (actionError()) {
+        <div class="error-message">{{ actionError() }}</div>
+      }
+    }
+  </div>
+}

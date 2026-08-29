@@ -19,6 +19,7 @@ export const routes: Routes = [
       { path: 'workspace/manage', loadComponent: () => import('./dashboard/workspace-manage/workspace-manage').then(m => m.WorkspaceManage) },
       { path: 'apis/generated', loadComponent: () => import('./dashboard/api-generated/api-generated').then(m => m.ApiGenerated) },
       { path: 'apis/custom', loadComponent: () => import('./dashboard/api-custom/api-custom').then(m => m.ApiCustom) },
+      { path: 'api-keys', loadComponent: () => import('./dashboard/api-keys/api-keys').then(m => m.ApiKeys) },
       { path: 'query-studio', redirectTo: '/query-studio', pathMatch: 'full' },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
     ]
