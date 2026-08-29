@@ -14,8 +14,8 @@ namespace AutoApiEngine.Presentation.Controllers
     /// workspace. Supports DDL operations (CREATE, ALTER, DROP, INSERT, UPDATE, DELETE)
     /// with user confirmation.
     ///
-    /// Uses Ollama as the local AI provider with portable system instructions
-    /// loaded from <c>opencode/system-instructions.md</c>.
+    /// Uses Ollama as the local AI provider with system instructions
+    /// loaded from <c>Prompts/db-copilot-instructions.md</c>.
     /// </summary>
     [ApiController]
     [Route("api/ai")]

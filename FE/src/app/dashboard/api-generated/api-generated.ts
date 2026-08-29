@@ -11,9 +11,7 @@ import {
   ForeignKeyDetail,
   ReferencedByDetail,
   FilterConfig,
-  SortConfig,
-  DeployedApiDto,
-  TestDeployedApiResponse
+  SortConfig
 } from './dynamic-api.service';
 import { environment } from '../../../environments/environment';
 
@@ -389,110 +387,6 @@ export class ApiGenerated {
     return cols;
   });
 
-  // ── Deployed API State ──
-
-  /** List of deployed APIs for the current workspace */
-  readonly deployedApis = signal<DeployedApiDto[]>([]);
-  readonly loadingDeployed = signal(false);
-  readonly deployError = signal('');
-  readonly deploySuccess = signal('');
-
-  /** Active test tab: 'table' | 'json' */
-  readonly testViewTab = signal<'table' | 'json'>('table');
-
-  /** Currently selected deployed API for testing */
-  readonly selectedDeployedApi = signal<DeployedApiDto | null>(null);
-
-  /** Test results */
-  readonly testResults = signal<TestDeployedApiResponse | null>(null);
-  readonly testLoading = signal(false);
-  readonly testError = signal('');
-
-  /** Deploy the current configuration as a reusable API */
-  deployApi(): void {
-    const wsId = this.workspaceId();
-    const objName = this.selectedObject();
-    if (!wsId || !objName) return;
-
-    this.deployError.set('');
-    this.deploySuccess.set('');
-
-    const req = {
-      workspaceId: wsId,
-      objectName: objName,
-      selectColumns: this.selectList().length > 0 ? this.selectList().join(',') : undefined,
-      filters: this.filters().length > 0 && this.filters()[0].column
-        ? JSON.stringify(this.filters().filter(f => f.column))
-        : undefined,
-      sorts: this.sorts().length > 0 && this.sorts()[0].column
-        ? JSON.stringify(this.sorts().filter(s => s.column))
-        : undefined,
-      pageSize: this.pageSize()
-    };
-
-    this.dynamicApi.deployApi(req).subscribe({
-      next: () => {
-        this.deploySuccess.set(`API "${objName} API" deployed successfully!`);
-        this.loadDeployedApis(wsId);
-      },
-      error: (err) => {
-        this.deployError.set('Deploy failed: ' + (err.error?.message ?? err.message));
-      }
-    });
-  }
-
-  /** Load deployed APIs for the current workspace */
-  loadDeployedApis(workspaceId: string): void {
-    this.loadingDeployed.set(true);
-    this.dynamicApi.listDeployedApis(workspaceId).subscribe({
-      next: (apis) => {
-        this.deployedApis.set(apis);
-        this.loadingDeployed.set(false);
-      },
-      error: () => this.loadingDeployed.set(false)
-    });
-  }
-
-  /** Delete a deployed API */
-  deleteDeployedApi(id: string): void {
-    if (!confirm('Delete this deployed API?')) return;
-    this.dynamicApi.deleteDeployedApi(id).subscribe({
-      next: () => {
-        this.deployedApis.update(apis => apis.filter(a => a.id !== id));
-        if (this.selectedDeployedApi()?.id === id) {
-          this.selectedDeployedApi.set(null);
-          this.testResults.set(null);
-        }
-      }
-    });
-  }
-
-  /** Select and test a deployed API */
-  selectAndTest(api: DeployedApiDto): void {
-    this.selectedDeployedApi.set(api);
-    this.testResults.set(null);
-    this.testError.set('');
-    this.testLoading.set(true);
-
-    this.dynamicApi.testDeployedApi(api.id).subscribe({
-      next: (res) => {
-        this.testResults.set(res);
-        this.testLoading.set(false);
-      },
-      error: (err) => {
-        this.testError.set('Test failed: ' + (err.error?.message ?? err.message));
-        this.testLoading.set(false);
-      }
-    });
-  }
-
-  /** Get column keys from test results */
-  getTestColumns(): string[] {
-    const data = this.testResults()?.data;
-    if (!data || data.length === 0) return [];
-    return Object.keys(data[0]);
-  }
-
   /** Generate a JSON example body for POST/PUT from the selected object's columns */
   readonly bodyTemplate = computed<string>(() => {
     const meta = this.selectedMetadata();
@@ -616,12 +510,11 @@ export class ApiGenerated {
   // ── Load Data ──
 
   constructor() {
-    // Auto-load schema and deployed APIs when workspace changes
+    // Auto-load schema when workspace changes
     effect(() => {
       const wsId = this.workspaceId();
       if (wsId) {
         this.loadSchemaObjects(wsId);
-        this.loadDeployedApis(wsId);
       }
     });
   }

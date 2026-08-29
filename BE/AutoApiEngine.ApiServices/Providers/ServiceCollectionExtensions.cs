@@ -16,6 +16,7 @@ namespace AutoApiEngine.ApiServices.Providers
             services.Configure<KeyclockSettings>(config.GetSection("KeyClock"));
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
+            services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
             services.AddScoped(typeof(KeycloakService));
             services.AddScoped<IOrganizationRepository, OrganizationRepository>();
 
@@ -48,7 +49,7 @@ namespace AutoApiEngine.ApiServices.Providers
             // ── AI Assistant (local Ollama or any OpenAI-compatible API) ──
             //
             // AiAssistantService is registered directly as IAiAssistantService.
-            // It loads system instructions from opencode/system-instructions.md
+            // It loads system instructions from Prompts/db-copilot-instructions.md
             // and uses the configured AI provider for completions with tool calling.
 
             services.Configure<AiSettings>(config.GetSection("Ai"));
@@ -98,7 +99,7 @@ namespace AutoApiEngine.ApiServices.Providers
 
             // ── Deployed API service ──
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
-            services.AddScoped<IDeployedApiService, DeployedApiService>();
+           
 
             return services;
         }

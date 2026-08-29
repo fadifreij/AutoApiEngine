@@ -14,8 +14,8 @@ namespace AutoApiEngine.ServiceAbstraction.DTO
         ///   <c>"Ollama"</c> (default) — local Ollama server via <c>OpenRouterAiSettings</c>
         ///   <c>"OpenRouter"</c> — external OpenAI-compatible API via <c>OpenRouterAiSettings</c>
         ///
-        /// System instructions are loaded from <c>opencode/system-instructions.md</c>
-        /// at startup and cached, making the AI assistant portable.
+        /// System instructions are loaded from <c>Prompts/db-copilot-instructions.md</c>
+        /// at startup and cached.
         /// </summary>
         public string Provider { get; set; } = "Ollama";
     }

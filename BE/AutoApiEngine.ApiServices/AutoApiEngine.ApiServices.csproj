@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.5" />
     <PackageReference Include="MySql.EntityFrameworkCore" Version="10.0.7" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5">
@@ -23,6 +23,12 @@
     <ProjectReference Include="..\AutoApiEngine.Persistence\AutoApiEngine.Persistence.csproj" />
     <ProjectReference Include="..\AutoApiEngine.Presentation\AutoApiEngine.Presentation.csproj" />
     <ProjectReference Include="..\AutoApiEngine.Services\AutoApiEngine.Services.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Prompts\db-copilot-instructions.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

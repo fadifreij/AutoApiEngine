@@ -15,9 +15,9 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
     /// API) with MCP-style tool calling to let the AI dynamically discover database schema
     /// and inspect data instead of pre-loading all schema context into the prompt.
     ///
-    /// System instructions are loaded from <c>opencode/system-instructions.md</c> at startup
-    /// and cached. This makes the AI assistant portable — just copy the opencode/ folder
-    /// with instruction MD files to a new environment.
+    /// System instructions are loaded from the backend prompt file
+    /// <c>Prompts/db-copilot-instructions.md</c> at startup and cached. Edit that file to
+    /// change the assistant's behavior; it is deployed next to the application.
     ///
     /// Supports DDL operations (CREATE, ALTER, DROP, INSERT, UPDATE, DELETE) with
     /// user confirmation via the execute_write tool.
@@ -34,7 +34,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         // Max rounds of tool calls to prevent infinite loops
         private const int MaxToolRounds = 5;
 
-        // Cached system instructions loaded from opencode/system-instructions.md
+        // Cached system instructions loaded from Prompts/db-copilot-instructions.md
         private static string? _cachedInstructions;
         private static readonly object InstructionsLock = new();
 
@@ -87,7 +87,8 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     Temperature = _settings.Temperature,
                     MaxTokens = _settings.MaxTokens,
                     Stream = false,
-                    Tools = tools
+                    Tools = tools,
+                    KeepAlive = string.IsNullOrWhiteSpace(_settings.KeepAlive) ? null : _settings.KeepAlive
                 };
 
                 ChatCompletionResponse? completion;
@@ -160,6 +161,15 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                         messages.Add(new ChatMessage("tool", result, toolCall.Id));
                     }
                     // Continue loop for next round
+                    continue;
+                }
+
+                // JSON fallback: model emitted a tool call as text instead of tool_calls.
+                var fallback = await TryExecuteJsonFallbackToolCallAsync(
+                    choice.Message.Content, databaseName!, engine!.Value, connectionString!, cancellationToken);
+                if (fallback.Handled)
+                {
+                    messages.Add(new ChatMessage("user", $"[Tool result: {fallback.ToolName}]\n{fallback.Result}"));
                     continue;
                 }
 
@@ -242,7 +252,8 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 Messages = messages,
                 Temperature = _settings.Temperature,
                 MaxTokens = _settings.MaxTokens,
-                Stream = true
+                Stream = true,
+                KeepAlive = string.IsNullOrWhiteSpace(_settings.KeepAlive) ? null : _settings.KeepAlive
             };
 
             // Phase 1: Open the HTTP connection (no yield — catch is allowed here).
@@ -330,7 +341,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
         /// <summary>
         /// Builds the system prompt by loading instructions from
-        /// <c>opencode/system-instructions.md</c> and prepending the database context
+        /// <c>Prompts/db-copilot-instructions.md</c> and prepending the database context
         /// prefix (engine + database name). Instructions are cached after first load.
         /// </summary>
         private string BuildSystemPromptWithInstructions(DatabaseEngine engine, string databaseName)
@@ -341,9 +352,9 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         }
 
         /// <summary>
-        /// Loads and caches the DB Copilot system instructions from
-        /// <c>opencode/system-instructions.md</c>. Falls back to an embedded copy if the file
-        /// cannot be found, so the assistant always knows the tool-call protocol.
+        /// Loads and caches the DB Copilot system instructions from the backend prompt file
+        /// <c>Prompts/db-copilot-instructions.md</c> (copied next to the app at build time).
+        /// This file is the single source of truth for the assistant's behavior.
         /// </summary>
         private static string GetSystemInstructions()
         {
@@ -353,35 +364,36 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             {
                 if (_cachedInstructions != null) return _cachedInstructions;
 
-                try
+                var path = ResolveInstructionsPath();
+                if (string.IsNullOrEmpty(path))
                 {
-                    var path = ResolveInstructionsPath();
-                    if (!string.IsNullOrEmpty(path))
-                    {
-                        _cachedInstructions = File.ReadAllText(path);
-                        return _cachedInstructions;
-                    }
-                }
-                catch
-                {
-                    // Fall through to embedded fallback
+                    throw new InvalidOperationException(
+                        "Could not locate the DB Copilot prompt file 'Prompts/db-copilot-instructions.md'. " +
+                        "Ensure it is deployed next to the application (CopyToOutputDirectory=PreserveNewest).");
                 }
 
-                _cachedInstructions = FallbackInstructions;
+                _cachedInstructions = File.ReadAllText(path);
                 return _cachedInstructions;
             }
         }
 
         /// <summary>
-        /// Locates <c>system-instructions.md</c>: walks up from the app base directory
-        /// looking for <c>opencode/system-instructions.md</c>. Returns empty string if not found.
+        /// Locates <c>Prompts/db-copilot-instructions.md</c>: checks the app base directory first
+        /// (where it is copied at build time), then walks up the tree to find the source file
+        /// under <c>AutoApiEngine.ApiServices/Prompts</c> when running from a dev layout.
+        /// Returns an empty string if it cannot be found.
         /// </summary>
         private static string ResolveInstructionsPath()
         {
+            const string fileName = "db-copilot-instructions.md";
+
+            var baseCandidate = Path.Combine(AppContext.BaseDirectory, "Prompts", fileName);
+            if (File.Exists(baseCandidate)) return baseCandidate;
+
             var current = AppContext.BaseDirectory;
             for (int i = 0; i < 8 && current != null; i++)
             {
-                var candidate = Path.Combine(current, "opencode", "system-instructions.md");
+                var candidate = Path.Combine(current, "AutoApiEngine.ApiServices", "Prompts", fileName);
                 if (File.Exists(candidate)) return candidate;
                 current = Path.GetDirectoryName(current);
             }
@@ -407,59 +419,6 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
             return $"[Workspace Database: {engineName} / {databaseName}] — Use the database tools to query this database. All SQL must use {engineName} syntax.";
         }
-
-        /// <summary>
-        /// Minimal embedded copy of the DB Copilot protocol used only when
-        /// system-instructions.md cannot be located on disk.
-        /// </summary>
-        private const string FallbackInstructions = """
-You are "DB Copilot", an expert database assistant embedded in a SQL Query Studio.
-Every user message includes a context line such as `[Workspace Database: MySQL / employees_db]`
-telling you the database engine and name. Work ONLY inside that database and use its SQL dialect.
-
-CRITICAL RULES:
-1. You do NOT have the data in memory. NEVER invent table names, column names, row counts, or results.
-2. To answer ANY question about the schema or data you MUST call a tool and wait for its result.
-3. You are connected to ONE database only. Never use USE or switch databases.
-4. Be direct and concise. Do NOT explain what you're going to do before doing it. Do NOT say "I will first run a query" or "Let me check" — just call the tool immediately. After getting the result, provide the answer directly without restating what you did. Only provide explanations if the user explicitly asks for them.
-
-To call a tool, reply with ONLY a single fenced JSON block and no other text:
-```json
-{"tool": "TOOL_NAME", "arguments": { ...arguments... }}
-```
-
-Available tools:
-- list_tables — {} — list all table names
-- describe_table — {"table_name": "employees"} — columns, types, keys
-- search_schema — {"query": "employee"} — find tables/views/columns
-- list_views — {} — list views
-- list_routines — {} — list stored procedures and functions
-- execute_query — {"sql": "SELECT COUNT(*) FROM employees"} — run a read-only SELECT
-- execute_write — {"sql": "..."} — INSERT/UPDATE/DELETE/CREATE/ALTER/DROP/TRUNCATE
-
-To count rows in a table, reply with ONLY:
-```json
-{"tool": "execute_query", "arguments": {"sql": "SELECT COUNT(*) AS total FROM employees"}}
-```
-Then read the returned count and give a concise final answer in markdown.
-
-For data queries like "show me all products under $300", directly call:
-```json
-{"tool": "execute_query", "arguments": {"sql": "SELECT * FROM Products WHERE price < 300"}}
-```
-Then present the results. No preamble, no "I will run a query", just the answer.
-
-For INSERT/UPDATE/DELETE/DDL: first inspect the schema, then show the SQL in a ```sql block and
-ask the user to confirm with "yes" before calling execute_write. Always include WHERE on DELETE/UPDATE.
-Dialect: SQL Server uses TOP N and [brackets]; MySQL uses LIMIT N and `backticks`;
-PostgreSQL uses LIMIT N and "double quotes"; SQLite uses LIMIT N.
-
-Response Style:
-- Direct answers first. Start with the result, not your process.
-- No narration. Don't say "I'll query the database" — just query it.
-- Concise. Unless the user asks for explanation, keep responses brief and factual.
-- Show data, not verbs. Instead of "I found 5 products under $300", say "Here are the products under $300:" followed by the data.
-""";
 
         // ── Helpers ──
 
@@ -506,6 +465,32 @@ Response Style:
                 _logger.LogError(ex, "Tool call '{Name}' failed", fn.Name);
                 return $"Error executing '{fn.Name}': {ex.Message}";
             }
+        }
+
+        /// <summary>
+        /// Handles the case where a (typically small) model emits a tool call as plain text /
+        /// JSON — e.g. <c>{"tool":"execute_query","arguments":{...}}</c> — instead of a native
+        /// <c>tool_calls</c> array. Parses the JSON fallback documented in the system prompt,
+        /// executes the tool, and reports the result so the tool loop can continue.
+        /// Returns <c>Handled = false</c> when the content is not a recognizable tool call.
+        /// </summary>
+        private async Task<(bool Handled, string ToolName, string Result, bool DbChanged)> TryExecuteJsonFallbackToolCallAsync(
+            string? content, string databaseName, DatabaseEngine engine, string connectionString,
+            CancellationToken cancellationToken)
+        {
+            if (!AiPromptBuilder.TryParseJsonToolCall(content, out var toolName, out var argumentsJson))
+                return (false, string.Empty, string.Empty, false);
+
+            var syntheticCall = new ToolCall
+            {
+                Id = $"call_{Guid.NewGuid():N}",
+                Function = new FunctionCall { Name = toolName, Arguments = argumentsJson }
+            };
+
+            var result = await ExecuteToolCallAsync(syntheticCall, databaseName, engine, connectionString, cancellationToken);
+            var dbChanged = toolName.Equals("execute_write", StringComparison.OrdinalIgnoreCase)
+                            && result.StartsWith("Success:", StringComparison.OrdinalIgnoreCase);
+            return (true, toolName, result, dbChanged);
         }
 
         private async Task<string> ExecuteWriteAsync(
@@ -611,7 +596,8 @@ Response Style:
                     Temperature = _settings.Temperature,
                     MaxTokens = _settings.MaxTokens,
                     Stream = false,
-                    Tools = tools
+                    Tools = tools,
+                    KeepAlive = string.IsNullOrWhiteSpace(_settings.KeepAlive) ? null : _settings.KeepAlive
                 };
 
                 ChatCompletionResponse? completion;
@@ -662,6 +648,15 @@ Response Style:
                     continue;
                 }
 
+                // JSON fallback: model emitted a tool call as text instead of tool_calls.
+                var fallback = await TryExecuteJsonFallbackToolCallAsync(
+                    choice.Message.Content, databaseName, engine, connectionString, cancellationToken);
+                if (fallback.Handled)
+                {
+                    messages.Add(new ChatMessage("user", $"[Tool result: {fallback.ToolName}]\n{fallback.Result}"));
+                    continue;
+                }
+
                 // Final answer with tool calls — return here for AssistAsync (which doesn't stream).
                 return new ToolRoundResult { FinalMessage = choice.Message };
             }
@@ -690,7 +685,8 @@ Response Style:
                     Temperature = _settings.Temperature,
                     MaxTokens = _settings.MaxTokens,
                     Stream = false,
-                    Tools = tools
+                    Tools = tools,
+                    KeepAlive = string.IsNullOrWhiteSpace(_settings.KeepAlive) ? null : _settings.KeepAlive
                 };
 
                 ChatCompletionResponse? completion;
@@ -742,6 +738,17 @@ Response Style:
                             dbChanged = true;
                         }
                     }
+                    continue;
+                }
+
+                // JSON fallback: model emitted a tool call as text instead of tool_calls.
+                var fallback = await TryExecuteJsonFallbackToolCallAsync(
+                    choice.Message.Content, databaseName, engine, connectionString, cancellationToken);
+                if (fallback.Handled)
+                {
+                    messages.Add(new ChatMessage("assistant", choice.Message.Content ?? string.Empty));
+                    messages.Add(new ChatMessage("user", $"[Tool result: {fallback.ToolName}]\n{fallback.Result}"));
+                    if (fallback.DbChanged) dbChanged = true;
                     continue;
                 }
 

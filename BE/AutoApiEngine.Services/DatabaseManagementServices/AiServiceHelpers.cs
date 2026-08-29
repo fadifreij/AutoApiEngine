@@ -22,6 +22,14 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         [JsonPropertyName("stream")] public bool Stream { get; set; }
         [JsonPropertyName("tools")] [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<ToolDefinition>? Tools { get; set; }
+
+        /// <summary>
+        /// Ollama-specific extension: how long to keep the model loaded in memory after the
+        /// request (e.g. "30m", or "-1" to keep it resident indefinitely). Prevents the
+        /// multi-second model reload cost between turns. Ignored by OpenAI/OpenRouter.
+        /// </summary>
+        [JsonPropertyName("keep_alive")] [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? KeepAlive { get; set; }
     }
 
     /// <summary>
@@ -332,6 +340,117 @@ D) Stored procedure / function execution (EXEC / CALL):
             messages.Add(new ChatMessage("user", userContent.ToString()));
 
             return messages;
+        }
+
+        /// <summary>
+        /// The set of tool names the assistant is allowed to call. Used to validate
+        /// JSON fallback tool-calls so ordinary JSON in an answer is not misread as a call.
+        /// </summary>
+        private static readonly HashSet<string> KnownToolNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "list_tables", "describe_table", "search_schema", "list_views",
+            "list_routines", "execute_query", "execute_write"
+        };
+
+        /// <summary>
+        /// Attempts to parse a JSON fallback tool-call from an assistant text response of the
+        /// form <c>{"tool": "execute_query", "arguments": { ... }}</c> (optionally wrapped in a
+        /// ```json code fence and surrounded by prose). Small models frequently emit tool calls
+        /// as text instead of a native <c>tool_calls</c> array, so this lets the tool loop still
+        /// execute them. Returns true and populates <paramref name="toolName"/> /
+        /// <paramref name="argumentsJson"/> when a valid, known tool call is found.
+        /// </summary>
+        public static bool TryParseJsonToolCall(string? content, out string toolName, out string argumentsJson)
+        {
+            toolName = string.Empty;
+            argumentsJson = "{}";
+            if (string.IsNullOrWhiteSpace(content)) return false;
+
+            foreach (var candidate in ExtractJsonObjects(content))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(candidate);
+                    var root = doc.RootElement;
+                    if (root.ValueKind != JsonValueKind.Object) continue;
+
+                    // Accept either {"tool": "..."} or {"name": "..."} for the tool name,
+                    // and either "arguments" or "parameters" for the payload.
+                    var name =
+                        (root.TryGetProperty("tool", out var t) && t.ValueKind == JsonValueKind.String) ? t.GetString() :
+                        (root.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String) ? n.GetString() :
+                        null;
+
+                    if (string.IsNullOrWhiteSpace(name) || !KnownToolNames.Contains(name)) continue;
+
+                    JsonElement argsEl;
+                    if ((root.TryGetProperty("arguments", out argsEl) || root.TryGetProperty("parameters", out argsEl))
+                        && argsEl.ValueKind == JsonValueKind.Object)
+                    {
+                        argumentsJson = argsEl.GetRawText();
+                    }
+                    else
+                    {
+                        argumentsJson = "{}";
+                    }
+
+                    toolName = name!;
+                    return true;
+                }
+                catch (JsonException)
+                {
+                    // Not valid JSON; try the next candidate.
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Yields balanced top-level <c>{ ... }</c> substrings from arbitrary text, ignoring
+        /// braces that appear inside JSON string literals. Used to find embedded tool-call JSON.
+        /// </summary>
+        private static IEnumerable<string> ExtractJsonObjects(string text)
+        {
+            int depth = 0;
+            int start = -1;
+            bool inString = false;
+            bool escape = false;
+
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+
+                if (inString)
+                {
+                    if (escape) escape = false;
+                    else if (c == '\\') escape = true;
+                    else if (c == '"') inString = false;
+                    continue;
+                }
+
+                switch (c)
+                {
+                    case '"':
+                        inString = true;
+                        break;
+                    case '{':
+                        if (depth == 0) start = i;
+                        depth++;
+                        break;
+                    case '}':
+                        if (depth > 0)
+                        {
+                            depth--;
+                            if (depth == 0 && start >= 0)
+                            {
+                                yield return text.Substring(start, i - start + 1);
+                                start = -1;
+                            }
+                        }
+                        break;
+                }
+            }
         }
 
         /// <summary>

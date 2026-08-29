@@ -163,65 +163,6 @@ export class DynamicApiService {
   }): string {
     return this.buildEndpointUrl(workspaceId, objectName) + this.buildQueryString(config);
   }
-
-  // ── Deployed API methods ──
-
-  /** Deploy (save) a new API configuration */
-  deployApi(request: DeployApiRequest): Observable<DeployedApiDto> {
-    return this.http.post<DeployedApiDto>(`${environment.apiUrl}/deployed`, request, {
-      withCredentials: true
-    });
-  }
-
-  /** List all deployed APIs for a workspace */
-  listDeployedApis(workspaceId: string): Observable<DeployedApiDto[]> {
-    return this.http.get<DeployedApiDto[]>(`${environment.apiUrl}/deployed/workspace/${workspaceId}`, {
-      withCredentials: true
-    });
-  }
-
-  /** Delete (soft) a deployed API */
-  deleteDeployedApi(id: string): Observable<{ message: string }> {
-    return this.http.delete<{ message: string }>(`${environment.apiUrl}/deployed/${id}`, {
-      withCredentials: true
-    });
-  }
-
-  /** Test a deployed API by executing it */
-  testDeployedApi(id: string): Observable<TestDeployedApiResponse> {
-    return this.http.get<TestDeployedApiResponse>(`${environment.apiUrl}/deployed/${id}/test`, {
-      withCredentials: true
-    });
-  }
-}
-
-// ── Deployed API DTOs ──
-
-export interface DeployApiRequest {
-  workspaceId: string;
-  objectName: string;
-  selectColumns?: string;
-  filters?: string;
-  sorts?: string;
-  pageSize: number;
-}
-
-export interface DeployedApiDto {
-  id: string;
-  workspaceId: string;
-  name: string;
-  objectName: string;
-  selectColumns?: string;
-  filters?: string;
-  sorts?: string;
-  pageSize: number;
-  isActive: boolean;
-  createdAt: string;
-}
-
-export interface TestDeployedApiResponse {
-  data: Record<string, any>[];
-  totalCount?: number;
 }
 
 // ── UI Configuration Models ──

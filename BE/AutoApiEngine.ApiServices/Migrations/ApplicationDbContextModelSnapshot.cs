@@ -19,7 +19,7 @@ namespace AutoApiEngine.ApiServices.Migrations
                 .HasAnnotation("ProductVersion", "10.0.7")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
-            modelBuilder.Entity("AutoApiEngine.Domain.Entities.DeployedApi", b =>
+            modelBuilder.Entity("AutoApiEngine.Domain.Entities.ApiKey", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -28,39 +28,33 @@ namespace AutoApiEngine.ApiServices.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<string>("Filters")
-                        .HasColumnType("longtext");
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime(6)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(250)
                         .HasColumnType("VARCHAR");
 
-                    b.Property<string>("ObjectName")
-                        .IsRequired()
-                        .HasMaxLength(250)
-                        .HasColumnType("VARCHAR");
-
-                    b.Property<int>("PageSize")
-                        .HasColumnType("int");
-
-                    b.Property<string>("SelectColumns")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("Sorts")
-                        .HasColumnType("longtext");
-
-                    b.Property<Guid>("WorkspaceId")
+                    b.Property<Guid>("OrganizationId")
                         .HasColumnType("char(36)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("WorkspaceId");
+                    b.HasIndex("OrganizationId");
 
-                    b.ToTable("DeployedApis");
+                    b.ToTable("ApiKeys");
                 });
 
             modelBuilder.Entity("AutoApiEngine.Domain.Entities.Organization", b =>
@@ -300,15 +294,15 @@ namespace AutoApiEngine.ApiServices.Migrations
                     b.ToTable("Workspaces");
                 });
 
-            modelBuilder.Entity("AutoApiEngine.Domain.Entities.DeployedApi", b =>
+            modelBuilder.Entity("AutoApiEngine.Domain.Entities.ApiKey", b =>
                 {
-                    b.HasOne("AutoApiEngine.Domain.Entities.Workspace", "Workspace")
+                    b.HasOne("AutoApiEngine.Domain.Entities.Organization", "Organization")
                         .WithMany()
-                        .HasForeignKey("WorkspaceId")
+                        .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Workspace");
+                    b.Navigation("Organization");
                 });
 
             modelBuilder.Entity("AutoApiEngine.Domain.Entities.Organization", b =>
