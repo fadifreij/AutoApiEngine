@@ -53,5 +53,31 @@ namespace AutoApiEngine.ServiceAbstraction
             string objectName,
             string objectType,  // "Table", "View", "StoredProcedure", "Function"
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Retrieves the declared parameters of a stored procedure or function in
+        /// declaration order. Views return an empty list (no parameter catalog rows).
+        /// SQL Server: <c>sys.parameters</c> (+ <c>sys.types</c> for the type name).
+        /// MySQL: <c>information_schema.PARAMETERS</c>.
+        /// </summary>
+        Task<List<RoutineParameterDto>> GetRoutineParametersAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            string schema,
+            string objectName,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Returns the SQL definition (body) of a single stored procedure. Used for
+        /// HTTP-verb classification; returns an empty string when unavailable.
+        /// </summary>
+        Task<string> GetRoutineDefinitionAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            string schema,
+            string objectName,
+            CancellationToken cancellationToken = default);
     }
 }

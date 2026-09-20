@@ -74,5 +74,35 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 _ => _sqlExplorer.GetObjectDdlAsync(databaseName, engine, connectionString, objectName, objectType, cancellationToken)
             };
         }
+
+        public Task<List<RoutineParameterDto>> GetRoutineParametersAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            string schema,
+            string objectName,
+            CancellationToken cancellationToken = default)
+        {
+            return engine switch
+            {
+                DatabaseEngine.MySql => _mySqlExplorer.GetRoutineParametersAsync(databaseName, engine, connectionString, schema, objectName, cancellationToken),
+                _ => _sqlExplorer.GetRoutineParametersAsync(databaseName, engine, connectionString, schema, objectName, cancellationToken)
+            };
+        }
+
+        public Task<string> GetRoutineDefinitionAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            string schema,
+            string objectName,
+            CancellationToken cancellationToken = default)
+        {
+            return engine switch
+            {
+                DatabaseEngine.MySql => _mySqlExplorer.GetRoutineDefinitionAsync(databaseName, engine, connectionString, schema, objectName, cancellationToken),
+                _ => _sqlExplorer.GetRoutineDefinitionAsync(databaseName, engine, connectionString, schema, objectName, cancellationToken)
+            };
+        }
     }
 }

@@ -280,6 +280,110 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             };
         }
 
+        /// <summary>
+        /// Retrieves the declared parameters of a stored procedure or function from
+        /// sys.parameters (joined with sys.types for the type name). Views have no
+        /// sys.parameters rows, so they naturally return an empty list. The synthetic
+        /// @RETURN_VALUE row (parameter_id = 0) is skipped.
+        /// </summary>
+        public async Task<List<RoutineParameterDto>> GetRoutineParametersAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            string schema,
+            string objectName,
+            CancellationToken cancellationToken = default)
+        {
+            var targetConn = string.IsNullOrWhiteSpace(connectionString) ? _appConnectionString : connectionString;
+            var csb = new SqlConnectionStringBuilder(targetConn)
+            {
+                InitialCatalog = databaseName
+            };
+
+            await using var connection = new SqlConnection(csb.ConnectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            const string sql = @"
+                SELECT p.name AS Name,
+                       t.name AS DataType,
+                       p.is_output AS IsOutput,
+                       p.has_default_value AS HasDefault,
+                       p.default_value AS DefaultValue,
+                       p.parameter_id AS OrdinalPosition
+                FROM sys.parameters p
+                JOIN sys.objects o ON o.object_id = p.object_id
+                JOIN sys.schemas s ON s.schema_id = o.schema_id
+                LEFT JOIN sys.types t ON t.user_type_id = p.user_type_id
+                WHERE s.name = @Schema AND o.name = @ObjectName
+                ORDER BY p.parameter_id;";
+
+            var result = new List<RoutineParameterDto>();
+
+            await using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@Schema", schema);
+            cmd.Parameters.AddWithValue("@ObjectName", objectName);
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var ordinalPosition = reader.GetInt32(5);
+
+                // Skip the synthetic @RETURN_VALUE row (parameter_id = 0).
+                if (ordinalPosition <= 0)
+                    continue;
+
+                // SQL Server has no true INOUT parameters; is_output -> OUT, else IN.
+                var isOutput = !reader.IsDBNull(2) && reader.GetBoolean(2);
+
+                result.Add(new RoutineParameterDto
+                {
+                    Name = reader.GetString(0),
+                    DataType = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                    ParameterMode = isOutput ? "OUT" : "IN",
+                    HasDefault = !reader.IsDBNull(3) && reader.GetBoolean(3),
+                    DefaultValue = reader.IsDBNull(4) ? null : Convert.ToString(reader[4]),
+                    OrdinalPosition = ordinalPosition
+                });
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Returns the SQL definition (body) of a single stored procedure via
+        /// OBJECT_DEFINITION. Empty string when the object is not a procedure or
+        /// its definition is unavailable (e.g. encrypted).
+        /// </summary>
+        public async Task<string> GetRoutineDefinitionAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            string schema,
+            string objectName,
+            CancellationToken cancellationToken = default)
+        {
+            var targetConn = string.IsNullOrWhiteSpace(connectionString) ? _appConnectionString : connectionString;
+            var csb = new SqlConnectionStringBuilder(targetConn)
+            {
+                InitialCatalog = databaseName
+            };
+
+            await using var connection = new SqlConnection(csb.ConnectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            const string sql = @"
+                SELECT OBJECT_DEFINITION(o.object_id)
+                FROM sys.objects o
+                JOIN sys.schemas s ON s.schema_id = o.schema_id
+                WHERE s.name = @Schema AND o.name = @ObjectName AND o.type = 'P';";
+
+            await using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@Schema", schema);
+            cmd.Parameters.AddWithValue("@ObjectName", objectName);
+
+            return (await cmd.ExecuteScalarAsync(cancellationToken) as string) ?? string.Empty;
+        }
+
         // ---------------------------------------------------------------
         //  Helpers — Schema resolution
         // ---------------------------------------------------------------

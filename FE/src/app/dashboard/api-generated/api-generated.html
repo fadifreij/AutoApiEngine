@@ -486,20 +486,154 @@
             <button (click)="copyUrl(dynamicApi.buildEndpointUrl(workspaceId(), selectedObject()))">Copy</button>
           </div>
 
-          <div class="query-preview">
-            <div class="preview-header">
-              <span>Query String Preview</span>
-              <button (click)="copyUrl(dynamicApi.buildEndpointUrl(workspaceId(), selectedObject()) + computedQueryString())">
-                {{ copyFeedback() || 'Copy Full URL' }}
-              </button>
+          <!-- Table-oriented query preview (Tables + Views) — hidden for SPs/Functions which use routine params -->
+          @if (!hasRoutine(selectedMetadata())) {
+            <div class="query-preview">
+              <div class="preview-header">
+                <span>Query String Preview</span>
+                <button (click)="copyUrl(dynamicApi.buildEndpointUrl(workspaceId(), selectedObject()) + computedQueryString())">
+                  {{ copyFeedback() || 'Copy Full URL' }}
+                </button>
+              </div>
+              <div class="preview-code">{{ computedQueryString() || '(No query parameters)' }}</div>
+              <p class="field-hint" style="margin: 6px 0 0 0; font-size: 0.85rem;">
+                💡 Multiple values use repeated <code>&amp;key=value</code> syntax (e.g.
+                <code>?select=Id&amp;select=Name&amp;filter=status:eq:active</code>).
+                No URL-encoding needed — the UI uses <code>&amp;</code> separators, not <code>%2C</code> or <code>%3A</code>.
+              </p>
             </div>
-            <div class="preview-code">{{ computedQueryString() || '(No query parameters)' }}</div>
-            <p class="field-hint" style="margin: 6px 0 0 0; font-size: 0.85rem;">
-              💡 Multiple values use repeated <code>&amp;key=value</code> syntax (e.g.
-              <code>?select=Id&amp;select=Name&amp;filter=status:eq:active</code>).
-              No URL-encoding needed — the UI uses <code>&amp;</code> separators, not <code>%2C</code> or <code>%3A</code>.
-            </p>
-          </div>
+          }
+
+          <!-- Run panel: Views / Functions / Stored Procedures -->
+          @if (hasRoutine(selectedMetadata()) || isView(selectedMetadata())) {
+            <div class="run-panel">
+              <div class="run-panel-header">
+                <span class="run-panel-title">
+                  {{ hasRoutine(selectedMetadata()) ? 'Run Routine' : 'Query View' }}
+                </span>
+                @if (hasRoutine(selectedMetadata())) {
+                  <span class="method-badge {{ selectedMetadata()?.verb === 'POST' ? 'post' : 'get' }}">
+                    {{ selectedMetadata()?.verb ?? 'GET' }}
+                  </span>
+                }
+              </div>
+
+              @if ((selectedMetadata()?.parameters?.length ?? 0) > 0) {
+                <div class="run-params">
+                  @for (param of selectedMetadata()?.parameters ?? []; track param.name) {
+                    <div class="run-param-row">
+                      <label class="run-param-label">
+                        <span class="run-param-name">{{ param.name }}</span>
+                        <span class="run-param-type">{{ param.dataType }}</span>
+                        @if (param.parameterMode === 'OUT') {
+                          <span class="run-param-tag run-param-output">output</span>
+                        } @else if (param.hasDefault) {
+                          <span class="run-param-tag run-param-optional">optional</span>
+                        }
+                      </label>
+                      @if (param.parameterMode === 'OUT') {
+                        <span class="run-param-out-note">(read back after execution)</span>
+                      } @else {
+                        <input
+                          class="run-param-input"
+                          type="text"
+                          [placeholder]="param.hasDefault && param.defaultValue ? 'default: ' + param.defaultValue : 'value'"
+                          [(ngModel)]="runParamValues()[param.name]"
+                        />
+                      }
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="run-no-params">No input parameters — the routine runs as-is.</p>
+              }
+
+              <div class="run-actions">
+                <button class="btn-run" [disabled]="running()" (click)="runObject()">
+                  {{ running() ? 'Running…' : 'Run' }}
+                </button>
+                @let single = generatedUrls()[0];
+                @if (single) {
+                  <button class="btn-copy-url" (click)="copyUrl(single.fullUrl)" title="Copy the routine endpoint URL">Copy URL</button>
+                }
+                @if (running()) {
+                  <span class="loading-spinner"></span>
+                }
+              </div>
+
+              @if (runError()) {
+                <div class="run-error">{{ runError() }}</div>
+              }
+
+              @if (runResult()) {
+                <div class="run-response">
+                  <div class="run-response-title">Response</div>
+
+                  @if (hasResultSets(runResult())) {
+                    <div class="response-section">
+                      <div class="response-section-label">Result Sets</div>
+                      <div class="response-resultset">
+                        @for (row of runResult()?.resultSets; track $index) {
+                          <table class="response-table">
+                            <caption class="response-row-caption">Row {{ $index + 1 }}</caption>
+                            <tbody>
+                              @for (col of row | keyvalue; track col.key) {
+                                <tr>
+                                  <td class="response-key">{{ col.key }}</td>
+                                  <td class="response-value">{{ col.value }}</td>
+                                </tr>
+                              } @empty {
+                                <tr><td class="response-empty" colspan="2">(empty row)</td></tr>
+                              }
+                            </tbody>
+                          </table>
+                        } @empty {
+                          <div class="response-empty">(empty result set)</div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  @if (hasOutputParams(runResult())) {
+                    <div class="response-section">
+                      <div class="response-section-label">Output Parameters</div>
+                      <table class="response-table">
+                        <tbody>
+                          @for (entry of runResult()?.outputParams | keyvalue; track entry.key) {
+                            <tr>
+                              <td class="response-key">{{ entry.key }}</td>
+                              <td class="response-value">{{ entry.value }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  }
+
+                  @if ((runResult()?.rowsAffected ?? 0) !== 0) {
+                    <div class="response-section">
+                      <div class="response-section-label">Rows Affected</div>
+                      <div class="response-rowcount">{{ runResult()?.rowsAffected }}</div>
+                    </div>
+                  }
+
+                  @if (hasData(runResult())) {
+                    <div class="response-section">
+                      <div class="response-section-label">Data</div>
+                      <pre class="response-json">{{ runResult() | json }}</pre>
+                    </div>
+                  }
+
+                  @if (showRawResponse(runResult())) {
+                    <div class="response-section">
+                      <div class="response-section-label">Raw Response</div>
+                      <pre class="response-json">{{ runResult() | json }}</pre>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
 
           @for (ep of generatedUrls(); track ep.method + ep.path) {
             <div class="endpoint-card">

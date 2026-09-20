@@ -288,6 +288,95 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             return string.Empty;
         }
 
+        /// <summary>
+        /// Retrieves the declared parameters of a stored procedure or function from
+        /// information_schema.PARAMETERS. Views have no parameter rows, so they
+        /// naturally return an empty list. The first row of a function is the RETURN
+        /// row whose PARAMETER_NAME is NULL — rows with a null/empty name are skipped.
+        /// MySQL exposes no default-value metadata, so HasDefault/DefaultValue are stubbed.
+        /// </summary>
+        public async Task<List<RoutineParameterDto>> GetRoutineParametersAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            string schema,
+            string objectName,
+            CancellationToken cancellationToken = default)
+        {
+            var connStr = string.IsNullOrWhiteSpace(connectionString)
+                ? $"{_mySqlConnection};Database={databaseName}"
+                : $"{connectionString};Database={databaseName}";
+
+            await using var connection = new MySqlConnection(connStr);
+            await connection.OpenAsync(cancellationToken);
+
+            const string sql = @"
+                SELECT PARAMETER_NAME AS Name,
+                       DTD_IDENTIFIER AS DataType,
+                       COALESCE(PARAMETER_MODE, 'IN') AS Mode,
+                       ORDINAL_POSITION AS OrdinalPosition
+                FROM information_schema.PARAMETERS
+                WHERE SPECIFIC_SCHEMA = @Schema AND SPECIFIC_NAME = @ObjectName
+                ORDER BY ORDINAL_POSITION;";
+
+            var result = new List<RoutineParameterDto>();
+
+            await using var cmd = new MySqlCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@Schema", schema);
+            cmd.Parameters.AddWithValue("@ObjectName", objectName);
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                // Skip the RETURN row of functions (PARAMETER_NAME is NULL for it).
+                var name = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+
+                result.Add(new RoutineParameterDto
+                {
+                    Name = name,
+                    DataType = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                    ParameterMode = reader.IsDBNull(2) ? "IN" : reader.GetString(2),
+                    HasDefault = false,
+                    DefaultValue = null,
+                    OrdinalPosition = reader.GetInt32(3)
+                });
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Returns the SQL definition (body) of a single stored procedure from
+        /// information_schema.ROUTINES. Empty string when unavailable.
+        /// </summary>
+        public async Task<string> GetRoutineDefinitionAsync(
+            string databaseName,
+            DatabaseEngine engine,
+            string connectionString,
+            string schema,
+            string objectName,
+            CancellationToken cancellationToken = default)
+        {
+            var connStr = string.IsNullOrWhiteSpace(connectionString)
+                ? $"{_mySqlConnection};Database={databaseName}"
+                : $"{connectionString};Database={databaseName}";
+
+            await using var connection = new MySqlConnection(connStr);
+            await connection.OpenAsync(cancellationToken);
+
+            const string sql = @"
+                SELECT ROUTINE_DEFINITION FROM information_schema.ROUTINES
+                WHERE ROUTINE_SCHEMA = @Schema AND ROUTINE_NAME = @ObjectName;";
+
+            await using var cmd = new MySqlCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@Schema", schema);
+            cmd.Parameters.AddWithValue("@ObjectName", objectName);
+
+            return (await cmd.ExecuteScalarAsync(cancellationToken) as string) ?? string.Empty;
+        }
+
         private static MySqlCommand BuildCommand(MySqlConnection connection, string sql, Dictionary<string, object>? parameters)
         {
             var cmd = connection.CreateCommand();

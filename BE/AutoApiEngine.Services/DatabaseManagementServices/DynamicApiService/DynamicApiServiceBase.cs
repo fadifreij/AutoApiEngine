@@ -1,4 +1,3 @@
-using System.Data;
 using System.Data.Common;
 using System.Text;
 using System.Text.Json;
@@ -6,43 +5,150 @@ using AutoApiEngine.Domain.Entities;
 using AutoApiEngine.Domain.Enums;
 using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.ServiceAbstraction.DTO;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Data.SqlClient;
 using MySql.Data.MySqlClient;
 
 namespace AutoApiEngine.Services.DatabaseManagementServices
 {
     /// <summary>
-    /// Core implementation of <see cref="IDynamicApiService"/>.
-    /// Dynamically builds and executes parameterized SQL for any database object,
-    /// supporting filtering, sorting, paging, and related-table expansion.
+    /// Abstract, dialect-agnostic implementation of <see cref="IDynamicApiService"/>.
+    /// Contains all shared orchestration (CRUD flow, SQL builders, query execution)
+    /// and delegates every database-specific concern to abstract dialect hooks.
+    ///
+    /// Per-database subclasses (<see cref="SqlServerDynamicApiService"/>,
+    /// <see cref="MySqlDynamicApiService"/>) implement the hooks; a
+    /// <see cref="DynamicApiServiceResolver"/> dispatches calls by engine.
     /// </summary>
-    public class DynamicApiService : IDynamicApiService
+    public abstract class DynamicApiServiceBase : IDynamicApiService
     {
         private readonly IWorkspaceRepository _workspaceRepository;
         private readonly IForeignKeyService _foreignKeyService;
-        private readonly IConfiguration _configuration;
-        private readonly ILogger<DynamicApiService> _logger;
+        private readonly ILogger _logger;
 
         private const int MaxInValues = 100;
         private const int MaxPageSize = 1000;
         private const int DefaultPageSize = 100;
 
-        public DynamicApiService(
+        // ─────────────────────────────────────────────────────────────────
+        //  Nested metadata records (kept internal so DynamicApiMetadataService
+        //  and the resolver can reference them; nested to avoid the CS0101
+        //  collision with the legacy namespace-level records of the same name).
+        // ─────────────────────────────────────────────────────────────────
+
+        protected internal record ColumnInfo(string Name, string DataType, bool IsNullable, bool IsPrimaryKey, bool IsIdentity);
+
+        protected internal record TableMetadata(
+            string Schema,
+            string TableName,
+            Dictionary<string, ColumnInfo> Columns,
+            List<string> PrimaryKeyColumns
+        );
+
+        protected DynamicApiServiceBase(
             IWorkspaceRepository workspaceRepository,
             IForeignKeyService foreignKeyService,
             IConfiguration configuration,
-            ILogger<DynamicApiService> logger)
+            ILogger logger)
         {
             _workspaceRepository = workspaceRepository;
             _foreignKeyService = foreignKeyService;
-            _configuration = configuration;
+            Configuration = configuration;
             _logger = logger;
         }
 
+        protected IConfiguration Configuration { get; }
+
+        protected ILogger Logger => _logger;
+
         // ─────────────────────────────────────────────────────────────────
-        //  Public API
+        //  Dialect hooks
+        // ─────────────────────────────────────────────────────────────────
+
+        /// <summary>Opening identifier quote (e.g. "[" for SQL Server, "`" for MySQL).</summary>
+        protected abstract string QuoteIdentifier { get; }
+
+        /// <summary>Closing identifier quote (e.g. "]" for SQL Server, "`" for MySQL).</summary>
+        protected abstract string QuoteClose { get; }
+
+        /// <summary>ADO.NET provider factory for the dialect.</summary>
+        protected abstract DbProviderFactory GetProviderFactory();
+
+        /// <summary>
+        /// SQL that lists a table's columns with (name, full-type, nullable, isPrimaryKey, isIdentity)
+        /// as five columns, filtered by @table and @schema.
+        /// </summary>
+        protected abstract string GetColumnsSql();
+
+        /// <summary>
+        /// SQL that lists a view/object's columns with (name, full-type, nullable) as
+        /// three columns, filtered by @table and @schema.
+        /// </summary>
+        protected abstract string GetObjectColumnsSql();
+
+        /// <summary>Appends the dialect-specific paging clause to a complete SELECT.</summary>
+        protected abstract string ApplyPaging(string selectSql, int pageSize, int offset);
+
+        /// <summary>
+        /// Resolves an object name to its (schema, type) where type is one of
+        /// "TABLE", "BASE TABLE", "VIEW", "PROCEDURE", "FUNCTION".
+        /// </summary>
+        protected abstract Task<(string Schema, string Type)> ResolveObjectAsync(DbConnection connection, string objectName, CancellationToken ct);
+
+        /// <summary>Reads the columns of a non-table object (view) using the dialect's object-column query.</summary>
+        protected abstract Task<Dictionary<string, ColumnInfo>> GetObjectColumnsAsync(DbConnection connection, string schema, string objectName, CancellationToken ct);
+
+        /// <summary>
+        /// Executes the parmeterized INSERT and returns the inserted row:
+        /// SQL Server uses OUTPUT INSERTED.*; MySQL executes then re-selects by LAST_INSERT_ID()/PK.
+        /// </summary>
+        /// <param name="workspace">The workspace (has the connection-string inputs).</param>
+        /// <param name="meta">Resolved table metadata.</param>
+        /// <param name="objectName">The target table.</param>
+        /// <param name="filtered">The non-identity column/value pairs being inserted (in parameter order).</param>
+        /// <param name="quotedColumns">Comma-joined, identifier-quoted column list for the INSERT (prefix).</param>
+        /// <param name="paramPlaceholders">Comma-joined @pN placeholders matching <paramref name="parameters"/> order.</param>
+        /// <param name="parameters">The DbParameters the base created (names @p0..@pN in filtered order).</param>
+        /// <param name="ct">Cancellation token.</param>
+        protected abstract Task<Dictionary<string, object?>?> InsertReturnRowAsync(
+            Workspace workspace, TableMetadata meta, string objectName,
+            Dictionary<string, object?> filtered, string quotedColumns, string paramPlaceholders,
+            List<DbParameter> parameters, CancellationToken ct);
+
+        /// <summary>
+        /// Executes the parameterized UPDATE and returns the updated row
+        /// (SQL Server: OUTPUT INSERTED.*; MySQL: execute then re-select by PK).
+        /// Returns null when no row matched the PK.
+        /// </summary>
+        /// <param name="setClauseSql">Comma-joined "col = @pN" SET clauses (already quoted).</param>
+        protected abstract Task<Dictionary<string, object?>?> UpdateReturnRowAsync(
+            Workspace workspace, TableMetadata meta, string objectName, string id, string pkCol,
+            string setClauseSql, Dictionary<string, object?> filtered, List<DbParameter> parameters, CancellationToken ct);
+
+        /// <summary>
+        /// Executes the parameterized DELETE and returns a non-null marker on success,
+        /// null when no row matched the PK
+        /// (SQL Server: OUTPUT DELETED.*; MySQL: ExecuteNonQuery + affected count).
+        /// </summary>
+        protected abstract Task<Dictionary<string, object?>?> DeleteReturnRowAsync(
+            Workspace workspace, TableMetadata meta, string objectName, string id,
+            List<DbParameter> parameters, CancellationToken ct);
+
+        /// <summary>
+        /// Builds a connection string for the workspace using the dialect's builder/rules.
+        /// </summary>
+        protected internal abstract string BuildConnectionString(Workspace workspace);
+
+        /// <summary>
+        /// Executes a stored procedure or function (EXEC/CALL or SELECT fn) returning
+        /// all result sets, captured OUT/INOUT parameter values, and rows affected.
+        /// </summary>
+        protected abstract Task<DynamicApiExecutionResponse> ExecuteRoutineInternalAsync(
+            Workspace workspace, string objectName, Dictionary<string, object?> parameters, CancellationToken ct);
+
+        // ─────────────────────────────────────────────────────────────────
+        //  Public API (workspaceId entry points)
         // ─────────────────────────────────────────────────────────────────
 
         public async Task<DynamicApiListResponse> GetListAsync(
@@ -51,7 +157,81 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             DynamicApiQueryRequest query,
             CancellationToken cancellationToken = default)
         {
-            var (workspace, meta) = await LoadWorkspaceAndMetaAsync(workspaceId, objectName, cancellationToken);
+            var workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken);
+            return await GetListAsync(workspace, objectName, query, cancellationToken);
+        }
+
+        public async Task<DynamicApiSingleResponse> GetByIdAsync(
+            string workspaceId,
+            string objectName,
+            string id,
+            DynamicApiQueryRequest? query = null,
+            CancellationToken cancellationToken = default)
+        {
+            var workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken);
+            return await GetByIdAsync(workspace, objectName, id, query, cancellationToken);
+        }
+
+        public async Task<DynamicApiSingleResponse> GetByCompositeKeyAsync(
+            string workspaceId,
+            string objectName,
+            Dictionary<string, string> pkValues,
+            DynamicApiQueryRequest? query = null,
+            CancellationToken cancellationToken = default)
+        {
+            var workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken);
+            return await GetByCompositeKeyAsync(workspace, objectName, pkValues, query, cancellationToken);
+        }
+
+        public async Task<DynamicApiActionResponse> CreateAsync(
+            string workspaceId,
+            string objectName,
+            Dictionary<string, object?> data,
+            CancellationToken cancellationToken = default)
+        {
+            var workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken);
+            return await CreateAsync(workspace, objectName, data, cancellationToken);
+        }
+
+        public async Task<DynamicApiActionResponse> UpdateAsync(
+            string workspaceId,
+            string objectName,
+            string id,
+            Dictionary<string, object?> data,
+            CancellationToken cancellationToken = default)
+        {
+            var workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken);
+            return await UpdateAsync(workspace, objectName, id, data, cancellationToken);
+        }
+
+        public async Task<DynamicApiActionResponse> DeleteAsync(
+            string workspaceId,
+            string objectName,
+            string id,
+            CancellationToken cancellationToken = default)
+        {
+            var workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken);
+            return await DeleteAsync(workspace, objectName, id, cancellationToken);
+        }
+
+        public async Task<DynamicApiExecutionResponse> ExecuteRoutineAsync(
+            string workspaceId,
+            string objectName,
+            Dictionary<string, object?> parameters,
+            CancellationToken cancellationToken = default)
+        {
+            var workspace = await LoadWorkspaceAsync(workspaceId, cancellationToken);
+            return await ExecuteRoutineAsync(workspace, objectName, parameters, cancellationToken);
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        //  Workspace-accepting overloads (used by the resolver to avoid
+        //  loading the workspace a second time)
+        // ─────────────────────────────────────────────────────────────────
+
+        internal virtual async Task<DynamicApiListResponse> GetListAsync(Workspace workspace, string objectName, DynamicApiQueryRequest query, CancellationToken ct)
+        {
+            var meta = await GetTableMetadataAsync(workspace, objectName, ct);
 
             // Fetch FK info if query selects related columns
             var relationNames = ExtractRelationNames(query);
@@ -64,22 +244,22 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     workspace.DatabaseEngine,
                     connStr,
                     meta.TableName,
-                    cancellationToken);
+                    ct);
             }
 
-            var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: true, workspace.DatabaseEngine, fkInfo);
+            var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: true, fkInfo);
             _logger.LogDebug("Dynamic GET list: {Sql}", sql);
-            var data = await ExecuteQueryAsync(workspace, sql, parameters, cancellationToken);
+            var data = await ExecuteQueryAsync(workspace, sql, parameters, ct);
 
             var response = new DynamicApiListResponse { Data = data };
 
             if (query.PageSize > 0)
             {
-                var (countSql, countParams) = BuildCountQuery(meta, query, workspace.DatabaseEngine);
+                var (countSql, countParams) = BuildCountQuery(meta, query);
                 var connStr = BuildConnectionString(workspace);
-                await using var conn = CreateConnection(workspace.DatabaseEngine, connStr);
-                await conn.OpenAsync(cancellationToken);
-                var totalCount = await ExecuteScalarAsync<long>(conn, countSql, countParams, cancellationToken);
+                await using var conn = CreateConnection(connStr);
+                await conn.OpenAsync(ct);
+                var totalCount = await ExecuteScalarAsync<long>(conn, countSql, countParams, ct);
                 response.Paging = new DynamicApiPagingInfo
                 {
                     Page = Math.Max(1, query.Page),
@@ -92,14 +272,10 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             return response;
         }
 
-        public async Task<DynamicApiSingleResponse> GetByIdAsync(
-            string workspaceId,
-            string objectName,
-            string id,
-            DynamicApiQueryRequest? query = null,
-            CancellationToken cancellationToken = default)
+        internal virtual async Task<DynamicApiSingleResponse> GetByIdAsync(
+            Workspace workspace, string objectName, string id, DynamicApiQueryRequest? query, CancellationToken ct)
         {
-            var (workspace, meta) = await LoadWorkspaceAndMetaAsync(workspaceId, objectName, cancellationToken);
+            var meta = await GetTableMetadataAsync(workspace, objectName, ct);
 
             if (meta.PrimaryKeyColumns.Count != 1)
                 throw new ArgumentException(
@@ -130,12 +306,12 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                         workspace.DatabaseEngine,
                         connStr,
                         meta.TableName,
-                        cancellationToken);
+                        ct);
                 }
 
-                var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: false, workspace.DatabaseEngine, fkInfo);
+                var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: false, fkInfo);
                 _logger.LogDebug("Dynamic GET by ID: {Sql}", sql);
-                var data = await ExecuteQueryAsync(workspace, sql, parameters, cancellationToken);
+                var data = await ExecuteQueryAsync(workspace, sql, parameters, ct);
 
                 var record = data.FirstOrDefault();
                 if (record == null)
@@ -149,14 +325,10 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             }
         }
 
-        public async Task<DynamicApiSingleResponse> GetByCompositeKeyAsync(
-            string workspaceId,
-            string objectName,
-            Dictionary<string, string> pkValues,
-            DynamicApiQueryRequest? query = null,
-            CancellationToken cancellationToken = default)
+        internal virtual async Task<DynamicApiSingleResponse> GetByCompositeKeyAsync(
+            Workspace workspace, string objectName, Dictionary<string, string> pkValues, DynamicApiQueryRequest? query, CancellationToken ct)
         {
-            var (workspace, meta) = await LoadWorkspaceAndMetaAsync(workspaceId, objectName, cancellationToken);
+            var meta = await GetTableMetadataAsync(workspace, objectName, ct);
 
             foreach (var pkCol in meta.PrimaryKeyColumns)
             {
@@ -186,12 +358,12 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                         workspace.DatabaseEngine,
                         connStr,
                         meta.TableName,
-                        cancellationToken);
+                        ct);
                 }
 
-                var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: false, workspace.DatabaseEngine, fkInfo);
+                var (sql, parameters) = BuildSelectQuery(meta, query, includePaging: false, fkInfo);
                 _logger.LogDebug("Dynamic GET by composite key: {Sql}", sql);
-                var data = await ExecuteQueryAsync(workspace, sql, parameters, cancellationToken);
+                var data = await ExecuteQueryAsync(workspace, sql, parameters, ct);
 
                 var record = data.FirstOrDefault();
                 if (record == null)
@@ -205,13 +377,9 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             }
         }
 
-        public async Task<DynamicApiActionResponse> CreateAsync(
-            string workspaceId,
-            string objectName,
-            Dictionary<string, object?> data,
-            CancellationToken cancellationToken = default)
+        internal virtual async Task<DynamicApiActionResponse> CreateAsync(Workspace workspace, string objectName, Dictionary<string, object?> data, CancellationToken ct)
         {
-            var (workspace, meta) = await LoadWorkspaceAndMetaAsync(workspaceId, objectName, cancellationToken);
+            var meta = await GetTableMetadataAsync(workspace, objectName, ct);
 
             // Exclude identity/auto-increment columns — they are generated by the DB
             var filtered = data
@@ -228,61 +396,21 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
             ValidateColumns(meta, filtered.Keys);
 
-            var qi = QuoteIdentifier(workspace.DatabaseEngine);
-            var qiClose = qi == "[" ? "]" : qi;
+            var qi = QuoteIdentifier;
+            var qiClose = QuoteClose;
             var columns = string.Join(", ", filtered.Keys.Select(c => $"{qi}{c}{qiClose}"));
             var paramNames = string.Join(", ", filtered.Keys.Select((c, i) => $"@p{i}"));
             var parameters = new List<DbParameter>();
             var idx = 0;
             foreach (var kvp in filtered)
             {
-                parameters.Add(CreateParam($"@p{idx}", kvp.Value, meta.Columns[kvp.Key], workspace.DatabaseEngine));
+                parameters.Add(CreateParam($"@p{idx}", kvp.Value, meta.Columns[kvp.Key]));
                 idx++;
             }
 
-            var isMySql = workspace.DatabaseEngine == DatabaseEngine.MySql;
-            var sql = new StringBuilder();
-            sql.Append($"INSERT INTO {qi}{meta.Schema}{qiClose}.{qi}{objectName}{qiClose} ({columns})");
-            if (!isMySql)
-                sql.Append($" OUTPUT INSERTED.*");
-            sql.Append($" VALUES ({paramNames})");
+            _logger.LogDebug("Dynamic INSERT: ({Columns}) VALUES ({ParamNames})", columns, paramNames);
 
-            _logger.LogDebug("Dynamic INSERT: {Sql}", sql);
-
-            Dictionary<string, object?>? inserted;
-            if (isMySql)
-            {
-                // MySQL does not support OUTPUT clause.
-                // Execute INSERT first, then SELECT the inserted row.
-                await ExecuteQueryAsync(workspace, sql.ToString(), parameters, cancellationToken);
-
-                var pkCol = meta.PrimaryKeyColumns.Count == 1 ? meta.PrimaryKeyColumns[0] : null;
-                if (pkCol != null && meta.Columns.TryGetValue(pkCol, out var pkInfo) && pkInfo.IsIdentity)
-                {
-                    // Auto-increment PK — retrieve via LAST_INSERT_ID()
-                    var selectSql = $"SELECT * FROM {qi}{meta.Schema}{qiClose}.{qi}{objectName}{qiClose} WHERE {qi}{pkCol}{qiClose} = LAST_INSERT_ID()";
-                    var selectResult = await ExecuteQueryAsync(workspace, selectSql, new List<DbParameter>(), cancellationToken);
-                    inserted = selectResult.FirstOrDefault();
-                }
-                else if (pkCol != null && filtered.ContainsKey(pkCol))
-                {
-                    // Non-identity PK — user provided the value in the request body
-                    var pkValue = filtered[pkCol];
-                    var pkParam = CreateParam("@pk", pkValue, meta.Columns[pkCol], workspace.DatabaseEngine);
-                    var selectSql = $"SELECT * FROM {qi}{meta.Schema}{qiClose}.{qi}{objectName}{qiClose} WHERE {qi}{pkCol}{qiClose} = @pk";
-                    var selectResult = await ExecuteQueryAsync(workspace, selectSql, new List<DbParameter> { pkParam }, cancellationToken);
-                    inserted = selectResult.FirstOrDefault();
-                }
-                else
-                {
-                    inserted = null;
-                }
-            }
-            else
-            {
-                var result = await ExecuteQueryAsync(workspace, sql.ToString(), parameters, cancellationToken);
-                inserted = result.FirstOrDefault();
-            }
+            var inserted = await InsertReturnRowAsync(workspace, meta, objectName, filtered, columns, paramNames, parameters, ct);
 
             return new DynamicApiActionResponse
             {
@@ -291,14 +419,9 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             };
         }
 
-        public async Task<DynamicApiActionResponse> UpdateAsync(
-            string workspaceId,
-            string objectName,
-            string id,
-            Dictionary<string, object?> data,
-            CancellationToken cancellationToken = default)
+        internal virtual async Task<DynamicApiActionResponse> UpdateAsync(Workspace workspace, string objectName, string id, Dictionary<string, object?> data, CancellationToken ct)
         {
-            var (workspace, meta) = await LoadWorkspaceAndMetaAsync(workspaceId, objectName, cancellationToken);
+            var meta = await GetTableMetadataAsync(workspace, objectName, ct);
 
             // Exclude identity/auto-increment columns — they cannot be updated
             var filtered = data
@@ -321,49 +444,23 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             ValidateColumns(meta, filtered.Keys);
 
             var pkCol = meta.PrimaryKeyColumns[0];
-            var qi = QuoteIdentifier(workspace.DatabaseEngine);
-            var qiClose = qi == "[" ? "]" : qi;
+            var qi = QuoteIdentifier;
+            var qiClose = QuoteClose;
 
             var setClauses = filtered.Keys.Select((c, i) => $"{qi}{c}{qiClose} = @p{i}");
             var parameters = new List<DbParameter>();
             var idx = 0;
             foreach (var kvp in filtered)
             {
-                parameters.Add(CreateParam($"@p{idx}", kvp.Value, meta.Columns[kvp.Key], workspace.DatabaseEngine));
+                parameters.Add(CreateParam($"@p{idx}", kvp.Value, meta.Columns[kvp.Key]));
                 idx++;
             }
-            parameters.Add(CreateParam("@pk", id, meta.Columns[pkCol], workspace.DatabaseEngine));
+            parameters.Add(CreateParam("@pk", id, meta.Columns[pkCol]));
 
-            var isMySql = workspace.DatabaseEngine == DatabaseEngine.MySql;
-            var sql = new StringBuilder();
-            sql.Append($"UPDATE {qi}{meta.Schema}{qiClose}.{qi}{objectName}{qiClose}");
-            sql.Append($" SET {string.Join(", ", setClauses)}");
-            if (!isMySql)
-                sql.Append($" OUTPUT INSERTED.*");
-            sql.Append($" WHERE {qi}{pkCol}{qiClose} = @pk");
+            var setClauseSql = string.Join(", ", setClauses);
+            _logger.LogDebug("Dynamic UPDATE: SET {Sets} WHERE {Pk} = @pk", setClauseSql, pkCol);
 
-            _logger.LogDebug("Dynamic UPDATE: {Sql}", sql);
-
-            Dictionary<string, object?>? updated;
-            if (isMySql)
-            {
-                // MySQL does not support OUTPUT clause.
-                // Execute UPDATE first, then SELECT the updated row.
-                await ExecuteQueryAsync(workspace, sql.ToString(), parameters, cancellationToken);
-
-                var selectSql = $"SELECT * FROM {qi}{meta.Schema}{qiClose}.{qi}{objectName}{qiClose} WHERE {qi}{pkCol}{qiClose} = @pk";
-                var selectParams = new List<DbParameter>
-                {
-                    CreateParam("@pk", id, meta.Columns[pkCol], workspace.DatabaseEngine)
-                };
-                var selectResult = await ExecuteQueryAsync(workspace, selectSql, selectParams, cancellationToken);
-                updated = selectResult.FirstOrDefault();
-            }
-            else
-            {
-                var result = await ExecuteQueryAsync(workspace, sql.ToString(), parameters, cancellationToken);
-                updated = result.FirstOrDefault();
-            }
+            var updated = await UpdateReturnRowAsync(workspace, meta, objectName, id, pkCol, setClauseSql, filtered, parameters, ct);
 
             if (updated == null)
                 throw new KeyNotFoundException($"Record with {pkCol} = '{id}' not found in '{objectName}'.");
@@ -375,13 +472,9 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             };
         }
 
-        public async Task<DynamicApiActionResponse> DeleteAsync(
-            string workspaceId,
-            string objectName,
-            string id,
-            CancellationToken cancellationToken = default)
+        internal virtual async Task<DynamicApiActionResponse> DeleteAsync(Workspace workspace, string objectName, string id, CancellationToken ct)
         {
-            var (workspace, meta) = await LoadWorkspaceAndMetaAsync(workspaceId, objectName, cancellationToken);
+            var meta = await GetTableMetadataAsync(workspace, objectName, ct);
 
             if (meta.PrimaryKeyColumns.Count != 1)
                 throw new ArgumentException(
@@ -389,35 +482,18 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     "Use query parameters for composite key deletes.");
 
             var pkCol = meta.PrimaryKeyColumns[0];
-            var qi = QuoteIdentifier(workspace.DatabaseEngine);
-            var qiClose = qi == "[" ? "]" : qi;
+            var qi = QuoteIdentifier;
+            var qiClose = QuoteClose;
             var parameters = new List<DbParameter>
             {
-                CreateParam("@pk", id, meta.Columns[pkCol], workspace.DatabaseEngine)
+                CreateParam("@pk", id, meta.Columns[pkCol])
             };
 
-            var isMySql = workspace.DatabaseEngine == DatabaseEngine.MySql;
-            var sql = isMySql
-                ? $"DELETE FROM {qi}{meta.Schema}{qiClose}.{qi}{objectName}{qiClose} WHERE {qi}{pkCol}{qiClose} = @pk"
-                : $"DELETE FROM {qi}{meta.Schema}{qiClose}.{qi}{objectName}{qiClose} OUTPUT DELETED.* WHERE {qi}{pkCol}{qiClose} = @pk";
+            _logger.LogDebug("Dynamic DELETE: WHERE {Pk} = @pk", pkCol);
 
-            _logger.LogDebug("Dynamic DELETE: {Sql}", sql);
-
-            if (isMySql)
-            {
-                // MySQL does not support OUTPUT clause.
-                // Use ExecuteNonQuery to get affected rows count.
-                var affected = await ExecuteNonQueryAsync(workspace, sql, parameters, cancellationToken);
-                if (affected == 0)
-                    throw new KeyNotFoundException($"Record with {pkCol} = '{id}' not found in '{objectName}'.");
-            }
-            else
-            {
-                var result = await ExecuteQueryAsync(workspace, sql, parameters, cancellationToken);
-                var deleted = result.FirstOrDefault();
-                if (deleted == null)
-                    throw new KeyNotFoundException($"Record with {pkCol} = '{id}' not found in '{objectName}'.");
-            }
+            var deleted = await DeleteReturnRowAsync(workspace, meta, objectName, id, parameters, ct);
+            if (deleted == null)
+                throw new KeyNotFoundException($"Record with {pkCol} = '{id}' not found in '{objectName}'.");
 
             return new DynamicApiActionResponse
             {
@@ -425,52 +501,39 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             };
         }
 
+        internal virtual Task<DynamicApiExecutionResponse> ExecuteRoutineAsync(
+            Workspace workspace, string objectName, Dictionary<string, object?> parameters, CancellationToken ct)
+        {
+            return ExecuteRoutineInternalAsync(workspace, objectName, parameters, ct);
+        }
+
         // ─────────────────────────────────────────────────────────────────
         //  Table Metadata
         // ─────────────────────────────────────────────────────────────────
 
-        internal record ColumnInfo(string Name, string DataType, bool IsNullable, bool IsPrimaryKey, bool IsIdentity);
-
-        internal record TableMetadata(
-            string Schema,
-            string TableName,
-            Dictionary<string, ColumnInfo> Columns,
-            List<string> PrimaryKeyColumns
-        );
-
-        private async Task<(Workspace Workspace, TableMetadata Meta)> LoadWorkspaceAndMetaAsync(
-            string workspaceId, string objectName, CancellationToken ct)
-        {
-            var workspace = await LoadWorkspaceAsync(workspaceId, ct);
-            var meta = await GetTableMetadataAsync(workspace, objectName, ct);
-            return (workspace, meta);
-        }
-
-        internal async Task<TableMetadata> GetTableMetadataAsync(Workspace workspace, string objectName, CancellationToken ct)
+        internal virtual async Task<TableMetadata> GetTableMetadataAsync(Workspace workspace, string objectName, CancellationToken ct)
         {
             var connStr = BuildConnectionString(workspace);
-            await using var connection = CreateConnection(workspace.DatabaseEngine, connStr);
+            await using var connection = CreateConnection(connStr);
             await connection.OpenAsync(ct);
 
-            var (schema, objectType) = await ResolveObjectAsync(connection, workspace.DatabaseEngine, objectName, ct);
+            var (schema, objectType) = await ResolveObjectAsync(connection, objectName, ct);
 
             if (objectType != "TABLE" && objectType != "BASE TABLE")
             {
-                var viewCols = await GetObjectColumnsAsync(connection, workspace.DatabaseEngine, schema, objectName, ct);
+                var viewCols = await GetObjectColumnsAsync(connection, schema, objectName, ct);
                 return new TableMetadata(schema, objectName, viewCols, new List<string>());
             }
 
             var columns = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
             var pkColumns = new List<string>();
-            var colSql = workspace.DatabaseEngine == DatabaseEngine.MySql
-                ? GetMySqlColumnsSql()
-                : GetSqlColumnsSql();
+            var colSql = GetColumnsSql();
 
             await using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandText = colSql;
-                cmd.Parameters.Add(CreateParam("@schema", schema, engine: workspace.DatabaseEngine));
-                cmd.Parameters.Add(CreateParam("@table", objectName, engine: workspace.DatabaseEngine));
+                cmd.Parameters.Add(CreateParam("@schema", schema));
+                cmd.Parameters.Add(CreateParam("@table", objectName));
 
                 await using var reader = await cmd.ExecuteReaderAsync(ct);
                 while (await reader.ReadAsync(ct))
@@ -487,119 +550,23 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             return new TableMetadata(schema, objectName, columns, pkColumns);
         }
 
-        private static string GetSqlColumnsSql() => @"
-            SELECT c.COLUMN_NAME,
-                   c.DATA_TYPE + CASE WHEN c.CHARACTER_MAXIMUM_LENGTH IS NOT NULL
-                       THEN '(' + CASE WHEN c.CHARACTER_MAXIMUM_LENGTH = -1 THEN 'MAX' ELSE CAST(c.CHARACTER_MAXIMUM_LENGTH AS VARCHAR) END + ')'
-                       WHEN c.NUMERIC_PRECISION IS NOT NULL AND c.NUMERIC_SCALE > 0 THEN '(' + CAST(c.NUMERIC_PRECISION AS VARCHAR) + ',' + CAST(c.NUMERIC_SCALE AS VARCHAR) + ')'
-                       WHEN c.NUMERIC_PRECISION IS NOT NULL THEN '(' + CAST(c.NUMERIC_PRECISION AS VARCHAR) + ')'
-                       ELSE '' END,
-                   c.IS_NULLABLE,
-                   CASE WHEN pk.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END,
-                   ISNULL(COLUMNPROPERTY(OBJECT_ID(c.TABLE_SCHEMA + '.' + c.TABLE_NAME), c.COLUMN_NAME, 'IsIdentity'), 0)
-            FROM INFORMATION_SCHEMA.COLUMNS c
-            LEFT JOIN (SELECT ku.TABLE_NAME, ku.COLUMN_NAME, ku.TABLE_SCHEMA
-                       FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
-                       JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE ku ON tc.CONSTRAINT_NAME = ku.CONSTRAINT_NAME AND tc.TABLE_SCHEMA = ku.TABLE_SCHEMA
-                       WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY') pk
-                ON pk.TABLE_NAME = c.TABLE_NAME AND pk.COLUMN_NAME = c.COLUMN_NAME AND pk.TABLE_SCHEMA = c.TABLE_SCHEMA
-            WHERE c.TABLE_NAME = @table AND c.TABLE_SCHEMA = @schema
-            ORDER BY c.ORDINAL_POSITION";
-
-        private static string GetMySqlColumnsSql() => @"
-            SELECT c.COLUMN_NAME, c.COLUMN_TYPE, c.IS_NULLABLE, CASE WHEN c.COLUMN_KEY = 'PRI' THEN 1 ELSE 0 END,
-                   CASE WHEN c.EXTRA LIKE '%auto_increment%' THEN 1 ELSE 0 END
-            FROM information_schema.COLUMNS c
-            WHERE c.TABLE_NAME = @table AND c.TABLE_SCHEMA = @schema
-            ORDER BY c.ORDINAL_POSITION";
-
-        private static async Task<Dictionary<string, ColumnInfo>> GetObjectColumnsAsync(
-            DbConnection connection, DatabaseEngine engine, string schema, string objectName, CancellationToken ct)
-        {
-            var columns = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
-            var sql = engine == DatabaseEngine.MySql
-                ? @"SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_NAME = @table AND TABLE_SCHEMA = @schema ORDER BY ORDINAL_POSITION"
-                : @"SELECT COLUMN_NAME, DATA_TYPE + CASE WHEN CHARACTER_MAXIMUM_LENGTH IS NOT NULL THEN '(' + CASE WHEN CHARACTER_MAXIMUM_LENGTH = -1 THEN 'MAX' ELSE CAST(CHARACTER_MAXIMUM_LENGTH AS VARCHAR) END + ')' ELSE '' END, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @table AND TABLE_SCHEMA = @schema ORDER BY ORDINAL_POSITION";
-
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
-            cmd.Parameters.Add(CreateParam("@schema", schema, engine: engine));
-            cmd.Parameters.Add(CreateParam("@table", objectName, engine: engine));
-
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-                columns[reader.GetString(0)] = new ColumnInfo(reader.GetString(0), reader.GetString(1), reader.GetString(2) == "YES", false, false);
-
-            return columns;
-        }
-
-        internal static async Task<(string Schema, string Type)> ResolveObjectStatic(
-            DbConnection connection, DatabaseEngine engine, string objectName, CancellationToken ct)
-        {
-            return await ResolveObjectAsync(connection, engine, objectName, ct);
-        }
-
-        private static async Task<(string Schema, string Type)> ResolveObjectAsync(
-            DbConnection connection, DatabaseEngine engine, string objectName, CancellationToken ct)
-        {
-            if (engine == DatabaseEngine.MySql)
-            {
-                const string sql = @"
-                    SELECT TABLE_SCHEMA, TABLE_TYPE FROM information_schema.tables WHERE TABLE_NAME = @name
-                    UNION ALL
-                    SELECT ROUTINE_SCHEMA, ROUTINE_TYPE FROM information_schema.routines WHERE ROUTINE_NAME = @name";
-                await using var cmd = connection.CreateCommand();
-                cmd.CommandText = sql;
-                cmd.Parameters.Add(CreateParam("@name", objectName, engine: engine));
-                await using var reader = await cmd.ExecuteReaderAsync(ct);
-                if (await reader.ReadAsync(ct))
-                    return (reader.GetString(0), reader.GetString(1).ToUpperInvariant());
-            }
-            else
-            {
-                await using (var cmd = connection.CreateCommand())
-                {
-                    cmd.CommandText = "SELECT TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @name AND TABLE_TYPE = 'BASE TABLE'";
-                    cmd.Parameters.Add(CreateParam("@name", objectName, engine: engine));
-                    var s = await cmd.ExecuteScalarAsync(ct) as string;
-                    if (s != null) return (s, "TABLE");
-                }
-                await using (var cmd = connection.CreateCommand())
-                {
-                    cmd.CommandText = "SELECT TABLE_SCHEMA FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = @name";
-                    cmd.Parameters.Add(CreateParam("@name", objectName, engine: engine));
-                    var s = await cmd.ExecuteScalarAsync(ct) as string;
-                    if (s != null) return (s, "VIEW");
-                }
-                await using (var cmd = connection.CreateCommand())
-                {
-                    cmd.CommandText = "SELECT ROUTINE_SCHEMA, ROUTINE_TYPE FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_NAME = @name";
-                    cmd.Parameters.Add(CreateParam("@name", objectName, engine: engine));
-                    await using var reader = await cmd.ExecuteReaderAsync(ct);
-                    if (await reader.ReadAsync(ct))
-                        return (reader.GetString(0), reader.GetString(1).ToUpperInvariant());
-                }
-            }
-            throw new ArgumentException($"Object '{objectName}' not found in the database.");
-        }
-
         // ─────────────────────────────────────────────────────────────────
         //  SQL Builders
         // ─────────────────────────────────────────────────────────────────
 
         private (string Sql, List<DbParameter> Parameters) BuildSelectQuery(
-            TableMetadata meta, DynamicApiQueryRequest query, bool includePaging, DatabaseEngine engine,
+            TableMetadata meta, DynamicApiQueryRequest query, bool includePaging,
             ForeignKeyInfoDto? fkInfo = null)
         {
             var parameters = new List<DbParameter>();
-            var qi = QuoteIdentifier(engine);
-            var qiClose = qi == "[" ? "]" : qi;
+            var qi = QuoteIdentifier;
+            var qiClose = QuoteClose;
             var sb = new StringBuilder();
 
             // SELECT
             sb.Append("SELECT ");
             var selectStr = query.Select is { Count: > 0 } ? string.Join(",", query.Select) : null;
-            var selectItems = BuildSelectList(meta, selectStr, qi);
+            var selectItems = BuildSelectList(meta, selectStr, qi, qiClose);
             sb.Append(string.Join(", ", selectItems));
 
             sb.Append($" FROM {qi}{meta.Schema}{qiClose}.{qi}{meta.TableName}{qiClose}");
@@ -611,7 +578,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 if (relationNames.Count > 0)
                 {
                     var joinClauses = BuildJoinClauses(
-                        meta.TableName, meta.Schema, relationNames, fkInfo, engine);
+                        meta.TableName, meta.Schema, relationNames, fkInfo, qi, qiClose);
                     sb.Append(joinClauses);
                 }
             }
@@ -619,7 +586,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             // WHERE
             if (query.Filter != null && query.Filter.Count > 0)
             {
-                var (whereSql, filterParams) = BuildWhereClause(meta, query.Filter, engine);
+                var (whereSql, filterParams) = BuildWhereClause(meta, query.Filter);
                 if (!string.IsNullOrWhiteSpace(whereSql))
                 {
                     sb.Append($" WHERE {whereSql}");
@@ -629,34 +596,32 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
             // ORDER BY
             var sortStr = query.Sort is { Count: > 0 } ? string.Join(",", query.Sort) : null;
-            sb.Append($" ORDER BY {BuildOrderByClause(meta, sortStr, engine)}");
+            sb.Append($" ORDER BY {BuildOrderByClause(meta, sortStr)}");
 
-            // OFFSET/FETCH or LIMIT
+            // OFFSET/FETCH or LIMIT (dialect hook)
+            var sql = sb.ToString();
             if (includePaging && query.PageSize > 0)
             {
                 var offset = Math.Max(0, (query.Page - 1) * query.PageSize);
-                if (engine == DatabaseEngine.MySql)
-                    sb.Append($" LIMIT {query.PageSize} OFFSET {offset}");
-                else
-                    sb.Append($" OFFSET {offset} ROWS FETCH NEXT {query.PageSize} ROWS ONLY");
+                sql = ApplyPaging(sql, query.PageSize, offset);
             }
 
-            return (sb.ToString(), parameters);
+            return (sql, parameters);
         }
 
         private (string Sql, List<DbParameter> Parameters) BuildCountQuery(
-            TableMetadata meta, DynamicApiQueryRequest query, DatabaseEngine engine)
+            TableMetadata meta, DynamicApiQueryRequest query)
         {
             var parameters = new List<DbParameter>();
-            var qi = QuoteIdentifier(engine);
-            var qiClose = qi == "[" ? "]" : qi;
+            var qi = QuoteIdentifier;
+            var qiClose = QuoteClose;
             var sb = new StringBuilder();
 
             sb.Append($"SELECT COUNT(*) FROM {qi}{meta.Schema}{qiClose}.{qi}{meta.TableName}{qiClose}");
 
             if (query.Filter != null && query.Filter.Count > 0)
             {
-                var (whereSql, filterParams) = BuildWhereClause(meta, query.Filter, engine);
+                var (whereSql, filterParams) = BuildWhereClause(meta, query.Filter);
                 if (!string.IsNullOrWhiteSpace(whereSql))
                 {
                     sb.Append($" WHERE {whereSql}");
@@ -693,10 +658,9 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             string mainSchema,
             HashSet<string> relationNames,
             ForeignKeyInfoDto fkInfo,
-            DatabaseEngine engine)
+            string qi,
+            string qiClose)
         {
-            var qi = QuoteIdentifier(engine);
-            var qiClose = qi == "[" ? "]" : qi;
             var mainAlias = $"{qi}{mainSchema}{qiClose}.{qi}{mainTable}{qiClose}";
             var joins = new StringBuilder();
 
@@ -708,8 +672,6 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
                 if (outgoingFk != null)
                 {
-                    // SQL: LEFT JOIN [Schema].[Related] AS [__Related]
-                    //            ON [__Related].[RefCol] = [main].[FkCol]
                     joins.Append(
                         $" LEFT JOIN {qi}{outgoingFk.ReferencedSchema}{qiClose}.{qi}{relation}{qiClose}" +
                         $" AS {qi}__{relation}{qiClose}" +
@@ -724,8 +686,6 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
 
                 if (incomingFk != null)
                 {
-                    // SQL: LEFT JOIN [Schema].[Related] AS [__Related]
-                    //            ON [__Related].[FkCol] = [main].[RefCol]
                     joins.Append(
                         $" LEFT JOIN {qi}{incomingFk.TableSchema}{qiClose}.{qi}{relation}{qiClose}" +
                         $" AS {qi}__{relation}{qiClose}" +
@@ -742,12 +702,11 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             return joins.ToString();
         }
 
-        private static List<string> BuildSelectList(TableMetadata meta, string? select, string qi)
+        private static List<string> BuildSelectList(TableMetadata meta, string? select, string qi, string qiClose)
         {
             if (string.IsNullOrWhiteSpace(select))
-                return meta.Columns.Keys.Select(c => $"{qi}{c}{(qi == "[" ? "]" : qi)}").ToList();
+                return meta.Columns.Keys.Select(c => $"{qi}{c}{qiClose}").ToList();
 
-            var qiClose = qi == "[" ? "]" : qi;
             var items = new List<string>();
             var parts = select.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -772,14 +731,14 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         }
 
         private (string WhereSql, List<DbParameter> Parameters) BuildWhereClause(
-            TableMetadata meta, List<string> filters, DatabaseEngine engine)
+            TableMetadata meta, List<string> filters)
         {
             var andClauses = new List<string>();
             var orClauses = new List<string>();
             var parameters = new List<DbParameter>();
             var pIdx = 0;
-            var qi = QuoteIdentifier(engine);
-            var qiClose = qi == "[" ? "]" : qi;
+            var qi = QuoteIdentifier;
+            var qiClose = QuoteClose;
 
             foreach (var filter in filters)
             {
@@ -804,39 +763,39 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 {
                     case "eq":
                         clause = $"{colRef} = @p{pIdx}";
-                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column], engine)); pIdx++;
+                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column])); pIdx++;
                         break;
                     case "neq":
                         clause = $"{colRef} <> @p{pIdx}";
-                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column], engine)); pIdx++;
+                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column])); pIdx++;
                         break;
                     case "gt":
                         clause = $"{colRef} > @p{pIdx}";
-                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column], engine)); pIdx++;
+                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column])); pIdx++;
                         break;
                     case "gte":
                         clause = $"{colRef} >= @p{pIdx}";
-                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column], engine)); pIdx++;
+                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column])); pIdx++;
                         break;
                     case "lt":
                         clause = $"{colRef} < @p{pIdx}";
-                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column], engine)); pIdx++;
+                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column])); pIdx++;
                         break;
                     case "lte":
                         clause = $"{colRef} <= @p{pIdx}";
-                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column], engine)); pIdx++;
+                        parameters.Add(CreateParam($"@p{pIdx}", value, meta.Columns[column])); pIdx++;
                         break;
                     case "contains":
                         clause = $"{colRef} LIKE @p{pIdx}";
-                        parameters.Add(CreateParam($"@p{pIdx}", $"%{EscapeLike(value ?? "")}%", meta.Columns[column], engine)); pIdx++;
+                        parameters.Add(CreateParam($"@p{pIdx}", $"%{EscapeLike(value ?? "")}%", meta.Columns[column])); pIdx++;
                         break;
                     case "startswith":
                         clause = $"{colRef} LIKE @p{pIdx}";
-                        parameters.Add(CreateParam($"@p{pIdx}", $"{EscapeLike(value ?? "")}%", meta.Columns[column], engine)); pIdx++;
+                        parameters.Add(CreateParam($"@p{pIdx}", $"{EscapeLike(value ?? "")}%", meta.Columns[column])); pIdx++;
                         break;
                     case "endswith":
                         clause = $"{colRef} LIKE @p{pIdx}";
-                        parameters.Add(CreateParam($"@p{pIdx}", $"%{EscapeLike(value ?? "")}", meta.Columns[column], engine)); pIdx++;
+                        parameters.Add(CreateParam($"@p{pIdx}", $"%{EscapeLike(value ?? "")}", meta.Columns[column])); pIdx++;
                         break;
                     case "in":
                         var vals = (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -844,7 +803,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                         if (vals.Length == 0) throw new ArgumentException("IN requires at least one value.");
                         var phs = string.Join(", ", vals.Select((_, i) => $"@p{pIdx + i}"));
                         for (int i = 0; i < vals.Length; i++)
-                            parameters.Add(CreateParam($"@p{pIdx + i}", vals[i], meta.Columns[column], engine));
+                            parameters.Add(CreateParam($"@p{pIdx + i}", vals[i], meta.Columns[column]));
                         clause = $"{colRef} IN ({phs})";
                         pIdx += vals.Length;
                         break;
@@ -868,10 +827,10 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             return (string.Join(" AND ", parts2), parameters);
         }
 
-        private string BuildOrderByClause(TableMetadata meta, string? sort, DatabaseEngine engine)
+        private string BuildOrderByClause(TableMetadata meta, string? sort)
         {
-            var qi = QuoteIdentifier(engine);
-            var qiClose = qi == "[" ? "]" : qi;
+            var qi = QuoteIdentifier;
+            var qiClose = QuoteClose;
 
             if (!string.IsNullOrWhiteSpace(sort))
             {
@@ -898,11 +857,11 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         //  Query Execution
         // ─────────────────────────────────────────────────────────────────
 
-        private async Task<List<Dictionary<string, object?>>> ExecuteQueryAsync(
+        protected async Task<List<Dictionary<string, object?>>> ExecuteQueryAsync(
             Workspace workspace, string sql, List<DbParameter> parameters, CancellationToken ct)
         {
             var connStr = BuildConnectionString(workspace);
-            await using var connection = CreateConnection(workspace.DatabaseEngine, connStr);
+            await using var connection = CreateConnection(connStr);
             await connection.OpenAsync(ct);
 
             await using var cmd = connection.CreateCommand();
@@ -910,9 +869,45 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             cmd.CommandTimeout = 120;
             foreach (var p in parameters) cmd.Parameters.Add(p);
 
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            return await ReadCurrentResultSetAsync(reader, ct);
+        }
+
+        protected async Task<int> ExecuteNonQueryAsync(
+            Workspace workspace, string sql, List<DbParameter> parameters, CancellationToken ct)
+        {
+            var connStr = BuildConnectionString(workspace);
+            await using var connection = CreateConnection(connStr);
+            await connection.OpenAsync(ct);
+
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.CommandTimeout = 120;
+            foreach (var p in parameters) cmd.Parameters.Add(p);
+
+            return await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        private static async Task<T> ExecuteScalarAsync<T>(
+            DbConnection connection, string sql, List<DbParameter> parameters, CancellationToken ct) where T : struct
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.CommandTimeout = 120;
+            foreach (var p in parameters) cmd.Parameters.Add(p);
+            var result = await cmd.ExecuteScalarAsync(ct);
+            return result is DBNull or null ? default : (T)Convert.ChangeType(result, typeof(T));
+        }
+
+        /// <summary>
+        /// Reads one full result set from the current position of the reader into rows.
+        /// Preserves the legacy behavior of JSON-string flattening for cell values.
+        /// </summary>
+        protected static async Task<List<Dictionary<string, object?>>> ReadCurrentResultSetAsync(
+            DbDataReader reader, CancellationToken ct)
+        {
             var result = new List<Dictionary<string, object?>>();
 
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
             var schema = await reader.GetColumnSchemaAsync(ct);
             var colNames = schema.Select(c => c.ColumnName ?? "").ToList();
 
@@ -945,32 +940,6 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             return result;
         }
 
-        private async Task<int> ExecuteNonQueryAsync(
-            Workspace workspace, string sql, List<DbParameter> parameters, CancellationToken ct)
-        {
-            var connStr = BuildConnectionString(workspace);
-            await using var connection = CreateConnection(workspace.DatabaseEngine, connStr);
-            await connection.OpenAsync(ct);
-
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
-            cmd.CommandTimeout = 120;
-            foreach (var p in parameters) cmd.Parameters.Add(p);
-
-            return await cmd.ExecuteNonQueryAsync(ct);
-        }
-
-        private static async Task<T> ExecuteScalarAsync<T>(
-            DbConnection connection, string sql, List<DbParameter> parameters, CancellationToken ct) where T : struct
-        {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
-            cmd.CommandTimeout = 120;
-            foreach (var p in parameters) cmd.Parameters.Add(p);
-            var result = await cmd.ExecuteScalarAsync(ct);
-            return result is DBNull or null ? default : (T)Convert.ChangeType(result, typeof(T));
-        }
-
         // ─────────────────────────────────────────────────────────────────
         //  Helpers
         // ─────────────────────────────────────────────────────────────────
@@ -983,30 +952,27 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             return ws;
         }
 
-        internal string BuildConnectionString(Workspace workspace)
+        /// <summary>
+        /// Creates an ADO.NET connection for the current dialect using this instance's provider factory.
+        /// </summary>
+        protected DbConnection CreateConnection(string connStr)
         {
-            var engine = workspace.DatabaseEngine;
-            var dbName = workspace.DatabaseName ?? "";
-            var baseConn = engine switch
-            {
-                DatabaseEngine.MySql => _configuration.GetConnectionString("MySqlConnection") ?? "Server=localhost;Port=3307;Uid=root;Pwd=root;",
-                _ => _configuration.GetConnectionString("SqlServerConnection") ?? "Server=localhost;Trusted_Connection=True;TrustServerCertificate=True;"
-            };
+            var factory = GetProviderFactory();
+            var conn = factory.CreateConnection() ?? throw new InvalidOperationException("Failed to create database connection.");
+            conn.ConnectionString = connStr;
+            return conn;
+        }
 
-            if (!string.IsNullOrWhiteSpace(workspace.DbUserName))
-            {
-                if (engine == DatabaseEngine.MySql)
-                    return $"{baseConn.TrimEnd(';')};Database={dbName};Uid={workspace.DbUserName};Pwd={workspace.DbPassword ?? ""}";
-
-                var csb = new SqlConnectionStringBuilder(baseConn) { InitialCatalog = dbName, UserID = workspace.DbUserName, Password = workspace.DbPassword ?? "" };
-                return csb.ConnectionString;
-            }
-
-            if (engine == DatabaseEngine.MySql)
-                return $"{baseConn.TrimEnd(';')};Database={dbName}";
-
-            var sqlCsb = new SqlConnectionStringBuilder(baseConn) { InitialCatalog = dbName };
-            return sqlCsb.ConnectionString;
+        /// <summary>
+        /// Engine-based static connection factory (used by DynamicApiServiceResolver /
+        /// DynamicApiMetadataService before the workspace is resolved to a dialect).
+        /// </summary>
+        internal static DbConnection CreateConnection(DatabaseEngine engine, string connStr)
+        {
+            var factory = GetProviderFactory(engine);
+            var conn = factory.CreateConnection() ?? throw new InvalidOperationException($"Failed to create connection for engine '{engine}'.");
+            conn.ConnectionString = connStr;
+            return conn;
         }
 
         /// <summary>
@@ -1019,15 +985,13 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
             _ => SqlClientFactory.Instance,
         };
 
-        internal static DbConnection CreateConnection(DatabaseEngine engine, string connStr)
-        {
-            var factory = GetProviderFactory(engine);
-            var conn = factory.CreateConnection() ?? throw new InvalidOperationException($"Failed to create connection for engine '{engine}'.");
-            conn.ConnectionString = connStr;
-            return conn;
-        }
-
-        internal static string QuoteIdentifier(DatabaseEngine engine) => engine == DatabaseEngine.MySql ? "`" : "[";
+        /// <summary>
+        /// Same-assembly accessor for the protected <see cref="ResolveObjectAsync"/> hook,
+        /// so the resolver (not derived from this class) can dispatch object resolution.
+        /// </summary>
+        internal Task<(string Schema, string Type)> ResolveObjectInternalAsync(
+            DbConnection connection, string objectName, CancellationToken ct)
+            => ResolveObjectAsync(connection, objectName, ct);
 
         private static string EscapeLike(string value) =>
             value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_").Replace("[", @"[");
@@ -1039,10 +1003,14 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     throw new ArgumentException($"Column '{col}' does not exist on table '{meta.TableName}'.");
         }
 
-        internal static DbParameter CreateParam(string name, object? value, ColumnInfo? colInfo = null, DatabaseEngine engine = DatabaseEngine.SqlServer)
+        /// <summary>
+        /// Creates a parameter for the current dialect. Column info is optional; when the
+        /// column is a character type the size is set to MAX to avoid truncation.
+        /// </summary>
+        protected DbParameter CreateParam(string name, object? value, ColumnInfo? colInfo = null)
         {
-            var factory = GetProviderFactory(engine);
-            var param = factory.CreateParameter() ?? throw new InvalidOperationException($"Failed to create parameter for engine '{engine}'.");
+            var factory = GetProviderFactory();
+            var param = factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
             param.ParameterName = name;
             param.Value = ConvertToNativeValue(value);
             if (colInfo != null && colInfo.DataType.IndexOf("char", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -1056,7 +1024,7 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
         /// type is <c>object?</c> (e.g. <c>Dictionary&lt;string, object?&gt;</c>).
         /// ADO.NET providers do not understand JsonElement, so we must flatten it here.
         /// </summary>
-        internal static object ConvertToNativeValue(object? value)
+        protected static object ConvertToNativeValue(object? value)
         {
             if (value is null)
                 return DBNull.Value;

@@ -141,12 +141,62 @@ namespace AutoApiEngine.Presentation.Controllers
                     return Ok(result);
                 }
 
-                var listResult = await _dynamicApiService.GetListAsync(workspaceId, objectName, query, cancellationToken);
+                var meta = await GetClassificationAsync(workspaceId, objectName, cancellationToken);
 
-                if (listResult.Paging != null)
-                    Response.Headers["X-Total-Count"] = listResult.Paging.TotalCount.ToString();
+                // Table — unchanged list behavior (filters, paging, joins, X-Total-Count).
+                if (IsObjectType(meta, "TABLE"))
+                {
+                    var listResult = await _dynamicApiService.GetListAsync(workspaceId, objectName, query, cancellationToken);
 
-                return Ok(listResult);
+                    if (listResult.Paging != null)
+                        Response.Headers["X-Total-Count"] = listResult.Paging.TotalCount.ToString();
+
+                    return Ok(listResult);
+                }
+
+                // View — list, with arbitrary query-string params bound as equality WHERE
+                // conditions (e.g. ?departmentId=5 becomes filter "departmentId:eq:5").
+                if (IsObjectType(meta, "VIEW"))
+                {
+                    var viewFilters = GetNonReservedQueryParams()
+                        .Select(kvp => $"{kvp.Key}:eq:{kvp.Value}")
+                        .ToList();
+
+                    if (viewFilters.Count > 0)
+                    {
+                        var existing = query.Filter ?? new List<string>();
+                        query.Filter = existing.Concat(viewFilters).ToList();
+                    }
+
+                    var listResult = await _dynamicApiService.GetListAsync(workspaceId, objectName, query, cancellationToken);
+
+                    if (listResult.Paging != null)
+                        Response.Headers["X-Total-Count"] = listResult.Paging.TotalCount.ToString();
+
+                    return Ok(listResult);
+                }
+
+                // Function, or stored procedure classified GET — run through the routine executor.
+                // (Stored procedures classified POST must be invoked via POST.)
+                if (!string.Equals(meta.Verb, "GET", StringComparison.OrdinalIgnoreCase))
+                    return StatusCode(405, new
+                    {
+                        message = $"Stored procedure '{objectName}' only supports POST. Use POST /api/{workspaceId}/{objectName}.",
+                        code = "METHOD_NOT_ALLOWED"
+                    });
+
+                var parameters = BindQueryParameters();
+
+                var missing = GetMissingRequiredParameters(meta, parameters);
+                if (missing.Count > 0)
+                    return BadRequest(new
+                    {
+                        message = $"Missing required parameter(s): {string.Join(", ", missing)}",
+                        code = "MISSING_PARAMETER"
+                    });
+
+                var routineResult = await _dynamicApiService.ExecuteRoutineAsync(workspaceId, objectName, parameters, cancellationToken);
+                return Ok(routineResult);
             }
             catch (KeyNotFoundException ex)
             {
@@ -155,6 +205,10 @@ namespace AutoApiEngine.Presentation.Controllers
             catch (ArgumentException ex)
             {
                 return BadRequest(new { message = ex.Message, code = "INVALID_PARAMETER" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -203,9 +257,38 @@ namespace AutoApiEngine.Presentation.Controllers
             CancellationToken cancellationToken)
         {
             try
-            {               
-                var result = await _dynamicApiService.CreateAsync(workspaceId, objectName, data, cancellationToken);
-                return Ok(result);
+            {
+                var meta = await GetClassificationAsync(workspaceId, objectName, cancellationToken);
+
+                // Table — unchanged create behavior.
+                if (IsObjectType(meta, "TABLE"))
+                {
+                    var result = await _dynamicApiService.CreateAsync(workspaceId, objectName, data, cancellationToken);
+                    return Ok(result);
+                }
+
+                // Views, functions, and GET-classified stored procedures are read-only.
+                if (!string.Equals(meta.Verb, "POST", StringComparison.OrdinalIgnoreCase))
+                    return StatusCode(405, new
+                    {
+                        message = $"Object '{objectName}' only supports GET.",
+                        code = "METHOD_NOT_ALLOWED"
+                    });
+
+                // Stored procedure classified POST — the body is the routine's input
+                // parameters (matched by name).
+                var parameters = NormalizeRoutineParameters(data);
+
+                var missing = GetMissingRequiredParameters(meta, parameters);
+                if (missing.Count > 0)
+                    return BadRequest(new
+                    {
+                        message = $"Missing required parameter(s): {string.Join(", ", missing)}",
+                        code = "MISSING_PARAMETER"
+                    });
+
+                var routineResult = await _dynamicApiService.ExecuteRoutineAsync(workspaceId, objectName, parameters, cancellationToken);
+                return Ok(routineResult);
             }
             catch (KeyNotFoundException ex)
             {
@@ -214,6 +297,10 @@ namespace AutoApiEngine.Presentation.Controllers
             catch (ArgumentException ex)
             {
                 return BadRequest(new { message = ex.Message, code = "INVALID_PARAMETER" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -279,6 +366,115 @@ namespace AutoApiEngine.Presentation.Controllers
             {
                 return StatusCode(500, new { message = "An unexpected error occurred.", details = ex.Message });
             }
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        //  Object classification + routine param binding
+        //  (Step 8: GET/POST branching by object type)
+        // ─────────────────────────────────────────────────────────────
+
+        private DynamicApiObjectMetadataDto? _classificationCache;
+
+        /// <summary>
+        /// Loads the database object's metadata (type, classified verb, routine parameters)
+        /// once per request and caches it for any subsequent branch in the same action.
+        /// </summary>
+        private async Task<DynamicApiObjectMetadataDto> GetClassificationAsync(
+            string workspaceId, string objectName, CancellationToken ct)
+            => _classificationCache ??= await _metadataService.GetObjectMetadataAsync(workspaceId, objectName, ct);
+
+        /// <summary>
+        /// Case-insensitive object-type check on the resolved metadata type. The resolver
+        /// returns uppercase types: "TABLE"/"BASE TABLE", "VIEW", "FUNCTION", "PROCEDURE".
+        /// </summary>
+        private static bool IsObjectType(DynamicApiObjectMetadataDto meta, string expected)
+            => meta.ObjectType.Contains(expected, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Query-string keys owned by the dynamic API framework (never routine params / view filters).</summary>
+        private static readonly HashSet<string> ReservedQueryKeys = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "select", "include", "filter", "filter_or", "sort", "page", "pageSize"
+        };
+
+        private static bool IsReservedQueryKey(string key)
+        {
+            // Composite-PK keys: pk1, pk2, ..., plus their pk{n}_name column overrides.
+            if (key.StartsWith("pk", StringComparison.OrdinalIgnoreCase)) return true;
+            return ReservedQueryKeys.Contains(key);
+        }
+
+        /// <summary>
+        /// Enumerates the request's non-reserved query-string params. Used both to translate
+        /// arbitrary params into view equality filters and to bind routine arguments.
+        /// </summary>
+        private IEnumerable<KeyValuePair<string, string>> GetNonReservedQueryParams()
+        {
+            foreach (var kvp in HttpContext.Request.Query)
+            {
+                if (IsReservedQueryKey(kvp.Key)) continue;
+                yield return new KeyValuePair<string, string>(kvp.Key, kvp.Value.ToString());
+            }
+        }
+
+        /// <summary>
+        /// Binds non-reserved query-string params into a routine-parameter dictionary.
+        /// Each bare key is also aliased with an '@' prefix so both engine conventions
+        /// resolve: SQL Server routine names from sys.parameters carry a leading '@',
+        /// MySQL information_schema names are bare. The service matches by name.
+        /// </summary>
+        private Dictionary<string, object?> BindQueryParameters()
+        {
+            var parameters = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kvp in GetNonReservedQueryParams())
+            {
+                parameters[kvp.Key] = kvp.Value;
+                if (!kvp.Key.StartsWith('@'))
+                    parameters["@" + kvp.Key] = kvp.Value;
+            }
+            return parameters;
+        }
+
+        /// <summary>
+        /// Copies a POST body into a routine-parameter dictionary, aliasing '@'-prefixed
+        /// keys exactly like <see cref="BindQueryParameters"/> so SQL Server and MySQL
+        /// both resolve the values by parameter name.
+        /// </summary>
+        private static Dictionary<string, object?> NormalizeRoutineParameters(Dictionary<string, object?> source)
+        {
+            var parameters = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kvp in source)
+            {
+                parameters[kvp.Key] = kvp.Value;
+                if (!kvp.Key.StartsWith('@'))
+                    parameters["@" + kvp.Key] = kvp.Value;
+            }
+            return parameters;
+        }
+
+        /// <summary>
+        /// Returns the routine's required parameters (IN/INOUT, no default) that are missing
+        /// from the bound dictionary. Matching is case-insensitive and ignores the leading
+        /// '@' SQL Server adds to catalog parameter names. OUT-only routines yield no
+        /// required parameters, so they never block a call.
+        /// </summary>
+        private static List<string> GetMissingRequiredParameters(
+            DynamicApiObjectMetadataDto meta, Dictionary<string, object?> parameters)
+        {
+            var missing = new List<string>();
+            foreach (var p in meta.Parameters)
+            {
+                var isInput = p.ParameterMode.Equals("IN", StringComparison.OrdinalIgnoreCase)
+                           || p.ParameterMode.Equals("INOUT", StringComparison.OrdinalIgnoreCase);
+                if (!isInput || p.HasDefault) continue;
+
+                var bareName = p.Name.TrimStart('@');
+                var bound = parameters.ContainsKey(p.Name)
+                         || parameters.ContainsKey(bareName)
+                         || parameters.ContainsKey("@" + bareName);
+                if (!bound)
+                    missing.Add(bareName);
+            }
+            return missing;
         }
     }
 }

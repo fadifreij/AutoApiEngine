@@ -13,6 +13,18 @@ namespace AutoApiEngine.ServiceAbstraction.DTO
         public List<string> PrimaryKeyColumns { get; set; } = new();
         public List<ForeignKeyDetailDto> ForeignKeys { get; set; } = new();
         public List<ReferencedByDetailDto> ReferencedBy { get; set; } = new();
+
+        /// <summary>
+        /// HTTP verb the object is exposed as: "GET" | "POST" for stored procedures,
+        /// "GET" for views/functions, null for tables.
+        /// </summary>
+        public string? Verb { get; set; }
+
+        /// <summary>
+        /// Routine parameters for stored procedures and functions (IN/OUT/INOUT).
+        /// Empty for tables.
+        /// </summary>
+        public List<RoutineParameterDto> Parameters { get; set; } = new();
     }
 
     /// <summary>

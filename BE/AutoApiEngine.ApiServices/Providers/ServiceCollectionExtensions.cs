@@ -93,8 +93,11 @@ namespace AutoApiEngine.ApiServices.Providers
             services.AddScoped<SqlForeignKeyService>();
             services.AddScoped<MySqlForeignKeyService>();
             services.AddScoped<IForeignKeyService, ForeignKeyServiceResolver>();
-            services.AddScoped<DynamicApiService>();
-            services.AddScoped<IDynamicApiService>(sp => sp.GetRequiredService<DynamicApiService>());
+            services.AddScoped<SqlServerDynamicApiService>();
+            services.AddScoped<MySqlDynamicApiService>();
+            services.AddScoped<DynamicApiServiceResolver>();
+            services.AddScoped<IDynamicApiService, DynamicApiServiceResolver>();
+            services.AddScoped<SpVerbClassifier>();
             services.AddScoped<IDynamicApiMetadataService, DynamicApiMetadataService>();
 
             // ── Deployed API service ──

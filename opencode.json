@@ -17,7 +17,7 @@
     "agent": {
         "build": {
             "description": "Default build agent. Routes to sub-agents based on task.",
-            "prompt": "You are the main AutoApiEngine orchestrator. Read .opencode/instructions.md for routing and project context. Delegate specialized tasks to sub-agents via @name.\n\nCRITICAL RULE — Always create a new branch before making any changes. Never modify master or develop directly.",
+            "prompt": "You are the main AutoApiEngine orchestrator. Read .opencode/instructions.md for routing and project context. Delegate specialized tasks to sub-agents via @name.",
             "mode": "primary",
             "permission": {
                 "*": "allow",
@@ -27,7 +27,7 @@
         },
         "frontend": {
             "description": "Angular/TypeScript frontend work: components, routing, SSR, guards, services, styling",
-            "prompt": "You are the Frontend Angular specialist. Read .opencode/agents/frontend.md for project-specific instructions.\n\nCRITICAL RULE — Always create a new branch before making any changes. Never modify master or develop directly.",
+            "prompt": "You are the Frontend Angular specialist. Read .opencode/agents/frontend.md for project-specific instructions.",
             "mode": "subagent",
             "permission": {
                 "*": "allow",
@@ -36,7 +36,7 @@
         },
         "backend": {
             "description": ".NET/C# backend work: controllers, services, EF Core, migrations, auth, API design",
-            "prompt": "You are the Backend .NET specialist. Read .opencode/agents/backend.md for project-specific instructions.\n\nCRITICAL RULE — Always create a new branch before making any changes. Never modify master or develop directly.",
+            "prompt": "You are the Backend .NET specialist. Read .opencode/agents/backend.md for project-specific instructions.",
             "mode": "subagent",
             "permission": {
                 "*": "allow",
@@ -45,7 +45,7 @@
         },
         "docker": {
             "description": "Docker/infrastructure: compose, Keycloak, MySQL, SQL Server, container management",
-            "prompt": "You are the Infrastructure specialist. Read .opencode/agents/docker.md for project-specific instructions.\n\nCRITICAL RULE — Always create a new branch before making any changes. Never modify master or develop directly.",
+            "prompt": "You are the Infrastructure specialist. Read .opencode/agents/docker.md for project-specific instructions.",
             "mode": "subagent",
             "permission": {
                 "*": "allow",
@@ -54,7 +54,7 @@
         },
         "review": {
             "description": "Code review: architecture review, security audit, performance analysis, style checks, PR review",
-            "prompt": "You are the Code Review specialist. Read .opencode/agents/review.md for project-specific instructions. You are read-only.\n\nCRITICAL RULE — Always create a new branch before making any changes. Never modify master or develop directly.",
+            "prompt": "You are the Code Review specialist. Read .opencode/agents/review.md for project-specific instructions. You are read-only.",
             "mode": "subagent",
             "permission": {
                 "*": "allow",
@@ -63,7 +63,7 @@
         },
         "merge-push": {
             "description": "Git operations: stash, commit, push, create PR, merge branches, rebase",
-            "prompt": "You are the Git operations specialist. Read .opencode/agents/merge-push.md for project-specific instructions.\n\nCRITICAL RULE — Always create a new branch before making any changes. Never modify master or develop directly.",
+            "prompt": "You are the Git operations specialist. Read .opencode/agents/merge-push.md for project-specific instructions.",
             "mode": "subagent",
             "permission": {
                 "*": "allow",

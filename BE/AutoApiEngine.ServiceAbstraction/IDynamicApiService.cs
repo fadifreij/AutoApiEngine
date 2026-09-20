@@ -66,5 +66,22 @@ namespace AutoApiEngine.ServiceAbstraction
             string objectName,
             string id,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Executes a stored procedure or function with the given parameters (by name).
+        /// Used for both SP GET (query params) and SP POST (body) execution.
+        /// </summary>
+        Task<DynamicApiExecutionResponse> ExecuteRoutineAsync(
+            string workspaceId,
+            string objectName,
+            Dictionary<string, object?> parameters,
+            CancellationToken cancellationToken = default)
+        {
+            // Default interface member for breadth-first compatibility: any implementation
+            // can be invoked through ExecuteRoutineAsync without overriding it; concrete
+            // services provide the real behavior.
+            throw new NotSupportedException(
+                "ExecuteRoutineAsync is not supported by this implementation.");
+        }
     }
 }

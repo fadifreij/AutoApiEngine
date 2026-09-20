@@ -11,7 +11,9 @@ import {
   ForeignKeyDetail,
   ReferencedByDetail,
   FilterConfig,
-  SortConfig
+  SortConfig,
+  RoutineParameter,
+  DynamicApiExecutionResponse
 } from './dynamic-api.service';
 import { environment } from '../../../environments/environment';
 
@@ -63,6 +65,20 @@ export class ApiGenerated {
 
   /** Copy feedback */
   readonly copyFeedback = signal('');
+
+  // ── Run Routine (SP / Function / View) State ──
+
+  /** Live values for routine IN/INOUT parameters */
+  readonly runParamValues = signal<Record<string, any>>({});
+
+  /** Last routine execution response */
+  readonly runResult = signal<DynamicApiExecutionResponse | null>(null);
+
+  /** Last routine execution error message */
+  readonly runError = signal('');
+
+  /** Is a routine execution in flight? */
+  readonly running = signal(false);
 
   // Exposed for template access
   readonly Math = Math;
@@ -440,16 +456,71 @@ export class ApiGenerated {
     return `example ${name}`;
   }
 
-  /** Generated endpoint URLs for display */
+  /** Generated endpoint URLs for display — branches on the object kind from metadata */
   readonly generatedUrls = computed<EndpointInfo[]>(() => {
     const wsId = this.workspaceId();
     const objName = this.selectedObject();
     if (!wsId || !objName) return [];
 
+    const meta = this.selectedMetadata();
     const baseUrl = this.dynamicApi.buildEndpointUrl(wsId, objName);
+    const kind = this.getObjectKind(meta);
+
+    // View → exactly 1 GET URL (list); no /{id} — PK lookup is ?param=value on this URL
+    if (kind === 'View') {
+      return [
+        {
+          method: 'GET',
+          methodClass: 'get',
+          path: objName,
+          fullUrl: baseUrl + this.computedQueryString(),
+          description: 'Query the view (filter by any column via query-string parameters)'
+        }
+      ];
+    }
+
+    // Function → 1 GET URL (run) with routine-parameter placeholders; no /{id}
+    if (kind === 'Function') {
+      return [
+        {
+          method: 'GET',
+          methodClass: 'get',
+          path: objName,
+          fullUrl: baseUrl + this.routineQueryString(meta),
+          description: 'Execute the function with its input parameters'
+        }
+      ];
+    }
+
+    // StoredProcedure → exactly 1 URL: GET or POST per the classified verb; no /{id}
+    if (kind === 'StoredProcedure') {
+      const verb = meta?.verb ?? 'GET';
+      if (verb === 'POST') {
+        return [
+          {
+            method: 'POST',
+            methodClass: 'post',
+            path: objName,
+            fullUrl: baseUrl,
+            description: 'Execute the stored procedure (body contains the input parameters)',
+            bodyTemplate: this.routineBodyTemplate(meta)
+          }
+        ];
+      }
+      return [
+        {
+          method: 'GET',
+          methodClass: 'get',
+          path: objName,
+          fullUrl: baseUrl + this.routineQueryString(meta),
+          description: 'Execute the stored procedure (GET-classified) with query-string parameters'
+        }
+      ];
+    }
+
+    // Table → current 5 CRUD endpoints, unchanged
     const queryPart = this.computedQueryString();
     const body = this.bodyTemplate();
-
     return [
       {
         method: 'GET',
@@ -507,6 +578,120 @@ export class ApiGenerated {
     });
   });
 
+  // ── Object Kind Helpers (backend metadata → FE kind) ──
+
+  /**
+   * Map the backend objectType value to the FE kind.
+   * Backend returns values like "TABLE" / "BASE TABLE" / "VIEW" / "FUNCTION" / "PROCEDURE",
+   * matched case-insensitively with a contains-style check. Unknown → 'Table' (safest default).
+   */
+  private getObjectKind(meta: ObjectMetadata | null): 'Table' | 'View' | 'Function' | 'StoredProcedure' {
+    const t = (meta?.objectType ?? '').toUpperCase();
+    if (t.includes('VIEW')) return 'View';
+    if (t.includes('PROCEDURE')) return 'StoredProcedure';
+    if (t.includes('FUNCTION')) return 'Function';
+    return 'Table';
+  }
+
+  /** True for Function / StoredProcedure (routines executed via the backend) */
+  hasRoutine(meta: ObjectMetadata | null): boolean {
+    const kind = this.getObjectKind(meta);
+    return kind === 'Function' || kind === 'StoredProcedure';
+  }
+
+  isView(meta: ObjectMetadata | null): boolean {
+    return this.getObjectKind(meta) === 'View';
+  }
+
+  isTable(meta: ObjectMetadata | null): boolean {
+    return this.getObjectKind(meta) === 'Table';
+  }
+
+  /** IN / INOUT routine parameters only (OUT params are read-back only) */
+  routineInputParams(meta: ObjectMetadata | null): RoutineParameter[] {
+    return (meta?.parameters ?? []).filter(p => p.parameterMode === 'IN' || p.parameterMode === 'INOUT');
+  }
+
+  /** Build routine query-string placeholders from IN/INOUT params — e.g. ?param1={param1}&param2={param2} */
+  routineQueryString(meta: ObjectMetadata | null): string {
+    const params = this.routineInputParams(meta);
+    if (params.length === 0) return '';
+    return '?' + params.map(p => `${p.name}={${p.name}}`).join('&');
+  }
+
+  /** Build a JSON body template for POST-classified routines from IN/INOUT params */
+  private routineBodyTemplate(meta: ObjectMetadata | null): string {
+    const obj: Record<string, any> = {};
+    for (const p of this.routineInputParams(meta)) {
+      obj[p.name] = this.generateExampleValue({
+        name: p.name,
+        dataType: p.dataType,
+        isNullable: p.hasDefault,
+        isPrimaryKey: false,
+        isIdentity: false
+      } as ColumnMetadata);
+    }
+    return JSON.stringify(obj, null, 2);
+  }
+
+  // ── Run Routine (SP / Function / parametrized View) ──
+
+  /** Execute the selected view/function/stored procedure with the current parameter values */
+  runObject(): void {
+    const wsId = this.workspaceId();
+    const objName = this.selectedObject();
+    const meta = this.selectedMetadata();
+    if (!wsId || !objName || !meta) return;
+
+    const verb = meta.verb ?? 'GET';
+    this.running.set(true);
+    this.runError.set('');
+    this.runResult.set(null);
+
+    // Build payload from IN/INOUT params — omit empty/undefined (missing optional params → DB default)
+    const payload: Record<string, any> = {};
+    for (const p of this.routineInputParams(meta)) {
+      const v = this.runParamValues()[p.name];
+      if (v === undefined || v === null || v === '') continue;
+      payload[p.name] = v;
+    }
+
+    const onNext = (res: DynamicApiExecutionResponse) => {
+      this.runResult.set(res);
+      this.running.set(false);
+    };
+    const onError = (err: any) => {
+      const details = err.error?.details ? ` (${err.error.details})` : '';
+      this.runError.set((err.error?.message ?? err.message) + details);
+      this.running.set(false);
+    };
+
+    if (verb === 'GET') {
+      this.dynamicApi.executeRoutineGet(wsId, objName, payload).subscribe({ next: onNext, error: onError });
+    } else {
+      this.dynamicApi.executeRoutinePost(wsId, objName, payload).subscribe({ next: onNext, error: onError });
+    }
+  }
+
+  // ── Response Viewer Helpers ──
+
+  hasResultSets(res: DynamicApiExecutionResponse | null): boolean {
+    return !!res && (res.resultSets?.length ?? 0) > 0;
+  }
+
+  hasOutputParams(res: DynamicApiExecutionResponse | null): boolean {
+    return !!res && !!res.outputParams && Object.keys(res.outputParams).length > 0;
+  }
+
+  hasData(res: DynamicApiExecutionResponse | null): boolean {
+    return !!res && res.data !== undefined && res.data !== null;
+  }
+
+  /** No structured sections to render → show the raw JSON */
+  showRawResponse(res: DynamicApiExecutionResponse | null): boolean {
+    return !this.hasResultSets(res) && !this.hasOutputParams(res) && !this.hasData(res);
+  }
+
   // ── Load Data ──
 
   constructor() {
@@ -546,6 +731,10 @@ export class ApiGenerated {
     this.currentPage.set(1);
 
     this.relatedTablesMeta.set(new Map());
+    this.runParamValues.set({});
+    this.runResult.set(null);
+    this.runError.set('');
+    this.running.set(false);
     this.dynamicApi.getObjectMetadata(this.workspaceId(), name).subscribe({
       next: (meta) => {
         this.selectedMetadata.set(meta);

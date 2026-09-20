@@ -44,10 +44,23 @@ export interface ColumnMetadata {
   isIdentity: boolean;
 }
 
+export interface RoutineParameter {
+  name: string;
+  dataType: string;
+  parameterMode: 'IN' | 'OUT' | 'INOUT';
+  hasDefault: boolean;
+  defaultValue?: string;
+  ordinalPosition: number;
+}
+
 export interface ObjectMetadata {
   objectName: string;
   objectType: string;
   schema: string;
+  /** "GET" | "POST" for StoredProcedures, "GET" for Views/Functions, null/undefined for Tables */
+  verb?: 'GET' | 'POST';
+  /** Routine (SP/Function/View) parameter list — always returned by the backend; empty for Tables */
+  parameters?: RoutineParameter[];
   columns: ColumnMetadata[];
   primaryKeyColumns: string[];
   foreignKeys: ForeignKeyDetail[];
@@ -73,6 +86,14 @@ export interface DynamicApiSingleResponse {
 export interface DynamicApiActionResponse {
   data?: Record<string, any>;
   message: string;
+}
+
+/** Response returned when executing a stored procedure or function (mirrors BE DynamicApiExecutionResponse). */
+export interface DynamicApiExecutionResponse {
+  data?: Record<string, any>;          // scalar-function style result (not part of the BE DTO — reserved)
+  resultSets?: Record<string, any>[];  // rows or grouped sets
+  outputParams?: Record<string, any>;  // OUT / INOUT param values
+  rowsAffected?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -162,6 +183,33 @@ export class DynamicApiService {
     pageSize?: number;
   }): string {
     return this.buildEndpointUrl(workspaceId, objectName) + this.buildQueryString(config);
+  }
+
+  // ── Routine Execution (StoredProcedure / Function / parametrized View) ──
+
+  /** Execute a GET-classified routine (or parametrized view). Params are serialized as the query string. */
+  executeRoutineGet(workspaceId: string, objectName: string, params: Record<string, any>): Observable<DynamicApiExecutionResponse> {
+    return this.http.get<DynamicApiExecutionResponse>(`${this.apiUrl}/${workspaceId}/${objectName}`, {
+      params: this.trimParams(params),
+      withCredentials: true
+    });
+  }
+
+  /** Execute a POST-classified routine (stored procedure). Params are sent as the JSON body. */
+  executeRoutinePost(workspaceId: string, objectName: string, body: Record<string, any>): Observable<DynamicApiExecutionResponse> {
+    return this.http.post<DynamicApiExecutionResponse>(`${this.apiUrl}/${workspaceId}/${objectName}`, body, {
+      withCredentials: true
+    });
+  }
+
+  /** Drop null / undefined / empty-string values before sending as query params */
+  private trimParams(params: Record<string, any>): Record<string, any> {
+    const out: Record<string, any> = {};
+    for (const [key, value] of Object.entries(params)) {
+      if (value === null || value === undefined || value === '') continue;
+      out[key] = value;
+    }
+    return out;
   }
 }
 
