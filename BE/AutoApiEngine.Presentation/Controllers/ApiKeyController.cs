@@ -1,12 +1,11 @@
 using AutoApiEngine.Domain.Entities;
 using AutoApiEngine.ServiceAbstraction;
+using AutoApiEngine.ServiceAbstraction.Common;
 using AutoApiEngine.ServiceAbstraction.DTO;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -95,7 +94,7 @@ namespace AutoApiEngine.Presentation.Controllers
                 {
                     Id = Guid.NewGuid(),
                     Name = dto.Name,
-                    Key = HashKey(plainKey),
+                    Key = ApiKeyHasher.Hash(plainKey),
                     ExpiresAt = dto.ExpiresAt,
                     IsActive = true,
                     OrganizationId = organization.Id,
@@ -152,13 +151,6 @@ namespace AutoApiEngine.Presentation.Controllers
         {
             // 64 hex chars — cryptographically strong enough for an API key
             return Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
-        }
-
-        private static string HashKey(string plainKey)
-        {
-            using var sha256 = SHA256.Create();
-            var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(plainKey));
-            return Convert.ToHexString(hashBytes).ToLowerInvariant();
         }
     }
 }

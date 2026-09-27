@@ -5,8 +5,32 @@
   </div>
 </div>
 
+<!-- Tab strip: key CRUD stays here, Scopes is its own component (D8) -->
+<div class="tab-strip" role="tablist">
+  <button
+    type="button"
+    role="tab"
+    class="tab-btn"
+    [class.active]="activeTab() === 'keys'"
+    [attr.aria-selected]="activeTab() === 'keys'"
+    (click)="activeTab.set('keys')">
+    Keys
+  </button>
+  <button
+    type="button"
+    role="tab"
+    class="tab-btn"
+    [class.active]="activeTab() === 'scopes'"
+    [attr.aria-selected]="activeTab() === 'scopes'"
+    (click)="activeTab.set('scopes')">
+    Scopes
+  </button>
+</div>
+
 @if (!orgId()) {
   <div class="error-message">Unable to determine organization.</div>
+} @else if (activeTab() === 'scopes') {
+  <app-api-key-scopes />
 } @else {
   <!-- CREATE -->
   <div class="create-card">

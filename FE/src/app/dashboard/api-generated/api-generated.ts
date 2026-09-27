@@ -767,6 +767,47 @@ export class ApiGenerated {
     }
   }
 
+  // ── Copy cURL (D5) ──
+
+  /**
+   * Placeholder for the plaintext key. Keys are stored as a SHA-256 hash and the plaintext is shown
+   * exactly once, at creation, so it can never be recovered here — the admin pastes their own.
+   */
+  readonly apiKeyPlaceholder = 'YOUR_API_KEY_HERE';
+
+  /**
+   * Build a ready-to-run cURL command for a generated endpoint (D5).
+   *
+   * The dynamic CRUD endpoints authenticate with the `X-Api-Key` header, not a bearer token
+   * (`//[Authorize]` stays commented out on `DynamicApiController`, D11), so the header is what
+   * makes the command work. It is included on **every** verb, not just the gated ones: whether a
+   * key is actually required depends on whether a scope row exists for that (object, verb,
+   * workspace, database), and the admin sets those in the Scopes tab — an extra header on an
+   * ungated endpoint is harmless, while a missing one is a 401.
+   *
+   * A body is only attached for endpoints that actually take one; a `GET`/`DELETE` with `-d` is
+   * noise at best and a changed request at worst.
+   */
+  buildCurl(ep: EndpointInfo): string {
+    const parts: string[] = [`curl -X ${ep.method}`, `"${ep.fullUrl}"`];
+    parts.push(`-H "X-Api-Key: ${this.apiKeyPlaceholder}"`);
+
+    if (ep.bodyTemplate) {
+      parts.push('-H "Content-Type: application/json"');
+      // Single-quote the body and escape any embedded single quotes so the shell does not
+      // terminate the string early.
+      const body = ep.bodyTemplate.replace(/'/g, `'\\''`);
+      parts.push(`-d '${body}'`);
+    }
+
+    // Line continuations keep it readable when pasted into a terminal.
+    return parts.join(' \\\n  ');
+  }
+
+  async copyCurl(ep: EndpointInfo): Promise<void> {
+    await this.copyUrl(this.buildCurl(ep));
+  }
+
   // ── Object Type Helpers ──
 
   getObjectIcon(type: string): string {

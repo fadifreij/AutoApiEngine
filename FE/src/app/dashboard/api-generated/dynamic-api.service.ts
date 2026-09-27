@@ -9,6 +9,18 @@ export interface SchemaObject {
   name: string;
   type: 'Table' | 'View' | 'StoredProcedure' | 'Function';
   columnCount?: number;
+  /**
+   * The single HTTP verb that reaches this object, or undefined when no verb is
+   * verb-restricted (tables, where GET/POST/PUT/DELETE all apply).
+   *
+   *   Table           -> undefined (all four verbs reach it)
+   *   View/Function   -> 'GET'
+   *   StoredProcedure -> 'GET' or 'POST', classified from its definition server-side
+   *
+   * Served by the schema explorer so a client can decide which verb columns are
+   * applicable without a per-object metadata round-trip.
+   */
+  verb?: 'GET' | 'POST';
 }
 
 export interface SchemaExplorerResponse {

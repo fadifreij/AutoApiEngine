@@ -1,6 +1,7 @@
 using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.ServiceAbstraction.Common;
 using AutoApiEngine.ServiceAbstraction.DTO;
+using AutoApiEngine.Presentation.Filters;
 using AutoApiEngine.Services.AuthServices;
 using AutoApiEngine.Services.DatabaseManagementServices;
 using AutoApiEngine.Services.Services;
@@ -17,6 +18,12 @@ namespace AutoApiEngine.ApiServices.Providers
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
             services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
+
+            // API key scopes (doc/ApiKeyAuth). The repository backs both the permissions CRUD
+            // controller and the runtime auth filter; the filter must be resolvable from DI because
+            // the dynamic CRUD actions reference it via [ServiceFilter(typeof(ApiKeyAuthFilter))].
+            services.AddScoped<IApiKeyPermissionRepository, ApiKeyPermissionRepository>();
+            services.AddScoped<ApiKeyAuthFilter>();
             services.AddScoped(typeof(KeycloakService));
             services.AddScoped<IOrganizationRepository, OrganizationRepository>();
 

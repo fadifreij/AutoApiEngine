@@ -1,4 +1,5 @@
 using AutoApiEngine.Domain.Entities;
+using AutoApiEngine.Presentation.Filters;
 using AutoApiEngine.ServiceAbstraction;
 using AutoApiEngine.ServiceAbstraction.DTO;
 using Microsoft.AspNetCore.Authorization;
@@ -17,6 +18,10 @@ namespace AutoApiEngine.Presentation.Controllers
     /// </summary>
     [ApiController]
     //[Authorize]
+    // Left commented out DELIBERATELY (D11). The CRUD actions below are gated per-scope by
+    // ApiKeyAuthFilter, which permits EITHER an anonymous request on an ungated endpoint OR an
+    // X-Api-Key request on a gated one. A controller-level [Authorize] would demand a JWT from
+    // external API-key clients and break the whole feature. Do not un-comment it in this story.
     public class DynamicApiController : ControllerBase
     {
         private readonly IDynamicApiService _dynamicApiService;
@@ -70,6 +75,13 @@ namespace AutoApiEngine.Presentation.Controllers
         /// Returns column metadata + FK info for a specific database object.
         /// Used by the frontend to populate the column selector UI.
         /// </summary>
+        /// <remarks>
+        /// JWT-only (D9): this is dashboard metadata, not a data endpoint, so it is not part of the
+        /// API-key scheme at all. [Authorize] makes the claim mandatory, which in turn makes the
+        /// manual VerifyWorkspaceAccessAsync call below redundant — it is left in place as defence in
+        /// depth rather than removed, so the org check survives even if [Authorize] is ever dropped.
+        /// </remarks>
+        [Authorize]
         [HttpGet("api/schema/{workspaceId:guid}/columns")]
         public async Task<IActionResult> GetObjectColumns(
             string workspaceId,
@@ -117,6 +129,7 @@ namespace AutoApiEngine.Presentation.Controllers
         ///   GET /api/{ws}/employees?select=id,firstName,department.name
         ///   GET /api/{ws}/employees?filter=age:gte:25&amp;page=1&amp;pageSize=20
         /// </summary>
+        [ServiceFilter(typeof(ApiKeyAuthFilter))]
         [HttpGet("api/{workspaceId:guid}/{objectName}")]
         public async Task<IActionResult> GetList(
             string workspaceId,
@@ -219,6 +232,7 @@ namespace AutoApiEngine.Presentation.Controllers
         /// <summary>
         /// Get a single record by primary key.
         /// </summary>
+        [ServiceFilter(typeof(ApiKeyAuthFilter))]
         [HttpGet("api/{workspaceId:guid}/{objectName}/{id}")]
         public async Task<IActionResult> GetById(
             string workspaceId,
@@ -249,6 +263,7 @@ namespace AutoApiEngine.Presentation.Controllers
         /// <summary>
         /// Create a new record. Request body is a JSON object of column-value pairs.
         /// </summary>
+        [ServiceFilter(typeof(ApiKeyAuthFilter))]
         [HttpPost("api/{workspaceId:guid}/{objectName}")]
         public async Task<IActionResult> Create(
             string workspaceId,
@@ -312,6 +327,7 @@ namespace AutoApiEngine.Presentation.Controllers
         /// Update a record by primary key. Request body is a JSON object of column-value pairs.
         /// Supports partial update (PATCH semantics) — only include columns that should change.
         /// </summary>
+        [ServiceFilter(typeof(ApiKeyAuthFilter))]
         [HttpPut("api/{workspaceId:guid}/{objectName}/{id}")]
         public async Task<IActionResult> Update(
             string workspaceId,
@@ -342,6 +358,7 @@ namespace AutoApiEngine.Presentation.Controllers
         /// <summary>
         /// Delete a record by primary key.
         /// </summary>
+        [ServiceFilter(typeof(ApiKeyAuthFilter))]
         [HttpDelete("api/{workspaceId:guid}/{objectName}/{id}")]
         public async Task<IActionResult> Delete(
             string workspaceId,

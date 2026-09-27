@@ -39,6 +39,7 @@ namespace AutoApiEngine.Persistence.Context
         public DbSet<Organization> Organizations { get; set; } = null!;
         public DbSet<Workspace> Workspaces { get; set; } = null!;
         public DbSet<ApiKey> ApiKeys { get; set; } = null!;
+        public DbSet<ApiKeyPermission> ApiKeyPermissions { get; set; } = null!;
         
 
         public DbSet<Plan> Plans { get; set; } = null!;
@@ -81,6 +82,30 @@ namespace AutoApiEngine.Persistence.Context
                 .HasOne(k => k.Organization)
                 .WithMany()
                 .HasForeignKey(k => k.OrganizationId);
+
+            // One-way (config-only) relationship, mirroring the ApiKey → Organization block above.
+            // The Cascade is REQUIRED, not cosmetic: EF's default for a required FK is ClientSetNull,
+            // which throws on delete when dependents exist — and ApiKeyController has DELETE /api/keys/{id}.
+            // Without it, deleting a key that has ever been granted a scope 500s at runtime.
+            modelBuilder.Entity<ApiKeyPermission>()
+                .HasOne(p => p.ApiKey)
+                .WithMany()
+                .HasForeignKey(p => p.ApiKeyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Unique index on the exact 5-tuple, as a backstop for an exact duplicate.
+            //
+            // DO NOT add IsDeny here. Its omission IS the enforcement mechanism (D12): (k, Orders, GET, ws, db, deny)
+            // and (k, Orders, GET, ws, db, grant) collide on this index, so a grant and a deny can never
+            // coexist at the same scope. Adding IsDeny "for clarity" would allow both, creating an
+            // ambiguous cell that no DELETE could resolve. Leave it out.
+            //
+            // Note this index is only a PARTIAL guard: on MySQL, NULLs are distinct inside a UNIQUE index,
+            // so a wildcard row like (k, NULL, NULL, ws, db) can be inserted twice without a DB error.
+            // The provider-agnostic duplicate check is ApiKeyPermissionRepository.ExistsExactScopeAsync.
+            modelBuilder.Entity<ApiKeyPermission>()
+                .HasIndex(p => new { p.ApiKeyId, p.ObjectName, p.Verb, p.WorkspaceId, p.DatabaseName })
+                .IsUnique();
            
             modelBuilder.Entity<Plan>().HasData(
             new Plan

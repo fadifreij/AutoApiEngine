@@ -1,0 +1,157 @@
+<div class="scopes">
+
+  <!-- ── Pickers ───────────────────────────────────────────────────────── -->
+  <div class="pickers-card">
+    <div class="picker">
+      <label for="scopeWorkspace">Workspace</label>
+      <select
+        id="scopeWorkspace"
+        name="scopeWorkspace"
+        [ngModel]="selectedWorkspaceId()"
+        (ngModelChange)="selectedWorkspaceId.set($event); onWorkspaceChange()"
+        [disabled]="loading()">
+        <option value="">— select a workspace —</option>
+        @for (ws of workspaces(); track ws.id) {
+          <option [value]="ws.id">{{ ws.name }}</option>
+        }
+      </select>
+      <span class="picker-hint">The workspace decides the database and the object list.</span>
+    </div>
+
+    <div class="picker">
+      <label for="scopeKey">API key</label>
+      <select
+        id="scopeKey"
+        name="scopeKey"
+        [ngModel]="selectedKeyId()"
+        (ngModelChange)="selectedKeyId.set($event); onKeyChange()"
+        [disabled]="orgKeys().length === 0">
+        <option value="">— select an API key —</option>
+        @for (key of orgKeys(); track key.id) {
+          <option [value]="key.id">{{ key.name }}</option>
+        }
+      </select>
+      <span class="picker-hint">Scopes are granted per key.</span>
+    </div>
+  </div>
+
+  <!-- ── Resolved scope ────────────────────────────────────────────────── -->
+  @if (gridReady()) {
+    <div class="scope-header">
+      <span class="scope-header-label">Scope</span>
+      <span class="scope-header-value">{{ scopeHeader() }}</span>
+    </div>
+  }
+
+  @if (hasStaleRows()) {
+    <div class="warning-message">
+      <strong>Stale scopes ignored.</strong>
+      {{ staleDatabaseRows().length }} scope row(s) for this key and workspace were saved against a
+      different database name. The API key filter only matches the workspace's current database, so
+      these rows are <em>not</em> in force. Re-grant them after the database was renamed.
+    </div>
+  }
+
+  @if (permissionError()) {
+    <div class="error-message">{{ permissionError() }}</div>
+  }
+  @if (actionMessage()) {
+    <div class="success-message">{{ actionMessage() }}</div>
+  }
+
+  <!-- ── Grid ──────────────────────────────────────────────────────────── -->
+  @if (!gridReady()) {
+    <div class="empty-state">
+      <p>Select a workspace and an API key</p>
+      <span>The grid is scoped to one key, one workspace and one database.</span>
+    </div>
+  } @else if (schemaLoading()) {
+    <div class="loading-row"><span class="loader"></span> Loading database objects…</div>
+  } @else {
+    <div class="grid-legend">
+      <span class="legend-item"><b>■</b> granted &mdash; click to revoke</span>
+      <span class="legend-item"><b>⊘</b> denied &mdash; click to remove the deny</span>
+      <span class="legend-item"><b>░</b> granted by a broader scope &mdash; not clickable</span>
+      <span class="legend-item"><b>□</b> not granted &mdash; click to grant</span>
+      <span class="legend-item"><b>n/a</b> verb does not apply to this object type</span>
+    </div>
+
+    <div class="grid-wrap">
+      <table class="scopes-grid">
+        <thead>
+          <tr>
+            <th class="object-col">Object</th>
+            @for (verb of verbs; track verb) {
+              <th class="verb-col">{{ verb }}</th>
+            }
+            <th class="actions-col">Deny</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of gridRows(); track row.label) {
+            <tr [class.wildcard-row]="row.isWildcard" [class.row-denied]="row.l2DenyId">
+              <td class="object-col">
+                <span class="object-name">{{ row.label }}</span>
+                @if (row.isWildcard) {
+                  <span class="object-meta">wildcard &mdash; every object</span>
+                }
+              </td>
+
+              @for (verb of verbs; track verb; let i = $index) {
+                @if (row.cells[i]; as cell) {
+                  <td class="verb-col">
+                    <button
+                      type="button"
+                      class="cell"
+                      [class.cell-on]="cell.state === 'on'"
+                      [class.cell-denied]="cell.state === 'denied' || cell.state === 'denied-l2'"
+                      [class.cell-inherited]="cell.state === 'inherited'"
+                      [class.cell-off]="cell.state === 'off'"
+                      [class.cell-na]="cell.state === 'na'"
+                      [disabled]="cell.state === 'na' || cell.state === 'inherited' || permissionBusy()"
+                      [title]="cell.hint"
+                      [attr.aria-label]="row.label + ' ' + verb + ': ' + cellLabel(cell.state)"
+                      (click)="onCellClick(row, verb)">
+                      {{ cellSymbol(cell.state) }}
+                    </button>
+                  </td>
+                }
+              }
+
+              <td class="actions-col">
+                @if (row.isWildcard) {
+                  <span class="na-text">&mdash;</span>
+                } @else if (row.l2DenyId) {
+                  <span class="deny-note" title="All verbs on this object are denied.">denied</span>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn btn-outline btn-sm deny-btn"
+                    [disabled]="permissionBusy()"
+                    (click)="addDeny(row)">
+                    Deny all
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="object-col" [attr.colspan]="verbs.length + 2">
+                <div class="empty-state">
+                  <p>No objects found in this workspace</p>
+                  <span>The database reported no tables, views, functions or stored procedures.</span>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <p class="grid-note">
+      Scopes are <strong>additive</strong> and deny always wins. Because the API allows a request when
+      no matching scope row exists, removing a broad scope re-opens everything it covered &mdash; you
+      will be warned before that happens.
+    </p>
+  }
+</div>

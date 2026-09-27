@@ -4,6 +4,7 @@ import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../shared/auth/auth.service';
+import { ApiKeyScopes } from './api-key-scopes';
 
 interface ApiKey {
   id: string;
@@ -28,7 +29,7 @@ interface CreateApiKeyResponse {
 @Component({
   selector: 'app-api-keys',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, ApiKeyScopes],
   templateUrl: './api-keys.html',
   styleUrl: './api-keys.scss'
 })
@@ -38,6 +39,12 @@ export class ApiKeys implements OnInit {
   private platformId = inject(PLATFORM_ID);
 
   orgId = this.authService.organizationId;
+
+  /**
+   * Tab strip state. The keys view stays in this component; the Scopes tab is a separate
+   * co-located component (D8) so key CRUD and permission CRUD do not entangle.
+   */
+  activeTab = signal<'keys' | 'scopes'>('keys');
 
   keys = signal<ApiKey[]>([]);
   loading = signal(false);

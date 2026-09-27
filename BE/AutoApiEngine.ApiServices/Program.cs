@@ -65,13 +65,52 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 }
                 return Task.CompletedTask;
             },
-            OnChallenge = context =>
+            OnChallenge = async context =>
             {
-                if (context.AuthenticateFailure != null)
+                // A failed token validation used to be swallowed silently: HandleResponse()
+                // suppresses the framework's default 401, and the handler then wrote nothing in
+                // its place. Nothing ever touched the response, so Kestrel finalised its untouched
+                // default - 200 OK, zero bytes, no Content-Type - and the action never ran.
+                // A bad token now gets a real, diagnosable 401.
+                if (context.AuthenticateFailure == null)
                 {
-                    context.HandleResponse();
+                    // No credentials at all: keep the framework default so the
+                    // WWW-Authenticate challenge header is still emitted.
+                    return;
                 }
-                return Task.CompletedTask;
+
+                context.HandleResponse();
+
+                if (context.Response.HasStarted)
+                {
+                    // Too late to change the status; whatever is on the wire has to stand.
+                    return;
+                }
+
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    code = "UNAUTHORIZED",
+                    message = "Invalid, expired or inactive access token."
+                });
+            },
+            OnForbidden = async context =>
+            {
+                // The token was accepted but the authorization policy/claim check failed.
+                // Answer with a body instead of the framework's bare, bodyless 403.
+                if (context.Response.HasStarted)
+                {
+                    return;
+                }
+
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    code = "FORBIDDEN",
+                    message = "You do not have permission to access this resource."
+                });
             }
         };
     });

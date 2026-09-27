@@ -48,5 +48,20 @@ namespace AutoApiEngine.Services.Repositories
 
             return entity;
         }
+
+        /// <summary>
+        /// Active + unexpired only. An expired or inactive key returns null, so the caller reports the
+        /// same API_KEY_INVALID for "unknown", "inactive" and "expired" — the three must not be
+        /// distinguishable from the response.
+        /// </summary>
+        public async Task<ApiKey?> FindActiveKeyByHashAsync(string keyHash, CancellationToken cancellationToken = default)
+        {
+            return await _context.ApiKeys
+                .AsNoTracking()
+                .FirstOrDefaultAsync(k =>
+                    k.Key == keyHash &&
+                    k.IsActive &&
+                    (k.ExpiresAt == null || k.ExpiresAt > DateTime.UtcNow), cancellationToken);
+        }
     }
 }

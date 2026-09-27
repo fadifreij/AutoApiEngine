@@ -555,6 +555,8 @@
                 @let single = generatedUrls()[0];
                 @if (single) {
                   <button class="btn-copy-url" (click)="copyUrl(single.fullUrl)" title="Copy the routine endpoint URL">Copy URL</button>
+                  <button class="btn-copy-curl" (click)="copyCurl(single)"
+                          title="Copy a cURL command with the X-Api-Key header">Copy cURL</button>
                 }
                 @if (running()) {
                   <span class="loading-spinner"></span>
@@ -643,10 +645,16 @@
                 <span class="endpoint-desc">{{ ep.description }}</span>
                 <div class="endpoint-actions">
                   <button (click)="copyUrl(ep.fullUrl)" title="Copy URL">Copy</button>
+                  <button (click)="copyCurl(ep)"
+                    title="Copy a ready-to-run cURL command including the X-Api-Key header">Copy cURL</button>
                 </div>
               </div>
               <div class="endpoint-url-display">
                 <code>{{ ep.fullUrl }}</code>
+              </div>
+              <div class="endpoint-curl">
+                <span class="curl-label">cURL <span class="curl-note">(paste your key over {{ apiKeyPlaceholder }})</span></span>
+                <pre class="curl-preview">{{ buildCurl(ep) }}</pre>
               </div>
               @if (ep.bodyTemplate) {
                 <div class="endpoint-body">

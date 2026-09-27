@@ -16,10 +16,15 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
     {
         private readonly ILogger<SqlSchemaExplorer> _logger;
         private readonly string _appConnectionString;
+        private readonly SpVerbClassifier _spVerbClassifier;
 
-        public SqlSchemaExplorer(ILogger<SqlSchemaExplorer> logger, IConfiguration configuration)
+        public SqlSchemaExplorer(
+            ILogger<SqlSchemaExplorer> logger,
+            IConfiguration configuration,
+            SpVerbClassifier spVerbClassifier)
         {
             _logger = logger;
+            _spVerbClassifier = spVerbClassifier;
             _appConnectionString = configuration.GetConnectionString("SqlServerConnection")
                 ?? throw new InvalidOperationException("SqlServerConnection is not configured.");
         }
@@ -73,9 +78,14 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 SELECT TABLE_NAME
                 FROM INFORMATION_SCHEMA.VIEWS";
 
+            // The definition rides along via a LEFT JOIN so the SP verb can be classified without a
+            // per-object metadata call. m.definition is NULL for encrypted modules; SpVerbClassifier
+            // treats an empty definition as POST, which is the same fallback GetObjectMetadataAsync uses.
             var routinesSql = @"
-                SELECT SPECIFIC_NAME, ROUTINE_TYPE
-                FROM INFORMATION_SCHEMA.ROUTINES";
+                SELECT r.SPECIFIC_NAME, r.ROUTINE_TYPE, m.definition
+                FROM INFORMATION_SCHEMA.ROUTINES r
+                LEFT JOIN sys.sql_modules m
+                       ON m.object_id = OBJECT_ID(r.ROUTINE_SCHEMA + '.' + r.SPECIFIC_NAME)";
 
             if (!string.IsNullOrWhiteSpace(searchFilter))
             {
@@ -114,7 +124,8 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                     response.Objects.Add(new SchemaObjectDto
                     {
                         Name = reader.GetString(0),
-                        Type = "View"
+                        Type = "View",
+                        Verb = "GET"
                     });
                 }
             }
@@ -129,10 +140,18 @@ namespace AutoApiEngine.Services.DatabaseManagementServices
                 while (await reader.ReadAsync(cancellationToken))
                 {
                     var routineType = reader.GetString(1);
+                    var isFunction = routineType == "FUNCTION";
+                    var definition = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+
                     response.Objects.Add(new SchemaObjectDto
                     {
                         Name = reader.GetString(0),
-                        Type = routineType == "FUNCTION" ? "Function" : "StoredProcedure"
+                        Type = isFunction ? "Function" : "StoredProcedure",
+                        // Same classification the metadata endpoint uses, so the two can never disagree.
+                        // Functions are always GET; an SP is GET or POST depending on its body.
+                        Verb = isFunction
+                            ? "GET"
+                            : (_spVerbClassifier.Evaluate(definition) == SpVerb.Get ? "GET" : "POST")
                     });
                 }
             }
