@@ -44,6 +44,40 @@ dotnet ef database update --startup-project . --project ../AutoApiEngine.Persist
 | POST | /api/auth/refresh-token | Reads `refresh_token` cookie |
 | POST | /api/auth/logout | Clears auth cookies |
 
+### Dynamic CRUD endpoints take an API key, not a JWT
+
+`//[Authorize]` on `DynamicApiController` is intentionally commented out (D11).
+Those endpoints authenticate via the **`X-Api-Key`** header, enforced by
+`ApiKeyAuthFilter`:
+
+```
+X-Api-Key: <64-char plaintext key>
+```
+
+No prefix, no `Bearer`. The plaintext is returned **once**, as `plainKey` in the
+`POST /api/keys` response, and is not retrievable afterwards — only its SHA-256 hex
+hash is stored (`ApiKeyHasher.Hash`). The **Scopes** tab decides per-endpoint whether
+a key is required: no permission row in scope means the endpoint is open (D1/D13).
+
+Metadata endpoints (`api/schema/**`) stay `[Authorize]` and need `Authorization: Bearer <jwt>`.
+
+### Scripted API verification
+
+Do not try to log in via `POST /api/auth/login` (code exchange) or a Keycloak password
+grant — the live `api-engine-app` client is confidential with
+`clientAuthenticatorType: "client-jwt"`, so even a correct `client_secret` fails with
+`invalid_client: "Parameter client_assertion_type is missing"`. Sign the private-key
+JWT from `appsettings.json → KeyClock:ClientJwtKey` instead. Full recipe and the
+temporary-user procedure are in `.opencode/instructions.md` → Speed Rules §4.
+
+Endpoint shapes that are easy to guess wrong:
+
+| Call | Correct shape |
+|------|---------------|
+| Object metadata | `GET /api/schema/{workspaceId}/columns?table=<name>` (**`table`**, not `objectName`) |
+| Create key | `POST /api/keys` -> `plainKey` (not `apiKey`) |
+| Key permissions | `GET|POST /api/keys/{apiKeyId}/permissions`, org-wide: `GET /api/permissions?organizationId=` |
+
 ## Detailed Reference
 
 See `.opencode/agents/backend.md` for the full sub-agent instructions.

@@ -31,6 +31,20 @@ All npm commands run from `FE/` (the repo root has no `package.json`). `packageM
 - `keycloakUrl`: `http://localhost:8081`, `clientId`: `api-engine-app`.
 - **Cookie-based refresh** — pass `withCredentials: true` on calls that need it (see `shared/auth/auth.service.ts`).
 - **No HTTP interceptors** — components call `HttpClient` directly.
+- **"Unable to login" almost always means a tier is down, not broken auth.** Check in
+  this order: FE dev server on 4200 → backend on 5145/7002 → Keycloak on 8081. The FE
+  proxies `/api` to **https://localhost:7002**, so the https profile is mandatory.
+  Do not stop the FE as cleanup — that is exactly what produces this symptom.
+
+## Speed Rules
+
+Read **`.opencode/instructions.md` → "Speed Rules"** before verification work.
+The FE-specific ones:
+
+- `Start-Process npm` **fails** (`%1 is not a valid Win32 application`) — `npm` is a
+  `.cmd` shim. Use `Start-Process cmd.exe -ArgumentList "/c","npm start" -WorkingDirectory <FE>`.
+- `ng serve` needs ~15s before 4200 listens; poll the port instead of assuming failure.
+- Batch related component edits, then run `npm run build` **once**.
 
 ## Conventions
 

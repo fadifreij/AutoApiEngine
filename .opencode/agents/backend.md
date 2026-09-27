@@ -50,6 +50,25 @@ dotnet ef database update --startup-project . --project ../AutoApiEngine.Persist
 
 > `BE/AutoApiEngine.ApiServices/http/Authentication.http` is stale (old email/password flow).
 
+### Dynamic CRUD endpoints take `X-Api-Key`, not a JWT
+
+`//[Authorize]` on `DynamicApiController` stays commented out (D11). Those routes are
+gated by `ApiKeyAuthFilter` via the **`X-Api-Key`** header — no prefix, no `Bearer`.
+Plaintext is returned once as `plainKey` from `POST /api/keys`; only its SHA-256 hash
+is stored. `api/schema/**` remains `[Authorize]` (JWT).
+
+### Speed rules — non-negotiable
+
+A running `ApiServices` **locks its own output DLLs**, so `dotnet build` fails with
+`MSB3027`/`MSB3021`. Read **`.opencode/instructions.md` → "Speed Rules"** before
+touching a running service. In short:
+
+1. Stop → build → start in **one** call, and build **once per batch of edits**.
+2. Batch every HTTP/DB/log probe into a **single** PowerShell call.
+3. Leave services running between steps.
+4. Scripted API checks need a signed `client_assertion` JWT (§4) — a Keycloak
+   password grant cannot work on this realm.
+
 ## Reference Docs
 
 - `BE_REFERENCE.md` — full endpoint list, DTOs, service listing, startup flow.
